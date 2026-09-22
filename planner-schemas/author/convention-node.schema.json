@@ -16,9 +16,9 @@
     "notes": {"type": "string"},
     "implementation": {
       "type": "object",
-      "description": "The executable that enforces/realizes this node. Today usually a validator; the layer is generic (cf. the extension Implementation layer).",
+      "description": "The executable that enforces/realizes this node. Today usually a validator; `none` explicitly records a semantic node that has no direct executable realization.",
       "properties": {
-        "type": {"enum": ["validator", "generator", "fixer", "reporter", "collector", "test"]},
+        "type": {"enum": ["validator", "generator", "fixer", "reporter", "collector", "test", "none"]},
         "ref": {"type": "string", "description": "Verbatim from legacy `validator:` (module::test)."}
       }
     },

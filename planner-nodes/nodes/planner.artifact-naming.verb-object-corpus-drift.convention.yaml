@@ -40,7 +40,7 @@ validation:
   family: format
   template: naming_pattern
   variant: planner_artifact_naming_verb_object_corpus_drift
-  phase: VALIDATE
+  phase: CONFIRM
   enforcement: advisory
   subject_kind: wagon
   failure_evidence:

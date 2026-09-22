@@ -3,10 +3,10 @@ rule_id: planner.wmbt.definition
 kind: family
 status: draft
 name: WMBT — advisory semantic anchor
-statement: A WMBT (What-Might-Break Test) is a falsifiable statement of a single way
-  an artifact might break — scoped to one object of control along one dimension, direction,
-  and lens — declared with an id and a statement, and paired with the acceptances that
-  prove it, including at least one smoke acceptance. This node is an advisory semantic
+statement: A WMBT (What Must Be True) is a falsifiable statement of a single outcome
+  that must hold for an artifact — scoped to one object of control along one dimension,
+  direction, and lens — declared with an id and a statement, and paired with the
+  acceptances that prove it, including at least one smoke acceptance. This node is an advisory semantic
   anchor — it enforces nothing directly; the enforceable parts of this meaning are
   decomposed into the constraint/rule nodes that require it.
 terms:

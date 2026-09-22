@@ -12,6 +12,6 @@ terms:
   values:
     behavior: Observe, exercise, classify, validate, recommend, or report a capability against a system under examination; produces no authority commit.
     delivery: Govern accepted-system state through a durable Acceptance Authority commit; the declared terminal contract returns a platform:acceptance:commit-receipt.
-- term_id: family-source-of-truth
+- term_id: family_source_of_truth
   label: Terminal-contract source of truth
   text: family is derived from the declared terminal contract -- requires an Acceptance Authority commit and terminates in platform:acceptance:commit-receipt => delivery, otherwise behavior. The family field is a mandatory, validator-checked assertion (planner.train.family-matches-terminal-contract), not a second source of truth, and is never an ID digit.

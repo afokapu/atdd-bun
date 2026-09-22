@@ -31,7 +31,7 @@ metadata:
   # rows and 21 per-train documents with zero violations in either direction, so there
   # is no debt to ratchet down and no reason to land this advisory.
   disposition: strict
-  introduced_in: 1942
+  introduced_in: '1942'
   core_design_refs:
   - afokapu/atdd#1942
   - afokapu/atdd#1915

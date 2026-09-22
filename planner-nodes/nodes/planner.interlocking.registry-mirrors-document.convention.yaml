@@ -20,7 +20,7 @@ implementation:
 metadata:
   severity: 3
   disposition: strict
-  introduced_in: 1855
+  introduced_in: '1855'
   core_design_refs:
   - afokapu/atdd#1818
   - afokapu/atdd#1846
