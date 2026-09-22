@@ -1,0 +1,11 @@
+train_id: train:runaway:first
+title: First runaway train
+description: Produces the declared handoff artifact before the next routing decision.
+themes: [commons]
+participants: [system:runaway]
+sequence:
+  - step: 1
+    intent: Produce the declared continuation artifact
+    from: system:runaway
+    to: system:runaway
+    artifact: commons:handoff-ready
