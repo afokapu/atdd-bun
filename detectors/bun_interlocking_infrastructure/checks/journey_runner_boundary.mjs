@@ -54,6 +54,18 @@ function loadsJourneyDeclaration(text) {
   return readsJourneyPath && parsesDeclaration;
 }
 
+function hiddenTopologyLiterals(text) {
+  const masked = maskComments(text);
+  const hits = [];
+  const re = /(["'`])((?:plan\/_trains\/_interlockings\/[a-z][a-z0-9-]*\.ya?ml)|(?:interlocking:[a-z][a-z0-9-]+))\1/g;
+  let match;
+  while ((match = re.exec(masked)) !== null) {
+    const line = lineOfIndex(masked, match.index);
+    hits.push({ line, value: match[2], src: lineAt(text, line) });
+  }
+  return hits;
+}
+
 function hardcodedInterlockingConstruction(text) {
   const masked = maskComments(text);
   const hits = [];
@@ -104,6 +116,14 @@ for (const scanRoot of roots) {
         hit.line,
         0,
         "journey-runtime-hidden-topology: JourneyRunner constructs InterlockingRunner from literal " + hit.value + " instead of declared continuation data",
+        hit.src,
+      ));
+      for (const hit of hiddenTopologyLiterals(text)) violations.push(mk(
+        RULE,
+        rel(file, croot),
+        hit.line,
+        0,
+        "journey-runtime-hidden-topology: JourneyRunner contains static topology literal " + hit.value + " instead of deriving it from the journey declaration",
         hit.src,
       ));
       if (!referencesToken(text, "InterlockingRunner")) violations.push(mk(
