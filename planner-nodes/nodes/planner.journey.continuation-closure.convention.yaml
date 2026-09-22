@@ -8,7 +8,8 @@ statement: >-
   accounted for exactly once by either a continuation or a terminal. A continuation's source route
   must exist, its declared artifact must occur in the linear train selected by that route, and its
   destination interlocking must exist. Continuation or terminal declarations whose source interlocking
-  is unreachable from the journey entrypoint are invalid.
+  is unreachable from the journey entrypoint are invalid. Continuation cycles are rejected until an
+  explicit loop construct defines bounded/intentional repetition.
 rationale: >-
   Interlocking bilateral binding closes declaration -> runtime -> trace for one routing decision, but
   without a higher-order closure rule one interlocking can hand off to another only implicitly in code.
@@ -23,6 +24,10 @@ terms:
     text: >-
       a continuation artifact that appears in the selected train's declared sequence, proving the
       cross-interlocking edge is anchored in the plan rather than invented by runtime code.
+  - term_id: acyclic_topology
+    text: >-
+      continuation edges may not form a cycle in this version; looping behavior requires a future
+      explicit loop construct so termination and proof obligations are not implicit.
 implementation:
   type: validator
   ref: planner.static.validators.bun::journeyContinuationFindings
