@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: coder.bun.journey-runner-boundary
+kind: rule
+status: active
+name: JourneyRunner composes interlockings without executing trains or wagons (Bun)
+statement: >-
+  A Bun consumer that declares one or more journey topology documents under plan/_journeys/ MUST ship
+  a JourneyRunner under src/trains/**. JourneyRunner is the continuation-control layer above
+  InterlockingRunner: it MUST reference InterlockingRunner for routing decisions and MUST NOT bypass
+  that boundary by referencing TrainRunner directly, importing wagon modules, calling runTrain(...),
+  looping over train.sequence as an executor, or carrying/mutating Cargo. InterlockingRunner continues
+  to select exactly one train and delegate that train to TrainRunner; JourneyRunner only decides which
+  interlocking is entered next according to the declared journey topology.
+implementation:
+  type: validator
+  ref: coder.bun.journey-runner-boundary
+content:
+  summary: >-
+    Enforces the Bun runtime boundary introduced by planner journey topology. Presence of
+    plan/_journeys/**/*.yaml enables the obligation. The family detector looks for class
+    JourneyRunner under src/trains/**, requires it to reference InterlockingRunner, and rejects direct
+    TrainRunner/wagon/Cargo execution patterns.
+  normative_text: |
+    The intended call model is:
+
+        Station Master
+          -> JourneyRunner
+               -> InterlockingRunner.resolve/execute(...)
+                    -> TrainRunner.execute(selectedTrainId, ...)
+               -> inspect declared continuation/terminal
+               -> next InterlockingRunner ...
+
+    JourneyRunner owns continuation control, never the train step loop. InterlockingRunner owns local
+    route selection, never cross-interlocking topology. TrainRunner remains the only wagon-step executor.
+  fix_hint: |
+    Add a JourneyRunner under src/trains/ that delegates each routing decision to InterlockingRunner.
+    Remove direct TrainRunner calls, wagon imports, Cargo handling, runTrain(...) calls, and
+    train.sequence executor loops from JourneyRunner.
+  exceptions:
+    - Consumers with no plan/_journeys topology carry no JourneyRunner obligation.
+metadata:
+  aliases:
+    - BUN-JOURNEY-RUNNER-BOUNDARY-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+terms:
+  - term_id: journey_runner
+    text: the runtime continuation-control layer that traverses declared journey topology between interlockings.
+  - term_id: boundary
+    text: JourneyRunner -> InterlockingRunner -> TrainRunner; each layer owns only its declared responsibility.
