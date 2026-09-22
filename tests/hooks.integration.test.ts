@@ -1,12 +1,21 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { hookEvents, hooksStatus, installHooks, runHook, uninstallHooks } from "../src/hooks";
+import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()), err: (await new Response(child.stderr).text()) }; };
 async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); return root; }
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
+
+async function worktreeLayout() {
+  const container = await mkdtemp(join(tmpdir(), "atdd-bun-layout-")), main = join(container, "main");
+  await mkdir(main); for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "worktree@test"], ["config", "user.name", "Worktree"]]) await git(main, args);
+  await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n  root: ../worktrees\n  primary_directory: main\n  primary_branch: main\n  require_linked_worktree: true\n");
+  await writeFile(join(main, "readme.md"), "init\n"); await git(main, ["add", "."]); await git(main, ["commit", "-qm", "init"]);
+  return { container, main, worktrees: join(container, "worktrees") };
+}
 
 test("real Git installation is idempotent, worktree-local, and removable", async () => {
   const root = await repo(); try { expect((await installHooks(root)).ok).toBeTrue(); expect((await installHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeTrue(); expect((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); for (const event of hookEvents) expect((await readFile(join(root, ".githooks", event), "utf8")).includes("atdd ")).toBeFalse(); const wt = `${root}-wt`; expect((await git(root, ["worktree", "add", "-q", "-b", "linked", wt])).code).toBe(0); expect((await installHooks(wt)).ok).toBeTrue(); expect((await git(wt, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); expect((await uninstallHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeFalse(); }
@@ -26,3 +35,28 @@ test("pre-push fails closed on a protected destination and post-commit remains a
   const root = await repo(); try { await installHooks(root); const head = (await git(root, ["rev-parse", "HEAD"])).out.trim(); expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse(); expect((await runHook("post-commit", root)).ok).toBeTrue(); const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8"); expect(dispatcher).not.toContain("http"); expect(dispatcher).not.toContain("bunx"); expect(dispatcher).not.toContain("atdd "); }
   finally { await cleanup(root); }
 }, 20_000);
+
+test("worktree policy requires a main primary checkout and linked feature worktrees in the configured root", async () => {
+  const layout = await worktreeLayout(); const feature = join(layout.worktrees, "feature-x"), outside = join(layout.container, "outside");
+  try {
+    await git(layout.main, ["checkout", "-qb", "feature-primary"]);
+    expect((await runHook("pre-commit", layout.main)).ok).toBeFalse();
+    expect((await startWorktree(layout.main, "feature/x")).ok).toBeFalse();
+    await git(layout.main, ["checkout", "main"]);
+
+    expect((await startWorktree(layout.main, "feature/x")).ok).toBeTrue();
+    expect((await hooksStatus(feature)).ok).toBeTrue();
+    expect((await runHook("pre-commit", feature)).ok).toBeTrue();
+    expect((await worktreeStatus(feature)).message).toContain(feature);
+
+    expect((await git(layout.main, ["worktree", "add", "-q", "-b", "outside", outside])).code).toBe(0);
+    expect((await runHook("pre-commit", outside)).ok).toBeFalse();
+    await git(layout.main, ["worktree", "remove", outside]);
+
+    await writeFile(join(feature, "feature.md"), "done\n"); await git(feature, ["add", "feature.md"]); await git(feature, ["commit", "-qm", "feature", "--no-verify"]);
+    expect((await finishWorktree(feature)).ok).toBeFalse();
+    await git(layout.main, ["merge", "--no-ff", "feature/x", "-m", "merge feature"]);
+    expect((await finishWorktree(feature, true)).ok).toBeTrue();
+    expect(existsSync(feature)).toBeFalse();
+  } finally { await cleanup(layout.container); }
+}, 30_000);

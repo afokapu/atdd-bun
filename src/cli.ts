@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { enforce, type Profile } from "./enforce";
-import { hookEvents, hooksStatus, installHooks, runHook, uninstallHooks } from "./hooks";
+import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { releaseCheck } from "./release";
 
@@ -12,6 +12,10 @@ if (args[0] === "hooks") {
 if (args[0] === "hook" && hookEvents.includes(args[1] as any)) {
   const result = await runHook(args[1] as any, process.cwd(), args.slice(2), await new Response(Bun.stdin.stream()).text());
   if (result.message) console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "worktree") {
+  const result = args[1] === "start" ? await startWorktree(process.cwd(), args[2] ?? "") : args[1] === "finish" ? await finishWorktree(process.cwd(), args.includes("--delete-branch")) : await worktreeStatus(process.cwd());
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "ci") { const result = args[1] === "init" ? await ciInit(process.cwd(), args.includes("--replace")) : await ciStatus(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1); }
 if (args[0] === "release" && args[1] === "check") { const result = await releaseCheck(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1); }

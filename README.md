@@ -42,6 +42,33 @@ It reports an untested plan acceptance, an unbound/unknown test reference, an
 implementation without `Tested-By:`, and an implementation whose named test does
 not exist.
 
+## Linked-worktree policy
+
+An opt-in policy can require the primary checkout to be named `main` and be on
+the `main` branch, while all feature commits happen in linked worktrees beside it:
+
+```text
+my-repo/
+  main/
+  worktrees/feature-x/
+```
+
+```yaml
+# main/atdd-bun.yaml
+worktrees:
+  enabled: true
+  root: ../worktrees
+  primary_directory: main
+  primary_branch: main
+  require_linked_worktree: true
+```
+
+Use `atdd-bun worktree start feature/x`, `atdd-bun worktree status`, and, after
+merging into local `main`, `atdd-bun worktree finish --delete-branch`. The hook
+blocks commits from the primary checkout, protected branches, detached heads, or
+worktrees outside the configured root. `finish` refuses dirty or unmerged work;
+it never removes a worktree automatically.
+
 ## Corpus proof
 
 `bun test` runs every detector against its clean and dirty fixture trees and
