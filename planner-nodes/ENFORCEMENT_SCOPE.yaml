@@ -12,7 +12,7 @@ node_corpus:
 # prose convention has been ported.
 canonical_bun_enforcement:
   - rule_id: planner.train.naming
-    origin: bun-custom-validator
+    origin: schema-validator
     coverage: complete
     predicates:
       - train definitions and interlocking route targets use train:<subject>:<slug>

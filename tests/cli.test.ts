@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
 const cli = join(root, "src/cli.ts");
-const fixture = join(root, "detectors/planner_static_validators/fixtures/clean");
+const fixture = join(root, "detectors/planner_schema_validation/fixtures/clean");
 
 async function run(...args: string[]) {
   const child = Bun.spawn({ cmd: [Bun.which("bun") ?? globalThis.process.execPath, cli, ...args], cwd: root, stdout: "pipe", stderr: "pipe" });

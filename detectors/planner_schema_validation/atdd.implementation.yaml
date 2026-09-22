@@ -1,0 +1,16 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: guard
+implementation_id: planner.schema-validation.bun
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# Canonical JSON Schema validates individual plan artifact shape. Generic shape
+# failures remain package guards; the train-ID pattern realizes the canonical
+# planner.train.naming convention without duplicating its schema expression.
+emits_rule_ids:
+  - atdd-bun.planner.schema
+  - planner.train.naming
+realizes_convention:
+  - planner.train.naming
+entrypoint: detect.mjs
+report: detect.mjs

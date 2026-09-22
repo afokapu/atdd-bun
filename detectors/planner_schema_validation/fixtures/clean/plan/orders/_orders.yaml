@@ -1,0 +1,15 @@
+wagon: orders
+urn: wagon:orders
+description: A valid order wagon.
+subject: agent:planner
+context: test
+action: order
+goal: validate
+outcome: validated
+produce:
+  - name: orders:placed
+    contract: contract:orders:placed
+    telemetry: telemetry:orders:placed
+consume: []
+wmbt:
+  total: 0

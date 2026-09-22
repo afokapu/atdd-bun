@@ -1,0 +1,11 @@
+train_id: 1001-checkout
+title: Checkout journey
+description: A deliberately retired numeric train identity.
+themes: [orders]
+participants: [wagon:orders]
+sequence:
+  - step: 1
+    intent: Place the order
+    from: wagon:orders
+    to: wagon:orders
+    artifact: orders:placed

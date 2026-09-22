@@ -47,6 +47,7 @@ test("the package ships every current Bun implementation", () => {
     "htmx_tester_detector",
     "planner_docs_capability",
     "planner_plan_integrity",
+    "planner_schema_validation",
     "planner_static_validators",
   ]);
 });

@@ -31,6 +31,18 @@ test("real Git policy rejects protected branches, each micro threshold, deletion
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("pre-commit uses the canonical planner schema gate for staged plan artifacts", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await mkdir(join(root, "plan/_trains"), { recursive: true });
+    await writeFile(join(root, "plan/_trains/orders.yaml"), "train_id: 1001-checkout\ntitle: Checkout journey\ndescription: A deliberately invalid train identity.\nthemes: [orders]\nparticipants: [wagon:orders]\nsequence:\n  - step: 1\n    intent: Place the order\n    from: wagon:orders\n    to: wagon:orders\n    artifact: orders:placed\n");
+    await git(root, ["add", "plan/_trains/orders.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok).toBeFalse();
+    expect(result.message).toContain("planner.train.naming");
+  } finally { await cleanup(root); }
+}, 20_000);
+
 test("pre-push fails closed on a protected destination and post-commit remains advisory without network or ATDD", async () => {
   const root = await repo(); try { await installHooks(root); const head = (await git(root, ["rev-parse", "HEAD"])).out.trim(); expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse(); expect((await runHook("post-commit", root)).ok).toBeTrue(); const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8"); expect(dispatcher).not.toContain("http"); expect(dispatcher).not.toContain("bunx"); expect(dispatcher).not.toContain("atdd "); }
   finally { await cleanup(root); }

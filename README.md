@@ -98,6 +98,12 @@ does not pretend that every node is executable. The
 which rules have a Bun realization, which predicates are only partial, and which
 nodes are reference-only.
 
+The planner profile first validates recognized plan artifacts against the
+package-shipped JSON Schemas—wagon, feature, WMBT (including embedded
+acceptances), train, and train interlocking. It then runs cross-artifact
+validators such as registry coherence and traceability. Hooks, direct CLI use,
+and CI invoke this same profile and therefore share the same schema source.
+
 ## Hooks: fast feedback, not merge authority
 
 Install hooks once in each worktree where you work:
