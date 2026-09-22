@@ -38,6 +38,10 @@ title: Example journey
 status: checked
 entrypoint:
   interlocking_id: interlocking:a
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations:
   - from:
       interlocking_id: interlocking:a
@@ -74,6 +78,10 @@ title: Broken journey
 status: checked
 entrypoint:
   interlocking_id: interlocking:a
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations:
   - from:
       interlocking_id: interlocking:a
@@ -124,6 +132,10 @@ title: Cyclic journey
 status: checked
 entrypoint:
   interlocking_id: interlocking:a
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations:
   - from:
       interlocking_id: interlocking:a
