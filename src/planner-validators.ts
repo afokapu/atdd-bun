@@ -214,6 +214,27 @@ function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePl
       journey.file,
       `${journey.id} declares ${claim.kind} from unreachable ${claim.interlockingId}#${claim.routeId}`,
     ));
+
+    const adjacency = new Map<string, Set<string>>();
+    for (const claim of claims) if (claim.kind === "continuation" && reachable.has(claim.interlockingId) && reachable.has(claim.destination)) {
+      adjacency.set(claim.interlockingId, new Set([...(adjacency.get(claim.interlockingId) ?? []), claim.destination]));
+    }
+    const visiting = new Set<string>(), visited = new Set<string>();
+    let cycle: string[] | null = null;
+    const visit = (node: string, path: string[]): void => {
+      if (cycle || visited.has(node)) return;
+      if (visiting.has(node)) { const start = path.indexOf(node); cycle = [...path.slice(start), node]; return; }
+      visiting.add(node);
+      for (const next of adjacency.get(node) ?? []) visit(next, [...path, node]);
+      visiting.delete(node);
+      visited.add(node);
+    };
+    if (root) visit(root, []);
+    if (cycle) findings.push(finding(
+      "planner.journey.continuation-closure",
+      journey.file,
+      `${journey.id} contains a continuation cycle ${cycle.join(" -> ")}; journey topology is acyclic until explicit loop semantics exist`,
+    ));
   }
 
   return findings;
