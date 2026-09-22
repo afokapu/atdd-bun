@@ -1,0 +1,27 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:second
+title: Second routing decision
+theme: commons
+status: checked
+source:
+  path: plan/_trains/_interlockings/second.yaml
+  content_digest: fixture
+entrypoint:
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+route_resolution:
+  strategy: fail_on_multiple_match
+lifelines:
+  - ref: system:runaway
+messages: []
+routes:
+  - route_id: nominal
+    category: nominal
+    priority: 1
+    guard_ref: guard:nominal
+    train_id: train:runaway:second
+    train_path: plan/_trains/second.yaml
+    projection:
+      expected_sequence_digest: fixture
