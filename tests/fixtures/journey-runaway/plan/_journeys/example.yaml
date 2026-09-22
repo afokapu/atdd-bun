@@ -4,6 +4,10 @@ title: Runaway proof fixture
 status: checked
 entrypoint:
   interlocking_id: interlocking:first
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations:
   - from:
       interlocking_id: interlocking:first
