@@ -1,0 +1,18 @@
+schema_version: 1.0.0
+journey_id: journey:broken
+title: Broken journey fixture
+status: checked
+entrypoint:
+  interlocking_id: interlocking:journey-a
+continuations:
+  - from:
+      interlocking_id: interlocking:journey-a
+      route_id: nominal
+    artifact: journey:not-produced
+    to:
+      interlocking_id: interlocking:journey-a
+terminals:
+  - from:
+      interlocking_id: interlocking:journey-a
+      route_id: nominal
+    outcome: duplicate exit
