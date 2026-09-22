@@ -137,10 +137,9 @@ bun run atdd-bun init
 ```
 
 It creates `.githooks/` dispatchers, sets a worktree-local `core.hooksPath`,
-generates `.github/workflows/atdd-bun.yml`, and writes the coding-agent skill
-`.claude/skills/atdd/SKILL.md` when they are absent. It never overwrites another
-hook path, an existing generated workflow, or an existing skill unless you
-explicitly pass `--replace`. Installing the dependency alone deliberately does
+generates `.github/workflows/atdd-bun.yml`, and installs the coding-agent skill
+when they are absent. It never overwrites another hook path, an existing
+generated workflow, or an existing skill unless you explicitly pass `--replace`. Installing the dependency alone deliberately does
 neither: package installation must not mutate a repository through postinstall.
 
 Use `hooks install`, `ci init`, or `agent init` when only one surface is wanted:
@@ -165,13 +164,21 @@ workflow and GitHub branch ruleset are the authority for merging.
 
 ## Agent skill: the lifecycle in the agent's context
 
-`agent init` writes `.claude/skills/atdd/SKILL.md`, a short skill that coding
-agents load before changing code, tests, or `plan/`. It names the lifecycle
-PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE, the conventions each stage
-follows, and the `atdd-bun` profile that gates it. It points at the conventions
-shipped in this package instead of restating them, so it stays correct as they
-change; after upgrading, refresh it with `bun run atdd-bun agent init --replace`.
-The skill steers the agent; the profiles, hooks, and CI remain the enforcement.
+`agent init` gives every coding agent the same short ATDD skill:
+
+- `.agents/skills/atdd/SKILL.md`: the vendor-neutral Agent Skills path (Codex,
+  GitHub Copilot, Cursor, Gemini CLI, and others);
+- `.claude/skills/atdd/SKILL.md`: Claude Code;
+- a managed `<!-- atdd-bun:start -->` block in `AGENTS.md` pointing at the skill,
+  for agents that read `AGENTS.md` but not skills. The rest of `AGENTS.md` is
+  never touched.
+
+The skill names the lifecycle PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE, the
+conventions each stage follows, and the `atdd-bun` profile that gates it. It
+points at the conventions shipped in this package instead of restating them, so
+it stays correct as they change; after upgrading, refresh it with
+`bun run atdd-bun agent init --replace`. The skill steers the agent; the
+profiles, hooks, and CI remain the enforcement.
 
 ## CI: the merge gate
 
