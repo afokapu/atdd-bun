@@ -198,7 +198,13 @@ function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePl
       const interlocking = interlockings.get(interlockingId);
       if (!interlocking) continue;
       reachable.add(interlockingId);
-      for (const route of records(interlocking.data.routes)) {
+      const routeRows = records(interlocking.data.routes);
+      for (const routeId of duplicate(routeRows.map(route => text(route.route_id)))) findings.push(finding(
+        "planner.journey.continuation-closure",
+        journey.file,
+        `${journey.id} cannot key topology through ${interlockingId}: duplicate route_id ${routeId}`,
+      ));
+      for (const route of routeRows) {
         const routeId = text(route.route_id), key = `${interlockingId}#${routeId}`, outgoing = claimsByRoute.get(key) ?? [];
         if (outgoing.length !== 1) findings.push(finding(
           "planner.journey.continuation-closure",
