@@ -104,7 +104,9 @@ acceptances), train, train interlocking, and journey topology. It then runs
 cross-artifact validators such as registry coherence, traceability, and
 cross-interlocking continuation closure. A journey starts at one interlocking;
 each reachable route must either terminate explicitly or continue, through an
-artifact produced by that route's selected train, to another interlocking.
+artifact produced by that route's selected train, to another interlocking. Exposed journeys also
+carry Station Master actions; the Bun interlocking family checks those actions resolve through
+`JOURNEY_MAP` to `JourneyRunner`, while internal journeys carry no public reachability obligation.
 Hooks, direct CLI use, and CI invoke this same profile and therefore share the
 same schema source.
 
