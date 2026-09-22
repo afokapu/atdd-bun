@@ -2,7 +2,7 @@ schema_version: "1.0.0"
 package: "@afokapu/atdd-bun"
 node_corpus:
   source: "src/atdd/planner/conventions/nodes/"
-  count: 193
+  count: 195
   policy: >-
     Every node is shipped as canonical planner reference material. A node is not
     represented as enforced merely because it is present in this corpus.
@@ -22,6 +22,15 @@ canonical_bun_enforcement:
     predicates:
       - every registry path resolves to a train document
       - every non-sidecar train document is registered
+  - rule_id: planner.journey.continuation-closure
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - every route reachable from a journey entrypoint has exactly one continuation or terminal
+      - continuation route references resolve
+      - continuation artifacts occur in the selected train sequence
+      - continuation destinations resolve to interlockings
+      - disconnected continuation or terminal sources are rejected
   - rule_id: planner.wagon.no-consume-cycle
     origin: core-validator-port
     coverage: partial
@@ -98,7 +107,7 @@ canonical_bun_enforcement:
 
 reference_only:
   selection: "every canonical planner node not named in canonical_bun_enforcement"
-  count: 180
+  count: 181
 
 package_integrity_guard:
   implementation_id: planner.plan-integrity.bun

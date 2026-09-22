@@ -1,0 +1,39 @@
+schema_version: 1.0.0
+rule_id: planner.journey.definition
+kind: family
+status: active
+name: Journey topology — composition above interlockings
+statement: >-
+  A journey is the declarative topology that composes routing decisions across interlockings.
+  Interlockings remain local decision boundaries: each selects exactly one linear train. An exposed
+  journey declares the Station Master actions that start it and its first interlocking. The journey
+  owns what happens AFTER that selected train completes: a route may terminate explicitly, or a named
+  artifact produced by the selected train may continue control at another interlocking. A journey
+  therefore composes interlocking -> train -> interlocking without making interlockings recursive and
+  without moving wagon execution out of TrainRunner.
+terms:
+  - term_id: journey
+    label: Journey topology
+    text: journey -> {station-entrypoint, entrypoint-interlocking, route-continuations, explicit-terminals}.
+  - term_id: station_entrypoint
+    text: >-
+      exposed journeys declare Station Master actions and consumer surfaces; Bun binds those actions
+      to {journeyId, path} through coder.bun.station-master-journey-routing.
+  - term_id: continuation
+    text: >-
+      a binding from one (interlocking_id, route_id) pair, through an artifact produced by that
+      route's selected train, to the next interlocking.
+  - term_id: terminal
+    text: an explicit declaration that a route ends the journey rather than continuing to another interlocking.
+  - term_id: ownership_boundary
+    text: >-
+      Interlocking owns train selection; TrainRunner owns linear wagon execution; Journey owns
+      continuation between routing decisions. None of the three absorbs the others.
+notes: >-
+  The canonical document shape is planner-schemas/journey.schema.json. Journey artifacts are planner
+  data; a Bun runtime realization may introduce a JourneyRunner, but runtime execution is deliberately
+  separate from this semantic definition.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

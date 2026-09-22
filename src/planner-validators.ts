@@ -120,6 +120,132 @@ function contractRegistryFindings(root: string, wagons: PlanArtifact[], registry
   return findings;
 }
 
+
+type JourneyClaim = {
+  kind: "continuation" | "terminal";
+  interlockingId: string;
+  routeId: string;
+  artifact: string;
+  destination: string;
+};
+
+function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePlan>>): PlanFinding[] {
+  const interlockings = new Map(graph.artifacts.filter(item => item.kind === "interlocking").map(item => [item.id, item]));
+  const trains = new Map(graph.artifacts.filter(item => item.kind === "train").map(item => [item.id, item]));
+  const findings: PlanFinding[] = [];
+
+  for (const journey of graph.artifacts.filter(item => item.kind === "journey")) {
+    const entrypoint = journey.data.entrypoint && typeof journey.data.entrypoint === "object" ? journey.data.entrypoint as Record<string, unknown> : {};
+    const root = text(entrypoint.interlocking_id);
+    const claims: JourneyClaim[] = [];
+
+    for (const continuation of records(journey.data.continuations)) {
+      const from = continuation.from && typeof continuation.from === "object" ? continuation.from as Record<string, unknown> : {};
+      const to = continuation.to && typeof continuation.to === "object" ? continuation.to as Record<string, unknown> : {};
+      claims.push({
+        kind: "continuation",
+        interlockingId: text(from.interlocking_id),
+        routeId: text(from.route_id),
+        artifact: text(continuation.artifact),
+        destination: text(to.interlocking_id),
+      });
+    }
+    for (const terminal of records(journey.data.terminals)) {
+      const from = terminal.from && typeof terminal.from === "object" ? terminal.from as Record<string, unknown> : {};
+      claims.push({
+        kind: "terminal",
+        interlockingId: text(from.interlocking_id),
+        routeId: text(from.route_id),
+        artifact: "",
+        destination: "",
+      });
+    }
+
+    const claimsByRoute = new Map<string, JourneyClaim[]>();
+    for (const claim of claims) {
+      const key = `${claim.interlockingId}#${claim.routeId}`;
+      claimsByRoute.set(key, [...(claimsByRoute.get(key) ?? []), claim]);
+      const source = interlockings.get(claim.interlockingId);
+      if (!source) {
+        findings.push(finding("planner.journey.continuation-closure", journey.file, `${journey.id} ${claim.kind} source interlocking ${claim.interlockingId || "<missing>"} does not exist`));
+        continue;
+      }
+      const route = records(source.data.routes).find(row => text(row.route_id) === claim.routeId);
+      if (!route) {
+        findings.push(finding("planner.journey.continuation-closure", journey.file, `${journey.id} ${claim.kind} references missing route ${claim.interlockingId}#${claim.routeId || "<missing>"}`));
+        continue;
+      }
+      if (claim.kind === "continuation") {
+        const selectedTrain = text(route.train_id), train = trains.get(selectedTrain);
+        const artifacts = train ? records(train.data.sequence).map(step => text(step.artifact)).filter(Boolean) : [];
+        if (train && claim.artifact && !artifacts.includes(claim.artifact)) findings.push(finding(
+          "planner.journey.continuation-closure",
+          journey.file,
+          `${journey.id} continuation ${claim.interlockingId}#${claim.routeId} waits for ${claim.artifact}, but selected train ${selectedTrain} declares [${artifacts.join(", ")}]`,
+        ));
+        if (claim.destination && !interlockings.has(claim.destination)) findings.push(finding(
+          "planner.journey.continuation-closure",
+          journey.file,
+          `${journey.id} continuation ${claim.interlockingId}#${claim.routeId} targets missing ${claim.destination}`,
+        ));
+      }
+    }
+
+    const reachable = new Set<string>(), queue = root ? [root] : [];
+    while (queue.length) {
+      const interlockingId = queue.shift()!;
+      if (reachable.has(interlockingId)) continue;
+      const interlocking = interlockings.get(interlockingId);
+      if (!interlocking) continue;
+      reachable.add(interlockingId);
+      const routeRows = records(interlocking.data.routes);
+      for (const routeId of duplicate(routeRows.map(route => text(route.route_id)))) findings.push(finding(
+        "planner.journey.continuation-closure",
+        journey.file,
+        `${journey.id} cannot key topology through ${interlockingId}: duplicate route_id ${routeId}`,
+      ));
+      for (const route of routeRows) {
+        const routeId = text(route.route_id), key = `${interlockingId}#${routeId}`, outgoing = claimsByRoute.get(key) ?? [];
+        if (outgoing.length !== 1) findings.push(finding(
+          "planner.journey.continuation-closure",
+          journey.file,
+          `${journey.id} reachable route ${key} must have exactly one continuation or terminal; found ${outgoing.length}`,
+        ));
+        for (const edge of outgoing) if (edge.kind === "continuation" && interlockings.has(edge.destination)) queue.push(edge.destination);
+      }
+    }
+
+    for (const claim of claims) if (claim.interlockingId && interlockings.has(claim.interlockingId) && !reachable.has(claim.interlockingId)) findings.push(finding(
+      "planner.journey.continuation-closure",
+      journey.file,
+      `${journey.id} declares ${claim.kind} from unreachable ${claim.interlockingId}#${claim.routeId}`,
+    ));
+
+    const adjacency = new Map<string, Set<string>>();
+    for (const claim of claims) if (claim.kind === "continuation" && reachable.has(claim.interlockingId) && reachable.has(claim.destination)) {
+      adjacency.set(claim.interlockingId, new Set([...(adjacency.get(claim.interlockingId) ?? []), claim.destination]));
+    }
+    const visiting = new Set<string>(), visited = new Set<string>();
+    let cycle: string[] | null = null;
+    const visit = (node: string, path: string[]): void => {
+      if (cycle || visited.has(node)) return;
+      if (visiting.has(node)) { const start = path.indexOf(node); cycle = [...path.slice(start), node]; return; }
+      visiting.add(node);
+      for (const next of adjacency.get(node) ?? []) visit(next, [...path, node]);
+      visiting.delete(node);
+      visited.add(node);
+    };
+    if (root) visit(root, []);
+    if (cycle) findings.push(finding(
+      "planner.journey.continuation-closure",
+      journey.file,
+      `${journey.id} contains a continuation cycle ${cycle.join(" -> ")}; journey topology is acyclic until explicit loop semantics exist`,
+    ));
+  }
+
+  return findings;
+}
+
 /** Bun realization of the planner validators that depend only on committed plan
  * artifacts. Runtime/session/GitHub validators deliberately stay outside this package. */
 export async function validateStaticPlannerConventions(root = process.cwd()): Promise<PlanFinding[]> {
@@ -156,6 +282,7 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
   findings.push(...contractRegistryFindings(root, wagons, registry));
   findings.push(...await themeRegistryFindings(root, graph, registry));
   findings.push(...await trainRegistryFindings(root));
+  findings.push(...journeyContinuationFindings(graph));
 
   return findings;
 }

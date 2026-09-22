@@ -4,5 +4,7 @@
   "interlocking_station_routing": "coder.bun.station-master-interlocking-routing",
   "interlocking_delegates": "coder.bun.interlocking-delegates-to-trainrunner",
   "interlocking_no_cargo": "coder.bun.interlocking-does-not-carry-cargo",
-  "wagon_contract_honoured": "coder.bun.wagon-honours-its-contract"
+  "wagon_contract_honoured": "coder.bun.wagon-honours-its-contract",
+  "journey_runner_boundary": "coder.bun.journey-runner-boundary",
+  "journey_station_routing": "coder.bun.station-master-journey-routing"
 }

@@ -20,20 +20,21 @@ async function countFiles(root: string, suffix: string): Promise<number> {
 
 test("planner package assets contain canonical nodes and schemas, never raw Python validators", async () => {
   const root = join(import.meta.dir, "..");
-  expect(await countFiles(join(root, "planner-nodes/nodes"), ".yaml")).toBe(193);
-  expect(await countFiles(join(root, "planner-schemas"), ".json")).toBe(20);
+  expect(await countFiles(join(root, "planner-nodes/nodes"), ".yaml")).toBe(195);
+  expect(await countFiles(join(root, "planner-schemas"), ".json")).toBe(21);
   expect(await countFiles(root, ".py")).toBe(0);
 });
 
-test("the static kernel joins wagon, feature, WMBT, acceptance, train, and interlocking", async () => {
+test("the static kernel joins wagon, feature, WMBT, acceptance, train, interlocking, and journey", async () => {
   const root = await fixture({
     "plan/fulfil_order/_fulfil_order.yaml": wagon,
     "plan/fulfil_order/features/book.yaml": "urn: feature:fulfil-order:book\nwagon: wagon:fulfil-order\nwmbts: [wmbt:fulfil-order:E001]\n",
     "plan/fulfil_order/E001.yaml": "urn: wmbt:fulfil-order:E001\nstep: execute\ndirection: maximize\ndimension: likelihood\nobject_of_control: order\nlens: functional.effectiveness\nacceptances:\n  - identity:\n      urn: acc:fulfil-order:E001-UNIT-001\n",
     "plan/_trains/fulfilment/run.yaml": "train_id: train:fulfilment:run\nparticipants: [wagon:fulfil-order]\nsource_interlocking:\n  interlocking_id: interlocking:fulfilment\n",
     "plan/_trains/_interlockings/fulfilment.yaml": "interlocking_id: interlocking:fulfilment\nlifelines:\n  - ref: wagon:fulfil-order\nroutes:\n  - train_id: train:fulfilment:run\nmessages:\n  - from: wagon:fulfil-order\n    to: wagon:fulfil-order\n    wmbt_refs: [wmbt:fulfil-order:E001]\n",
+    "plan/_journeys/fulfilment.yaml": "journey_id: journey:fulfilment\nentrypoint:\n  interlocking_id: interlocking:fulfilment\n  exposed: false\n  actions: []\n  reason: internal-transition-only\n  surfaces: [backend]\ncontinuations: []\nterminals:\n  - from:\n      interlocking_id: interlocking:fulfilment\n      route_id: run\n    outcome: completed\n",
   });
-  try { const graph = await validatePlan(root); expect(graph.findings).toEqual([]); expect(graph.artifacts.map(a => a.kind).sort()).toEqual(["acceptance", "feature", "interlocking", "train", "wagon", "wmbt"]); expect(traceabilityPlan(graph)).toContainEqual({ from: "wmbt:fulfil-order:E001", to: "acc:fulfil-order:E001-UNIT-001", relation: "defines" }); }
+  try { const graph = await validatePlan(root); expect(graph.findings).toEqual([]); expect(graph.artifacts.map(a => a.kind).sort()).toEqual(["acceptance", "feature", "interlocking", "journey", "train", "wagon", "wmbt"]); expect(traceabilityPlan(graph)).toContainEqual({ from: "wmbt:fulfil-order:E001", to: "acc:fulfil-order:E001-UNIT-001", relation: "defines" }); expect(traceabilityPlan(graph)).toContainEqual({ from: "journey:fulfilment", to: "interlocking:fulfilment", relation: "references" }); }
   finally { await rm(root, { recursive: true, force: true }); }
 });
 

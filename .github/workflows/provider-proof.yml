@@ -1,0 +1,19 @@
+name: Provider Proof
+
+on:
+  pull_request:
+  push:
+    branches:
+      - feat/journey-topology
+
+jobs:
+  test:
+    name: bun tests + runaway proof
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run atdd-bun release check

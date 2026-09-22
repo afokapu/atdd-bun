@@ -1,0 +1,7 @@
+train_id: train:journey:a
+sequence:
+  - step: 1
+    intent: Produce the actual handoff
+    from: system:test
+    to: system:test
+    artifact: journey:actual

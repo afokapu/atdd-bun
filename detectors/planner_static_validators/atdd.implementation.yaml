@@ -17,6 +17,7 @@ emits_rule_ids:
   - planner.artifact-naming.theme-first-identity
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
+  - planner.journey.continuation-closure
 realizes_convention:
   - planner.wagon.urn
   - planner.wagon.urn-naming
@@ -30,5 +31,6 @@ realizes_convention:
   - planner.artifact-naming.theme-first-identity
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
+  - planner.journey.continuation-closure
 entrypoint: detect.mjs
 report: detect.mjs

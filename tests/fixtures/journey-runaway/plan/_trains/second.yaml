@@ -1,0 +1,11 @@
+train_id: train:runaway:second
+title: Second runaway train
+description: Completes the declared journey after the second routing decision.
+themes: [commons]
+participants: [system:runaway]
+sequence:
+  - step: 1
+    intent: Produce the declared terminal artifact
+    from: system:runaway
+    to: system:runaway
+    artifact: commons:journey-complete

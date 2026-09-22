@@ -1,0 +1,51 @@
+schema_version: 1.0.0
+rule_id: planner.journey.continuation-closure
+kind: constraint
+status: active
+name: Journey continuation closure
+statement: >-
+  Starting from a journey's entrypoint interlocking, every reachable interlocking route must have a
+  unique route_id and be accounted for exactly once by either a continuation or a terminal. A continuation's source route
+  must exist, its declared artifact must occur in the linear train selected by that route, and its
+  destination interlocking must exist. Continuation or terminal declarations whose source interlocking
+  is unreachable from the journey entrypoint are invalid. Continuation cycles are rejected until an
+  explicit loop construct defines bounded/intentional repetition.
+rationale: >-
+  Interlocking bilateral binding closes declaration -> runtime -> trace for one routing decision, but
+  without a higher-order closure rule one interlocking can hand off to another only implicitly in code.
+  This rule makes the journey-of-journeys topology explicit and prevents silent gaps, duplicate
+  continuations, disconnected topology fragments, and artifact-free handoffs.
+terms:
+  - term_id: route_key
+    text: the pair (interlocking_id, route_id); route_id must be unique inside each reachable interlocking so the topology key is unambiguous.
+  - term_id: accounted_route
+    text: a reachable route with exactly one outgoing declaration — continuation or terminal, never both.
+  - term_id: artifact_handoff
+    text: >-
+      a continuation artifact that appears in the selected train's declared sequence, proving the
+      cross-interlocking edge is anchored in the plan rather than invented by runtime code.
+  - term_id: acyclic_topology
+    text: >-
+      continuation edges may not form a cycle in this version; looping behavior requires a future
+      explicit loop construct so termination and proof obligations are not implicit.
+implementation:
+  type: validator
+  ref: planner.static.validators.bun::journeyContinuationFindings
+metadata:
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+validation:
+  family: closure
+  template: graph_route_space_closure
+  variant: planner_journey_continuation
+  phase: CONFIRM
+  enforcement: confirm-blocking
+  subject_kind: journey
+  failure_evidence:
+    - journey_id
+    - interlocking_id
+    - route_id
+    - artifact
+    - destination_interlocking_id
+    - reason
