@@ -1,0 +1,12 @@
+schema_version: 1.0.0
+journey_id: journey:example
+title: Example journey
+status: checked
+entrypoint:
+  interlocking_id: interlocking:first
+continuations: []
+terminals:
+  - from:
+      interlocking_id: interlocking:first
+      route_id: done
+    outcome: completed
