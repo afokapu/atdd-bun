@@ -1,0 +1,18 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: guard
+implementation_id: planner.plan-integrity.bun
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# These are package guards, deliberately not claims to realize any of the 197
+# canonical planner convention nodes. They make parsing and graph construction
+# fail closed before convention validators can answer.
+emits_rule_ids:
+  - atdd-bun.planner.parse
+  - atdd-bun.planner.identity-unique
+  - atdd-bun.planner.reference-resolves
+  - atdd-bun.planner.train-wagon-resolves
+  - atdd-bun.planner.interlocking-participant-resolves
+  - atdd-bun.planner.acceptance-identity
+entrypoint: detect.mjs
+report: detect.mjs

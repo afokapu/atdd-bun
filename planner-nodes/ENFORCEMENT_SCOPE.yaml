@@ -1,0 +1,81 @@
+schema_version: "1.0.0"
+package: "@afokapu/atdd-bun"
+node_corpus:
+  source: "src/atdd/planner/conventions/nodes/"
+  count: 197
+  policy: >-
+    Every node is shipped as canonical planner reference material. A node is not
+    represented as enforced merely because it is present in this corpus.
+
+# A provider implementation must name every canonical rule it realizes. `coverage`
+# describes the Bun predicate actually exercised, not an assertion that the entire
+# prose convention has been ported.
+canonical_bun_enforcement:
+  - rule_id: planner.train.registry-coherence
+    origin: core-validator-port
+    coverage: complete
+    predicates:
+      - every registry path resolves to a train document
+      - every non-sidecar train document is registered
+  - rule_id: planner.wagon.no-consume-cycle
+    origin: core-validator-port
+    coverage: partial
+    predicates:
+      - a wagon may not consume from itself
+    unported:
+      - multi-wagon strongly-connected-component detection
+  - rule_id: planner.contract.registry-coherence
+    origin: core-validator-port
+    coverage: partial
+    predicates:
+      - duplicate contract producers are reported
+    unported:
+      - contracts/_contracts.yaml resolution
+      - null cross-wagon contract rejection
+      - unconsumed producer detection
+  - rule_id: planner.wagon.urn
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - duplicate wagon slugs are reported
+    unported:
+      - documented directory and file layout
+  - rule_id: planner.wagon.urn-naming
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - wagon identity equals wagon:<slug>
+    unported:
+      - verb-object preference
+  - rule_id: planner.wagon.produce-consume-artifacts
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - duplicate produced names and invalid declared wagon endpoints are reported
+    unported:
+      - complete required-field and URN-shape validation
+  - rule_id: planner.wagon.features
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - duplicate feature references are reported
+    unported:
+      - complete feature-manifest coverage
+  - rule_id: planner.wagon.telemetry-filesystem
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - duplicate telemetry producers are reported
+    unported:
+      - telemetry URN-to-filesystem mapping
+
+reference_only:
+  selection: "every canonical planner node not named in canonical_bun_enforcement"
+  count: 189
+
+package_integrity_guard:
+  implementation_id: planner.plan-integrity.bun
+  rule_namespace: atdd-bun.planner
+  policy: >-
+    Parse and graph-closure diagnostics are package safety guards, not claims to
+    realize canonical ATdd planner conventions. They run before canonical rules.

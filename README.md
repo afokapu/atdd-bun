@@ -27,6 +27,11 @@ bun run atdd-bun --profile traceability,architecture --root .
 `traceability`, `docs`, `planner`, `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime`,
 `interlocking`, `htmx`, and `all` select the shipped detector families.
 
+`planner` first runs package plan-integrity guards, then only the explicitly
+declared Bun planner rules. [The enforcement scope](planner-nodes/ENFORCEMENT_SCOPE.yaml)
+marks each rule as complete or partial; the other canonical planner nodes are
+reference-only and are never presented as enforced.
+
 `traceability` is a standalone closure gate:
 
 ```text

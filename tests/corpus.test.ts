@@ -10,6 +10,7 @@ const plannerNodes = join(packageRoot, "planner-nodes");
 
 async function emittedRuleIds(implementation: string): Promise<string[]> {
   const manifest = await readFile(join(detectors, implementation, "atdd.implementation.yaml"), "utf8");
+  if (manifest.includes("subtype: guard")) return [];
   const ids: string[] = [];
   let inList = false;
   for (const line of manifest.split("\n")) {
@@ -45,6 +46,7 @@ test("the package ships every current Bun implementation", () => {
     "htmx_hypermedia_detector",
     "htmx_tester_detector",
     "planner_docs_capability",
+    "planner_plan_integrity",
     "planner_static_validators",
   ]);
 });

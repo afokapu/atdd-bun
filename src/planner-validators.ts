@@ -28,7 +28,10 @@ async function trainRegistryFindings(root: string): Promise<PlanFinding[]> {
 /** Bun realization of the planner validators that depend only on committed plan
  * artifacts. Runtime/session/GitHub validators deliberately stay outside this package. */
 export async function validateStaticPlannerConventions(root = process.cwd()): Promise<PlanFinding[]> {
-  const graph = await validatePlan(root), findings = [...graph.findings], wagons = graph.artifacts.filter(artifact => artifact.kind === "wagon");
+  // Plan-graph integrity is a package guard with its own implementation contract.
+  // This validator emits only the canonical convention ids declared by
+  // planner.static.validators.bun.
+  const graph = await validatePlan(root), findings: PlanFinding[] = [], wagons = graph.artifacts.filter(artifact => artifact.kind === "wagon");
   const wagonSlugs = new Set(wagons.map(wagon => text(wagon.data.wagon)));
   const wagonBySlug = new Map(wagons.map(wagon => [text(wagon.data.wagon), wagon]));
   const wagonIds = wagons.map(wagon => text(wagon.data.wagon));
@@ -52,6 +55,8 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
       else if (!from.startsWith("system:") && !from.startsWith("appendix:") && from !== "internal") findings.push(finding("planner.wagon.produce-consume-artifacts", wagon.file, `${expected} has invalid consume source ${from}`));
     }
   }
+  // This is only the duplicate-producer predicate of the contract-registry
+  // convention. The scope manifest records the remaining predicates as unported.
   for (const [contract, owners] of contractOwners) if (owners.length > 1) findings.push(finding("planner.contract.registry-coherence", wagonBySlug.get(owners[0])?.file ?? "plan/", `contract ${contract} is produced by ${owners.join(", ")}`));
   for (const [telemetry, owners] of telemetryOwners) if (owners.length > 1) findings.push(finding("planner.wagon.telemetry-filesystem", wagonBySlug.get(owners[0])?.file ?? "plan/", `telemetry ${telemetry} is produced by ${owners.join(", ")}`));
   findings.push(...await trainRegistryFindings(root));

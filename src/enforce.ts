@@ -23,7 +23,7 @@ export type EnforcementConfig = {
 const profiles: Record<Exclude<Profile, "all">, string[]> = {
   traceability: ["atdd_traceability_closure"],
   docs: ["planner_docs_capability"],
-  planner: ["planner_static_validators"],
+  planner: ["planner_plan_integrity", "planner_static_validators"],
   coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector"],
   tester: ["bun_tester_discipline_detector"],
   security: ["bun_security_hygiene_detector"],
