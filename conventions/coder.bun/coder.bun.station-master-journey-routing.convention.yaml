@@ -1,0 +1,49 @@
+schema_version: 1.1.0
+rule_id: coder.bun.station-master-journey-routing
+kind: rule
+status: active
+name: Station Master reaches exposed journey topology through JourneyRunner (Bun)
+statement: >-
+  Every journey document with entrypoint.exposed=true MUST be reachable from the Bun Station Master
+  composition root. Each declared entrypoint action MUST appear in server.ts JOURNEY_MAP as a
+  {journeyId, path} mapping to that journey document, and the Station Master MUST reference
+  JourneyRunner. Internal journeys (entrypoint.exposed=false) carry no Station Master reachability
+  obligation. This closes the public entry direction for the higher-order journey topology without
+  weakening the existing direct-train or direct-interlocking mappings.
+implementation:
+  type: validator
+  ref: coder.bun.station-master-journey-routing
+content:
+  summary: >-
+    Binds journey declaration -> Station Master reachability -> JourneyRunner. It reads
+    plan/_journeys/**/*.yaml, selects exposed journeys, and verifies that each declared action maps
+    to the same journey_id/path in JOURNEY_MAP and that server.ts references JourneyRunner.
+  normative_text: |
+    The Station Master admits three additive route forms:
+
+        action -> "train:<subject>:<slug>"
+        action -> { interlockingId, path }
+        action -> { journeyId, path: "plan/_journeys/<id>.yaml" }
+
+    For a journey route the call boundary is:
+
+        Station Master -> JourneyRunner(journeyPath) -> InterlockingRunner -> TrainRunner
+
+    The journey document is authoritative for continuation topology. JOURNEY_MAP only establishes
+    external reachability; it must not restate continuation edges.
+  fix_hint: |
+    For every exposed journey action, add a JOURNEY_MAP entry whose journeyId and path point to the
+    declared journey document and dispatch it through JourneyRunner.
+  exceptions:
+    - Journeys with entrypoint.exposed:false are intentionally not Station-Master-reachable.
+metadata:
+  aliases:
+    - BUN-STATION-MASTER-JOURNEY-ROUTING-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+terms:
+  - term_id: journey_reachability
+    text: the declaration-to-composition-root binding that makes an exposed journey executable.
+  - term_id: journey_mapping
+    text: a Station Master JOURNEY_MAP value carrying journeyId and the canonical journey YAML path.
