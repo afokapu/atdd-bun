@@ -109,3 +109,42 @@ terminals:
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("journey topology rejects implicit continuation cycles", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-bun-journey-"));
+  try {
+    await write(root, "plan/_trains/a.yaml", train("train:test:a", "test:a-complete"));
+    await write(root, "plan/_trains/b.yaml", train("train:test:b", "test:b-complete"));
+    await write(root, "plan/_trains/_interlockings/a.yaml", interlocking("interlocking:a", "go", "train:test:a"));
+    await write(root, "plan/_trains/_interlockings/b.yaml", interlocking("interlocking:b", "back", "train:test:b"));
+    await write(root, "plan/_journeys/cycle.yaml", `schema_version: 1.0.0
+journey_id: journey:cycle
+title: Cyclic journey
+status: checked
+entrypoint:
+  interlocking_id: interlocking:a
+continuations:
+  - from:
+      interlocking_id: interlocking:a
+      route_id: go
+    artifact: test:a-complete
+    to:
+      interlocking_id: interlocking:b
+  - from:
+      interlocking_id: interlocking:b
+      route_id: back
+    artifact: test:b-complete
+    to:
+      interlocking_id: interlocking:a
+terminals: []
+`);
+
+    const evidence = (await validateStaticPlannerConventions(root))
+      .filter(item => item.rule_id === "planner.journey.continuation-closure")
+      .map(item => item.evidence);
+    expect(evidence.some(item => item.includes("continuation cycle") && item.includes("interlocking:a") && item.includes("interlocking:b"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
