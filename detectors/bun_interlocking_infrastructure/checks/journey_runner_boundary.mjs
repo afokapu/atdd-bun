@@ -45,6 +45,27 @@ function journeyRunnerLine(text) {
   return match ? lineOfIndex(text, match.index) : 1;
 }
 
+function loadsJourneyDeclaration(text) {
+  const masked = maskComments(text);
+  const readsJourneyPath =
+    /Bun\.file\s*\(\s*[^)]*(?:journey|_journeys)/i.test(masked) ||
+    /\breadFile(?:Sync)?\s*\(\s*[^,)]*(?:journey|_journeys)/i.test(masked);
+  const parsesDeclaration = /Bun\.YAML\.parse\s*\(|JSON\.parse\s*\(/.test(masked);
+  return readsJourneyPath && parsesDeclaration;
+}
+
+function hardcodedInterlockingConstruction(text) {
+  const masked = maskComments(text);
+  const hits = [];
+  const re = /new\s+InterlockingRunner\s*\(\s*(["'`])([^"'`]+)\1/g;
+  let match;
+  while ((match = re.exec(masked)) !== null) {
+    const line = lineOfIndex(masked, match.index);
+    hits.push({ line, value: match[2], src: lineAt(text, line) });
+  }
+  return hits;
+}
+
 for (const scanRoot of roots) {
   for (const croot of findConsumerRoots(scanRoot)) {
     if (!hasJourneyTopology(croot)) continue;
@@ -64,8 +85,27 @@ for (const scanRoot of roots) {
       continue;
     }
 
+    const runtimeSurface = runtimeFiles(croot).map(readText).join("\n");
+    const loadsDeclaration = loadsJourneyDeclaration(runtimeSurface);
+
     for (const { file, text } of modules) {
       const line = journeyRunnerLine(text);
+      if (!loadsDeclaration) violations.push(mk(
+        RULE,
+        rel(file, croot),
+        line,
+        0,
+        "journey-runtime-transcription: JourneyRunner does not read and parse a journey declaration; topology may be hardcoded",
+        lineAt(text, line),
+      ));
+      for (const hit of hardcodedInterlockingConstruction(text)) violations.push(mk(
+        RULE,
+        rel(file, croot),
+        hit.line,
+        0,
+        "journey-runtime-hidden-topology: JourneyRunner constructs InterlockingRunner from literal " + hit.value + " instead of declared continuation data",
+        hit.src,
+      ));
       if (!referencesToken(text, "InterlockingRunner")) violations.push(mk(
         RULE,
         rel(file, croot),
