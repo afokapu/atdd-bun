@@ -1,6 +1,6 @@
 # `@afokapu/atdd-bun`
 
-`@afokapu/atdd-bun` is a Bun-native ATdd enforcement package for repositories
+`@afokapu/atdd-bun` is a Bun-native ATDD enforcement package for repositories
 that keep their plan, acceptance evidence, tests, and implementation in the
 same Git history. It gives developers and coding agents fast local feedback,
 then runs the same checks in GitHub Actions.
