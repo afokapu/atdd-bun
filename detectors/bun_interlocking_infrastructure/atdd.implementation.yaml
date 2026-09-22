@@ -27,3 +27,4 @@ realizes_convention:
 - coder.bun.station-master-interlocking-routing
 - coder.bun.interlocking-delegates-to-trainrunner
 - coder.bun.interlocking-does-not-carry-cargo
+- coder.bun.journey-runner-boundary
