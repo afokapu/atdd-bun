@@ -8,9 +8,9 @@ Conventions live in `node_modules/@afokapu/atdd-bun/` (`planner-nodes/nodes/`, `
 
 1. PLAN — Decompose the intent into wagon → WMBT → acceptance → train/interlocking → journey → contract under `plan/`, following `planner.decomposition.*`; every WMBT declares a SMOKE acceptance. Gate: `bun run atdd-bun planner`.
 2. RED — For each acceptance, write a test headed `// URN: test:{wagon}:{feature}:{ACC-ID}` and `// Phase: RED` that fails for the missing behaviour (`tester.bun.red-*`). Gate: `bun run atdd-bun tester`.
-3. GREEN — Write the least code that passes; each source file carries `URN: component:{wagon}:{feature}:{Name}:{side}:{layer}` and a `Tested-By:` block (`coder.bun.green-*`). Gate: `bun test` and `bun run atdd-bun security`.
+3. GREEN — Write the least code that passes; each source file carries `URN: component:{wagon}:{feature}:{Name}:{side}:{layer}` and a `Tested-By:` block (`coder.bun.green-*`). Gate: `bun test`.
 4. SMOKE — Prove the SMOKE acceptance through the real entry point with no mocks or spies, asserting only on observable output: HTTP, markup, stdout, exit code (`tester.bun.smoke-*`, `planner.smoke.*`). Gate: `bun run atdd-bun tester`.
-5. REFACTOR — With tests green, reduce complexity and fix layering until metrics and architecture rules pass, without changing behaviour (`coder.bun.complexity-*`, `quality-*`, `composition-*`). Gate: `bun run atdd-bun coder`.
+5. REFACTOR — With tests green, reduce complexity, fix layering, and remove security faults until the rules pass, without changing behaviour (`coder.bun.complexity-*`, `quality-*`, `composition-*`, `security-*`). Gate: `bun run atdd-bun coder security`.
 6. TRACE — Every acceptance has a test, every test resolves to a declared acceptance, every source file resolves to its tests. Gate: `bun run atdd-bun traceability`, then `bun run atdd-bun all`.
 
 When a gate fails, open `<rule_id>.convention.yaml` for the reported rule ID and fix the artifact. Never skip, suppress, or edit a convention to get green.

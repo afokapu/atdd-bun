@@ -19,7 +19,7 @@ test("agent init writes a versioned skill naming every lifecycle stage and its g
     expect(content.startsWith("---\nname: atdd\ndescription: ")).toBeTrue();
     expect(content).not.toContain("{{VERSION}}");
     for (const stage of ["PLAN", "RED", "GREEN", "SMOKE", "REFACTOR", "TRACE"]) expect(content).toMatch(new RegExp(`\\d\\. ${stage} — `));
-    for (const gate of ["atdd-bun planner", "atdd-bun tester", "atdd-bun security", "atdd-bun coder", "atdd-bun traceability", "atdd-bun all"]) expect(content).toContain(gate);
+    for (const gate of ["atdd-bun planner", "atdd-bun tester", "atdd-bun coder security", "atdd-bun traceability", "atdd-bun all"]) expect(content).toContain(gate);
     await writeFile(skill, "kept\n"); expect((await agentInit(root)).ok).toBeFalse(); expect(await readFile(skill, "utf8")).toBe("kept\n");
     expect((await agentInit(root, true)).ok).toBeTrue(); expect(await readFile(skill, "utf8")).toContain("name: atdd");
   } finally { await rm(root, { recursive: true, force: true }); }
