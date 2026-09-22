@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ATDD Journey Topology Schema",
+  "description": "A declarative topology above interlockings. Interlockings choose one linear train; a journey declares where execution continues after that selected train produces a named artifact. The topology never executes wagons and never embeds train selection.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "journey_id", "title", "status", "entrypoint", "continuations", "terminals"],
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "journey_id": {
+      "type": "string",
+      "pattern": "^journey:[a-z][a-z0-9-]*$",
+      "description": "Stable journey identity."
+    },
+    "title": { "type": "string", "minLength": 3 },
+    "status": { "type": "string", "enum": ["draft", "checked", "stale"] },
+    "entrypoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interlocking_id"],
+      "properties": {
+        "interlocking_id": {
+          "type": "string",
+          "pattern": "^interlocking:[a-z][a-z0-9-]*$",
+          "description": "The first routing decision in this journey. Station-Master exposure remains owned by the interlocking entrypoint contract."
+        }
+      }
+    },
+    "continuations": {
+      "type": "array",
+      "description": "Cross-interlocking edges. Each edge starts from one declared interlocking route; after that route's selected train produces artifact, control continues at the destination interlocking.",
+      "items": { "$ref": "#/definitions/continuation" }
+    },
+    "terminals": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Explicit terminal outcomes. Every reachable route must be accounted for by exactly one continuation or terminal.",
+      "items": { "$ref": "#/definitions/terminal" }
+    }
+  },
+  "definitions": {
+    "route_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interlocking_id", "route_id"],
+      "properties": {
+        "interlocking_id": {
+          "type": "string",
+          "pattern": "^interlocking:[a-z][a-z0-9-]*$"
+        },
+        "route_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        }
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "artifact", "to"],
+      "properties": {
+        "from": { "$ref": "#/definitions/route_ref" },
+        "artifact": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*(?::[a-z0-9][a-z0-9.-]*)+$",
+          "description": "Artifact that must be present in the selected train's declared sequence before the next routing decision is entered."
+        },
+        "to": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["interlocking_id"],
+          "properties": {
+            "interlocking_id": {
+              "type": "string",
+              "pattern": "^interlocking:[a-z][a-z0-9-]*$"
+            }
+          }
+        }
+      }
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "outcome"],
+      "properties": {
+        "from": { "$ref": "#/definitions/route_ref" },
+        "outcome": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Human-readable terminal outcome. It is descriptive and carries no runtime Cargo."
+        }
+      }
+    }
+  }
+}
