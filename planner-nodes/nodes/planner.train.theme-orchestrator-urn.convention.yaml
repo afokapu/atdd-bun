@@ -12,7 +12,7 @@ source:
   extraction_mode: high_fidelity
 content:
   examples:
-  - train:mechanic:1001-decision-standard -> python/trains/orchestrators/mechanic.py
+  - train:mechanic:decision-standard -> python/trains/orchestrators/mechanic.py
   - 'multiple # urn: lines for files implementing multiple trains'
 parity:
   source_fragments_preserved: true

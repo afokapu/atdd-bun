@@ -26,8 +26,8 @@ export class InterlockingRunner {
     return {
       interlockingId: "interlocking:match-resolution",
       routeId: "nominal-all-voted",
-      trainId: "3001-solo-match-complete",
-      trainPath: "plan/_trains/3001-solo-match-complete.yaml",
+      trainId: "train:match:solo-match-complete",
+      trainPath: "plan/_trains/train:match:solo-match-complete.yaml",
       category: "nominal",
       resolutionStrategy: "first_priority",
       guardId: "all-voted",

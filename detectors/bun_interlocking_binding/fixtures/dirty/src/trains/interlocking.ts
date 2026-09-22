@@ -17,8 +17,8 @@ export class InterlockingRunner {
     return {
       interlockingId: "interlocking:match-resolution",
       routeId: "phantom-hidden-route",
-      trainId: "3007-match-resolution-standard",
-      trainPath: "plan/_trains/3007-match-resolution-standard.yaml",
+      trainId: "train:match:match-resolution-standard",
+      trainPath: "plan/_trains/train:match:match-resolution-standard.yaml",
       category: "nominal",
       resolutionStrategy: "first_priority",
       guardId: "guard:all-voted",

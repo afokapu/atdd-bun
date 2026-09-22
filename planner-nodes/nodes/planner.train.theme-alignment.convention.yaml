@@ -3,7 +3,7 @@ rule_id: planner.train.theme-alignment
 kind: rule
 status: active
 name: Train theme alignment
-statement: A train's primary theme is the first digit of its train_id; most wagons should match it; secondary
+statement: A train declares its themes explicitly; most wagons should match the primary declared theme; secondary
   themes are allowed when a train spans multiple themes.
 source:
   legacy_path: src/atdd/planner/conventions/train.convention.yaml
@@ -12,8 +12,8 @@ source:
   extraction_mode: high_fidelity
 content:
   examples:
-  - 20-story-to-scenario -> themes:[scenario] (all wagons scenario)
-  - 30-match-solo -> themes:[match, mechanic]
+  - train:scenario:story-to-scenario -> themes:[scenario] (all wagons scenario)
+  - train:match:solo -> themes:[match, mechanic]
 parity:
   source_fragments_preserved: true
   examples_preserved: true
@@ -22,4 +22,4 @@ parity:
   reviewed_at: '2026-06-16'
 terms:
 - term_id: theme_alignment
-  text: primary theme = first train-id digit; most wagons match it.
+  text: primary theme is the first declared theme; most wagons match it.

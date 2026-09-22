@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Train Interlocking Schema",
-  "description": "Schema for a train interlocking: the train-domain route-control artifact (issue #1248, parent #1246). The interlocking YAML is authoritative for the guarded route space; each executable route maps to exactly one numbered linear train variant. Mermaid/SVG/coverage outputs are derived projections, never sources of truth. Core validates shape only; semantic cross-checks (digit/train agreement, lifeline resolution, guard-ref existence) and Station Master reachability live in the Python API and downstream validators.",
+  "description": "Schema for a train interlocking: the train-domain route-control artifact. The interlocking YAML is authoritative for the guarded route space; each executable route maps to exactly one typed linear train. Mermaid/SVG/coverage outputs are derived projections, never sources of truth. Core validates shape only; semantic cross-checks (category/train agreement, lifeline resolution, guard-reference existence) and Station Master reachability belong to configured Bun validators.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -427,8 +427,8 @@
         },
         "train_id": {
           "type": "string",
-          "pattern": "^(train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*|\\d{4}-[a-z0-9-]+)$",
-          "description": "Target linear train this route selects: typed train:<subject>:<slug> (issue #1421), or the legacy NNNN-slug form during the migration transition."
+          "pattern": "^train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$",
+          "description": "Target linear train this route selects: train:<subject>:<slug>."
         },
         "train_path": {
           "type": "string",

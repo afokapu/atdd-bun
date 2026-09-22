@@ -13,7 +13,7 @@ Audited: `.atdd/hooks/`, `src/atdd/coach/templates/hooks/`,
 | `pre-push`: protected branches | Port unchanged as Git policy. |
 | `pre-push`: commits-per-push limit | Reimplement as package policy. |
 | `pre-push`: ATDD interpreter/version gate | Exclude: Python/ATDD runtime. |
-| `pre-push`: store mirror, tags, emergency bypass | Exclude: ATDD state/runtime orchestration. |
+| `pre-push`: store mirror, tags, state/runtime bypasses | Exclude: ATDD state/runtime orchestration. |
 | `pre-push`: blast-radius validation | Reimplement using Bun enforcer profiles. |
 | `pre-merge-commit`: protected main/master | Port unchanged as Git policy. |
 | `post-commit`: blast-radius validation | Reimplement as advisory Bun validation. |

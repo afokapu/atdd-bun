@@ -26,7 +26,7 @@ content:
     Name the acceptance the test discharges, or the train it walks:
 
       // Acceptance: acc:orders:E001-SMOKE-001-renders-row
-      // Train: train:orders:0001-checkout-journey
+      // Train: train:orders:checkout-journey
   exceptions:
   - A `Train:` binding satisfies the rule for journey and E2E tests.
   - Files with no URN are owned by `test-carries-urn-identity`.

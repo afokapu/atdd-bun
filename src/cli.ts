@@ -1,31 +1,85 @@
 #!/usr/bin/env bun
-import { enforce, type Profile } from "./enforce";
+import { enforce, profileNames, type Profile } from "./enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { releaseCheck } from "./release";
 
 const args = process.argv.slice(2);
+const usage = {
+  command: "atdd-bun",
+  usage: [
+    "atdd-bun [profile ...] [--root <path>]",
+    "atdd-bun hooks <install|uninstall|status> [--replace]",
+    "atdd-bun worktree <start|finish|status>",
+    "atdd-bun ci <init|status> [--replace]",
+    "atdd-bun release check",
+  ],
+  profiles: profileNames,
+  note: "Use a profile directly, for example: atdd-bun planner. --profile planner remains supported for compatibility.",
+};
+
+function printHelp(): void {
+  if (args.includes("--json")) { console.log(JSON.stringify(usage, null, 2)); return; }
+  console.log([
+    "ATdd Bun enforcement",
+    "",
+    "Usage:",
+    ...usage.usage.map(line => "  " + line),
+    "",
+    "Profiles: " + profileNames.join(", "),
+    "",
+    usage.note,
+  ].join("\n"));
+}
+
+function fail(message: string): never {
+  console.error([message, "Run atdd-bun help for available commands and profiles."].join("\n"));
+  process.exit(1);
+}
+
+if (args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
+  printHelp();
+  process.exit(0);
+}
 if (args[0] === "hooks") {
-  const result = args[1] === "install" ? await installHooks(process.cwd(), args.includes("--replace")) : args[1] === "uninstall" ? await uninstallHooks() : await hooksStatus();
+  const result = args[1] === "install" ? await installHooks(process.cwd(), args.includes("--replace")) : args[1] === "uninstall" ? await uninstallHooks() : args[1] === "status" ? await hooksStatus() : fail("hooks requires install, uninstall, or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
-if (args[0] === "hook" && hookEvents.includes(args[1] as any)) {
-  const result = await runHook(args[1] as any, process.cwd(), args.slice(2), await new Response(Bun.stdin.stream()).text());
+if (args[0] === "hook") {
+  if (!hookEvents.includes(args[1] as typeof hookEvents[number])) fail("unknown hook event: " + (args[1] ?? "(missing)"));
+  const result = await runHook(args[1] as typeof hookEvents[number], process.cwd(), args.slice(2), await new Response(Bun.stdin.stream()).text());
   if (result.message) console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "worktree") {
-  const result = args[1] === "start" ? await startWorktree(process.cwd(), args[2] ?? "") : args[1] === "finish" ? await finishWorktree(process.cwd(), args.includes("--delete-branch")) : await worktreeStatus(process.cwd());
+  const result = args[1] === "start" ? await startWorktree(process.cwd(), args[2] ?? "") : args[1] === "finish" ? await finishWorktree(process.cwd(), args.includes("--delete-branch")) : args[1] === "status" ? await worktreeStatus(process.cwd()) : fail("worktree requires start, finish, or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
-if (args[0] === "ci") { const result = args[1] === "init" ? await ciInit(process.cwd(), args.includes("--replace")) : await ciStatus(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1); }
-if (args[0] === "release" && args[1] === "check") { const result = await releaseCheck(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1); }
+if (args[0] === "ci") {
+  const result = args[1] === "init" ? await ciInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await ciStatus() : fail("ci requires init or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "release") {
+  if (args[1] !== "check") fail("release requires check");
+  const result = await releaseCheck(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+
 const valueAfter = (flag: string) => args[args.indexOf(flag) + 1];
 const root = args.includes("--root") ? valueAfter("--root") : process.cwd();
-const profileValue = args.includes("--profile") ? valueAfter("--profile") : "all";
-const profiles = profileValue.split(",").filter(Boolean) as Profile[];
-
-const violations = await enforce({ root, profiles });
-for (const violation of violations) {
-  console.error(`${violation.file}:${violation.line}:${violation.col} ${violation.rule_id} — ${violation.evidence}`);
+if (args.includes("--root") && !root) fail("--root requires a path");
+const positional: string[] = [];
+for (let index = 0; index < args.length; index += 1) {
+  const arg = args[index];
+  if (arg === "--root" || arg === "--profile") { index += 1; continue; }
+  if (!arg.startsWith("-")) positional.push(arg);
 }
+const profileValue = args.includes("--profile") ? valueAfter("--profile") : undefined;
+if (args.includes("--profile") && !profileValue) fail("--profile requires one or more comma-separated profiles");
+const requested = profileValue ? profileValue.split(",").filter(Boolean) : positional.length ? positional : ["all"];
+const invalid = requested.find(profile => !profileNames.includes(profile as Profile));
+if (invalid) fail("unknown command or profile: " + invalid);
+const violations = await enforce({ root, profiles: requested as Profile[] });
+for (const violation of violations) {
+  console.error([violation.file, violation.line, violation.col].join(":") + " " + violation.rule_id + " — " + violation.evidence);
+}
+if (violations.length) console.error("\nUse the rule ID and evidence above to correct the affected artifact. Run atdd-bun help for commands and profiles.");
 process.exitCode = violations.length ? 1 : 0;

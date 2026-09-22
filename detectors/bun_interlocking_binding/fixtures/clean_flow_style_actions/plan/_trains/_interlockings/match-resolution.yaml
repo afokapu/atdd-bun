@@ -28,16 +28,16 @@ routes:
       expected_sequence_digest: "d285d26427cb21fedb4c5b56edc673743f6d63c85686bdeb37f5e8c5ed4736d8"
     category: nominal
     guard_ref: guard:all-voted
-    train_id: 3007-match-resolution-standard
-    train_path: plan/_trains/3007-match-resolution-standard.yaml
+    train_id: train:match:match-resolution-standard
+    train_path: plan/_trains/train:match:match-resolution-standard.yaml
   - route_id: alternate-timeout
     priority: 2
     projection:
       expected_sequence_digest: "417c29734ac10c6a6c9a59dc3c568011aa9bdf4bc46e753f351657679d791672"
     category: alternate
     guard_ref: guard:timer-expires
-    train_id: 3207-match-resolution-timeout
-    train_path: plan/_trains/3207-match-resolution-timeout.yaml
+    train_id: train:match:match-resolution-timeout
+    train_path: plan/_trains/train:match:match-resolution-timeout.yaml
 
 theme: match-resolution
 lifelines:

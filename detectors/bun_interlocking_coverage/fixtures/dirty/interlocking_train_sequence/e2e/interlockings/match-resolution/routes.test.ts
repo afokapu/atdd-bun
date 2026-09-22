@@ -7,10 +7,10 @@ const IL = "plan/_trains/_interlockings/match-resolution.yaml";
 
 test("nominal route selects the standard train", () => {
   const r = new InterlockingRunner(IL).resolveTrain("resolve_match", {}, {});
-  expect(r.trainId).toBe("3007-match-resolution-standard");
+  expect(r.trainId).toBe("train:match:match-resolution-standard");
 });
 
 test("alternate route selects the timeout train", () => {
   const r = new InterlockingRunner(IL).resolveTrain("resolve_match", {}, { voteWindowExpired: true });
-  expect(r.trainId).toBe("3207-match-resolution-timeout");
+  expect(r.trainId).toBe("train:match:match-resolution-timeout");
 });

@@ -1,0 +1,4 @@
+schema_version: 1.0.0
+train_id: train:match:match-resolution-standard
+sequence:
+  - match

@@ -11,7 +11,7 @@ export class InterlockingRunner {
 
   // BUG: returns a bare trainId string — loses routeId, guardId, category, resolutionStrategy, reason, ...
   resolveTrain(action: string, inputs: Record<string, unknown>): string {
-    return "3001-solo-match-complete";
+    return "train:match:solo-match-complete";
   }
 
   execute(action: string, inputs: Record<string, unknown>) {

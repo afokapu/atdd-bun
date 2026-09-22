@@ -5,7 +5,7 @@ import { MockInterlockingRunner } from "../../../test/mocks";
 test("nominal resolves the standard train (against a fake)", () => {
   const resolution = new MockInterlockingRunner().resolveTrain("resolve_match", { allPlayersVoted: true });
   expect(resolution.routeId).toBe("nominal-all-voted");
-  expect(resolution.trainId).toBe("3007-match-resolution-standard");
+  expect(resolution.trainId).toBe("train:match:match-resolution-standard");
 });
 
 // SECOND substitution, and the one that matters most on THIS stack: bun:test's
@@ -17,7 +17,7 @@ test("nominal resolves the standard train (against a fake)", () => {
 mock.module("../../../src/trains/interlocking", () => ({
   InterlockingRunner: class {
     resolveTrain() {
-      return { routeId: "nominal-all-voted", trainId: "3007-match-resolution-standard" };
+      return { routeId: "nominal-all-voted", trainId: "train:match:match-resolution-standard" };
     }
   },
 }));

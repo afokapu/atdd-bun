@@ -1,4 +1,4 @@
-export { enforce, implementationsFor, runImplementation } from "./enforce";
+export { enforce, implementationsFor, profileNames, runImplementation } from "./enforce";
 export type { EnforcementConfig, Profile, Violation } from "./enforce";
 export { checkDocumentation, declarationViolations, DOC_RULE_IDS, parseAsciidoctorDiagnostics, parseAttributes, renderDocumentation, scanDocumentation } from "./docs-capability";
 export type { DocumentationCheck, DocumentationDeclaration, DocumentationRender, DocumentationRuleId, DocumentationViolation } from "./docs-capability";

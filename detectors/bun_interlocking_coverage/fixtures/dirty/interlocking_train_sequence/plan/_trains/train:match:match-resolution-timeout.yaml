@@ -1,4 +1,4 @@
-train_id: 3207-match-resolution-timeout
+train_id: train:match:match-resolution-timeout
 sequence:
   - wagon: collect-votes
   - wagon: expire-window

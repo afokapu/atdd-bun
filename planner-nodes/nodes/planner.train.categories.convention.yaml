@@ -4,7 +4,7 @@ kind: family
 status: active
 name: Train test categories
 statement: "The category FIELD classifies a train as nominal, error, alternate, or exception. It is
-  metadata on the train, never a digit in its identity (issues #1421, #1440), so reclassifying a train
+  metadata on the train, never encoded in its identity, so reclassifying a train
   changes a field and not its name."
 source:
   legacy_path: src/atdd/planner/conventions/train.convention.yaml

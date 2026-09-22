@@ -7,6 +7,7 @@ const finding = (rule_id: string, file: string, evidence: string): PlanFinding =
 const records = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
 const text = (value: unknown): string => typeof value === "string" ? value : "";
 const duplicate = (values: string[]) => [...new Set(values.filter((value, index) => value && values.indexOf(value) !== index))];
+const typedTrainId = /^train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 
 async function yamlFiles(root: string): Promise<string[]> {
   if (!existsSync(root)) return [];
@@ -32,6 +33,15 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
   // This validator emits only the canonical convention ids declared by
   // planner.static.validators.bun.
   const graph = await validatePlan(root), findings: PlanFinding[] = [], wagons = graph.artifacts.filter(artifact => artifact.kind === "wagon");
+  for (const train of graph.artifacts.filter(artifact => artifact.kind === "train")) {
+    if (!typedTrainId.test(train.id)) findings.push(finding("planner.train.naming", train.file, `train_id must use train:<subject>:<slug>; found ${train.id}`));
+  }
+  for (const interlocking of graph.artifacts.filter(artifact => artifact.kind === "interlocking")) {
+    for (const route of records(interlocking.data.routes)) {
+      const trainId = text(route.train_id);
+      if (trainId && !typedTrainId.test(trainId)) findings.push(finding("planner.train.naming", interlocking.file, `route train_id must use train:<subject>:<slug>; found ${trainId}`));
+    }
+  }
   const wagonSlugs = new Set(wagons.map(wagon => text(wagon.data.wagon)));
   const wagonBySlug = new Map(wagons.map(wagon => [text(wagon.data.wagon), wagon]));
   const wagonIds = wagons.map(wagon => text(wagon.data.wagon));

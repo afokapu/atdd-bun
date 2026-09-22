@@ -15,5 +15,5 @@ test("resolve_match smoke reaches the Station Master", () => {
   const result: any = server.handleAction("resolve_match", { allPlayersVoted: true });
   expect(server.interlockingRunner).toBeInstanceOf(InterlockingRunner);
   expect(server.trainRunner).toBeInstanceOf(TrainRunner);
-  expect(result.selectedTrainId).toBe("3007-match-resolution-standard");
+  expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
 });

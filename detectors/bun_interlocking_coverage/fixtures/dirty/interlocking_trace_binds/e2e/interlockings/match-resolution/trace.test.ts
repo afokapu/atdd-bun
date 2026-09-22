@@ -9,5 +9,5 @@ test("trace only checks the selected train", () => {
   const resolution = runner.resolveTrain("resolve_match", { timerExpired: true });
   const result: any = new TrainRunner(resolution.trainId).execute({});
   const trace = result.trace;
-  expect(trace.selectedTrainId).toBe("3207-match-resolution-timeout");
+  expect(trace.selectedTrainId).toBe("train:match:match-resolution-timeout");
 });

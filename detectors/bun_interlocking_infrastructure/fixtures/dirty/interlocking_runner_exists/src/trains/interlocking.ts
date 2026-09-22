@@ -11,6 +11,6 @@ export class InterlockingRunner {
 
   // BUG: no resolveTrain(...) — there is no route-control entry point at all.
   execute(action: string, inputs: Record<string, unknown>) {
-    return new TrainRunner("plan/_trains/3001-solo-match-complete.yaml").execute("3001-solo-match-complete", inputs);
+    return new TrainRunner("plan/_trains/train:match:solo-match-complete.yaml").execute("train:match:solo-match-complete", inputs);
   }
 }

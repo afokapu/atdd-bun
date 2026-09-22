@@ -34,6 +34,9 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector"],
 };
 
+/** Profile names accepted by the CLI and public integrations. */
+export const profileNames = [...Object.keys(profiles), "all"] as Profile[];
+
 const packageRoot = resolve(import.meta.dir, "..");
 const detectorRoot = join(packageRoot, "detectors");
 

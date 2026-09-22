@@ -20,7 +20,7 @@ terms:
   label: Variation strategies
   text: strategy -> example.
   values:
-    by_mode: 30-match-solo / 31-match-duel / 32-match-team
-    by_complexity: 10-decision-core / 11-decision-timeout / 12-decision-preview
-    by_persona: 01-player-registration / 02-sponsor-registration
-    by_phase: 60-tournament-setup / 61-tournament-active / 62-tournament-complete
+    by_mode: train:match:solo / train:match:duel / train:match:team
+    by_complexity: train:decision:core / train:decision:timeout / train:decision:preview
+    by_persona: train:player:registration / train:partnership:sponsor-registration
+    by_phase: train:league:tournament-setup / train:league:tournament-active / train:league:tournament-complete

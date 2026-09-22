@@ -52,11 +52,13 @@ bun add -d @afokapu/atdd-bun
 Run the complete installed policy from the repository root:
 
 ```sh
-bun run atdd-bun --profile all
+bun run atdd-bun all
 ```
 
-`--profile all` runs every enabled packaged detector. It is the command that CI
-uses for the local enforcement portion of its check.
+`all` runs every enabled packaged detector. It is the command that CI uses for
+the local enforcement portion of its check. Run a focused profile directly—for
+example, `bun run atdd-bun planner` or `bun run atdd-bun traceability`—without
+an extra `profile` verb. `--profile <name>` remains available for compatibility.
 
 For a focused local test, register only the policy that matters to that test:
 
@@ -73,6 +75,9 @@ This makes a Bun test fail when plan → acceptance → test → implementation
 closure is broken, without enabling unrelated code-quality profiles.
 
 ## Choose the enforcement scope
+
+Run `bun run atdd-bun help` to see the complete command list, or
+`bun run atdd-bun help --json` for an agent-readable command/profile inventory.
 
 Profiles describe *what is being checked*, rather than a technical detector
 name.

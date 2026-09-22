@@ -11,6 +11,11 @@ node_corpus:
 # describes the Bun predicate actually exercised, not an assertion that the entire
 # prose convention has been ported.
 canonical_bun_enforcement:
+  - rule_id: planner.train.naming
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - train definitions and interlocking route targets use train:<subject>:<slug>
   - rule_id: planner.train.registry-coherence
     origin: core-validator-port
     coverage: complete
@@ -71,7 +76,7 @@ canonical_bun_enforcement:
 
 reference_only:
   selection: "every canonical planner node not named in canonical_bun_enforcement"
-  count: 189
+  count: 188
 
 package_integrity_guard:
   implementation_id: planner.plan-integrity.bun

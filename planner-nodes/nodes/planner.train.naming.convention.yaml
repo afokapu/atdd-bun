@@ -3,8 +3,9 @@ rule_id: planner.train.naming
 kind: rule
 status: active
 name: Train naming
-statement: train_id is {number}-{descriptive-name} kebab-case (action-object/flow-descriptor); title is
-  Title Case; files are flat at plan/_trains/{train_id}.yaml.
+statement: train_id is the typed identity train:{subject}:{descriptive-name}, with
+  kebab-case subject and descriptive name; title is Title Case; files are flat at
+  plan/_trains/{train_id}.yaml.
 source:
   legacy_path: src/atdd/planner/conventions/train.convention.yaml
   legacy_section: naming
@@ -20,6 +21,6 @@ terms:
 - term_id: train_naming
   text: train_id, title, and file naming.
   values:
-    train_id: '{number}-{descriptive-name} kebab-case'
+    train_id: 'train:{subject}:{descriptive-name}, kebab-case'
     title: Title Case
     file: plan/_trains/{train_id}.yaml (flat)

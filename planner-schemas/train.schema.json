@@ -1,10 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Train Schema",
-  "description": "Schema for train definitions orchestrating multi-wagon workflows with theme-based numbering",
+  "description": "Schema for train definitions orchestrating multi-wagon workflows with typed identities",
   "type": "object",
   "additionalProperties": false,
-  "$comment": "Trains carry a typed identity `train:<subject>:<slug>` (issue #1421). The classification the legacy [Theme][Category][Variation] numbering encoded now rides as FIELDS — `themes`, `category` (nominal|error|alternate|exception) and `sort_key` — so reclassifying a train edits metadata instead of renaming it. The category digit is retired (issues #1421, #1440); nothing may derive a category by parsing an identity.",
+  "$comment": "Trains carry the typed identity `train:<subject>:<slug>`. Classification rides as fields — `themes`, `category` (nominal|error|alternate|exception), and `sort_key` — so reclassification edits metadata instead of identity.",
   "required": [
     "train_id",
     "title",
@@ -16,18 +16,18 @@
   "properties": {
     "train_id": {
       "type": "string",
-      "pattern": "^(train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*|\\d{4}-[a-z0-9-]+)$",
-      "description": "Typed train identity (issue #1421): train:<subject>:<slug> (e.g. train:artifact-identity:migrate-with-alias). `category` is a validated field, not an identity digit. The legacy hierarchical form `NNNN-slug` is still accepted DURING the migration transition (schema-first, data-follows) and is retired once worker C4 relocates every train."
+      "pattern": "^train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$",
+      "description": "Typed train identity: train:<subject>:<slug> (for example, train:artifact-identity:migrate-with-alias). `category` is a validated field, not an identity digit."
     },
     "category": {
       "type": "string",
       "enum": ["nominal", "error", "alternate", "exception"],
-      "description": "Train variant category (issue #1421): a validated FIELD, never an identity digit. Replaces the second digit of the legacy NNNN identity — a reclassification now changes metadata, not the identity. Optional during the migration transition; to become required once C4's data migration lands."
+      "description": "Train variant category: a validated field, never part of the identity."
     },
     "sort_key": {
       "type": "integer",
       "minimum": 0,
-      "description": "Optional ordinal used to order trains within a subject/category bucket, replacing the ordering the legacy variation digits carried in the identity (issue #1421)."
+      "description": "Optional ordinal used to order trains within a subject/category bucket."
     },
     "title": {
       "type": "string",
@@ -73,8 +73,8 @@
       "description": "Other trains that must run before this train",
       "items": {
         "type": "string",
-        "pattern": "^train:([a-z][a-z0-9-]*:[a-z][a-z0-9-]*|\\d{4}-[a-z0-9-]+)$",
-        "description": "Train reference: typed train:<subject>:<slug> (issue #1421), or the legacy train:NNNN-slug form accepted during the migration transition."
+        "pattern": "^train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$",
+        "description": "Train reference: train:<subject>:<slug>."
       }
     },
     "source_interlocking": {

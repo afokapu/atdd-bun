@@ -37,7 +37,7 @@ content:
       import { InterlockingRunner } from "./trains/interlocking";
       import { TrainRunner } from "./trains/runner";
       export const JOURNEY_MAP = {
-        start_match: "3001-solo-match-complete",                              // direct
+        start_match: "train:match:solo-match-complete",                       // direct
         resolve_match: { interlockingId: "...", path: "...yaml" },            // interlocking
       };
       // interlocking branch: new InterlockingRunner(path).execute(...) -> TrainRunner.execute(...)

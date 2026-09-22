@@ -5,7 +5,7 @@ import { InterlockingRunner } from "./src/trains/interlocking";
 import { TrainRunner } from "./src/trains/runner";
 
 export const JOURNEY_MAP: Record<string, string | { interlockingId: string; path: string }> = {
-  start_match: "3001-solo-match-complete",
+  start_match: "train:match:solo-match-complete",
   resolve_match: {
     interlockingId: "interlocking:match-resolution",
     path: "plan/_trains/_interlockings/match-resolution.yaml",

@@ -9,13 +9,13 @@ function runner() {
 test("nominal-all-voted resolves the standard train", () => {
   const resolution = runner().resolveTrain("resolve_match", { allPlayersVoted: true });
   expect(resolution.routeId).toBe("nominal-all-voted");
-  expect(resolution.trainId).toBe("3007-match-resolution-standard");
+  expect(resolution.trainId).toBe("train:match:match-resolution-standard");
   new TrainRunner(resolution.trainId).execute({});
 });
 
 test("alternate-timeout resolves the timeout train", () => {
   const resolution = runner().resolveTrain("resolve_match", { timerExpired: true });
   expect(resolution.routeId).toBe("alternate-timeout");
-  expect(resolution.trainId).toBe("3207-match-resolution-timeout");
+  expect(resolution.trainId).toBe("train:match:match-resolution-timeout");
   new TrainRunner(resolution.trainId).execute({});
 });

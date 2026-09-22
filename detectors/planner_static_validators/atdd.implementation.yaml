@@ -5,6 +5,7 @@ implementation_id: planner.static.validators.bun
 targets_workspace: atdd.workspace.bun
 contract_version: "1.0.0"
 emits_rule_ids:
+  - planner.train.naming
   - planner.wagon.urn
   - planner.wagon.urn-naming
   - planner.wagon.produce-consume-artifacts
@@ -14,6 +15,7 @@ emits_rule_ids:
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
 realizes_convention:
+  - planner.train.naming
   - planner.wagon.urn
   - planner.wagon.urn-naming
   - planner.wagon.produce-consume-artifacts

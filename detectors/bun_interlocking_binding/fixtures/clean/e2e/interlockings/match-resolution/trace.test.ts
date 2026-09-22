@@ -6,5 +6,5 @@ test("resolve_match trace binds the declared route", () => {
   const trace = result.trace;
   expect(trace.interlockingId).toBe("interlocking:match-resolution");
   expect(trace.routeId).toBe("nominal-all-voted");
-  expect(trace.selectedTrainId).toBe("3007-match-resolution-standard");
+  expect(trace.selectedTrainId).toBe("train:match:match-resolution-standard");
 });
