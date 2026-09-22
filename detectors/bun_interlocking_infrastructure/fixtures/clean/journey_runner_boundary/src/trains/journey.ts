@@ -1,8 +1,15 @@
 import { InterlockingRunner } from "@app/interlocking-runtime";
 
 export class JourneyRunner {
-  execute(action: string, inputs: Record<string, unknown>, state?: unknown) {
-    const runner = new InterlockingRunner("plan/_trains/_interlockings/first.yaml");
+  constructor(private readonly journeyYamlPath: string) {}
+
+  async execute(action: string, inputs: Record<string, unknown>, state?: unknown) {
+    const declaration = Bun.YAML.parse(await Bun.file(this.journeyYamlPath).text()) as {
+      entrypoint: { interlocking_id: string };
+    };
+    const id = declaration.entrypoint.interlocking_id.replace("interlocking:", "");
+    const path = `plan/_trains/_interlockings/${id}.yaml`;
+    const runner = new InterlockingRunner(path);
     return runner.execute(action, inputs, state);
   }
 }
