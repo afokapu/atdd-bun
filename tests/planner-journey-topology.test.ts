@@ -160,3 +160,43 @@ terminals: []
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+test("journey topology rejects duplicate route ids in a reachable interlocking", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-bun-journey-"));
+  try {
+    await write(root, "plan/_trains/a.yaml", train("train:test:a", "test:a-complete"));
+    await write(root, "plan/_trains/b.yaml", train("train:test:b", "test:b-complete"));
+    await write(root, "plan/_trains/_interlockings/a.yaml", `interlocking_id: interlocking:a
+routes:
+  - route_id: same
+    train_id: train:test:a
+  - route_id: same
+    train_id: train:test:b
+`);
+    await write(root, "plan/_journeys/duplicate.yaml", `schema_version: 1.0.0
+journey_id: journey:duplicate-route
+title: Duplicate route journey
+status: checked
+entrypoint:
+  interlocking_id: interlocking:a
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+continuations: []
+terminals:
+  - from:
+      interlocking_id: interlocking:a
+      route_id: same
+    outcome: completed
+`);
+
+    const evidence = (await validateStaticPlannerConventions(root))
+      .filter(item => item.rule_id === "planner.journey.continuation-closure")
+      .map(item => item.evidence);
+    expect(evidence.some(item => item.includes("duplicate route_id same"))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
