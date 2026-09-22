@@ -5,7 +5,8 @@ status: active
 name: Journey topology — composition above interlockings
 statement: >-
   A journey is the declarative topology that composes routing decisions across interlockings.
-  Interlockings remain local decision boundaries: each selects exactly one linear train. The journey
+  Interlockings remain local decision boundaries: each selects exactly one linear train. An exposed
+  journey declares the Station Master actions that start it and its first interlocking. The journey
   owns what happens AFTER that selected train completes: a route may terminate explicitly, or a named
   artifact produced by the selected train may continue control at another interlocking. A journey
   therefore composes interlocking -> train -> interlocking without making interlockings recursive and
@@ -13,7 +14,11 @@ statement: >-
 terms:
   - term_id: journey
     label: Journey topology
-    text: journey -> {entrypoint-interlocking, route-continuations, explicit-terminals}.
+    text: journey -> {station-entrypoint, entrypoint-interlocking, route-continuations, explicit-terminals}.
+  - term_id: station_entrypoint
+    text: >-
+      exposed journeys declare Station Master actions and consumer surfaces; Bun binds those actions
+      to {journeyId, path} through coder.bun.station-master-journey-routing.
   - term_id: continuation
     text: >-
       a binding from one (interlocking_id, route_id) pair, through an artifact produced by that
