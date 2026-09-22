@@ -4,6 +4,10 @@ title: Example journey
 status: checked
 entrypoint:
   interlocking_id: interlocking:first
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations: []
 terminals:
   - from:
