@@ -1,0 +1,18 @@
+schema_version: 1.0.0
+journey_id: journey:runaway
+title: Runaway proof fixture
+status: checked
+entrypoint:
+  interlocking_id: interlocking:first
+continuations:
+  - from:
+      interlocking_id: interlocking:first
+      route_id: nominal
+    artifact: commons:handoff-ready
+    to:
+      interlocking_id: interlocking:second
+terminals:
+  - from:
+      interlocking_id: interlocking:second
+      route_id: nominal
+    outcome: completed
