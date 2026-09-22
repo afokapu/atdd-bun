@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadPlan, type PlanArtifact, type PlanFinding } from "./planner-kernel";
 
-type SchemaKind = Extract<PlanArtifact["kind"], "wagon" | "feature" | "wmbt" | "train" | "interlocking">;
+type SchemaKind = Extract<PlanArtifact["kind"], "wagon" | "feature" | "wmbt" | "train" | "interlocking" | "journey">;
 
 const schemaFiles: Record<SchemaKind, string> = {
   wagon: "wagon.schema.json",
@@ -13,6 +13,7 @@ const schemaFiles: Record<SchemaKind, string> = {
   wmbt: "wmbt.schema.json",
   train: "train.schema.json",
   interlocking: "train-interlocking.schema.json",
+  journey: "journey.schema.json",
 };
 const supportingSchemaFiles = ["appendix.schema.json", "acceptance.schema.json"];
 const repositorySchemas = [
