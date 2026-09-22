@@ -205,7 +205,7 @@ function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePl
           journey.file,
           `${journey.id} reachable route ${key} must have exactly one continuation or terminal; found ${outgoing.length}`,
         ));
-        if (outgoing.length === 1 && outgoing[0].kind === "continuation" && interlockings.has(outgoing[0].destination)) queue.push(outgoing[0].destination);
+        for (const edge of outgoing) if (edge.kind === "continuation" && interlockings.has(edge.destination)) queue.push(edge.destination);
       }
     }
 
