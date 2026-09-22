@@ -21,15 +21,8 @@ parity:
 terms:
 - term_id: theme_taxonomy
   label: Themes
-  text: theme -> description.
+  text: themes are repository-defined plan metadata.
   values:
-    commons: Identity, session, account, identifiers, UX systems
-    mechanic: Core decision loop, timebank, predictions, domain impacts
-    scenario: Story processing, curation, graph construction, fragments
-    match: Solo, duel, team gameplay orchestration
-    sensory: Gesture interpretation, tone, feedback, audio, haptics
-    player: Onboarding, progression, achievements, review
-    league: Tournaments, brackets, leaderboards, rewards
-    audience: Streaming, donations, viewer engagement
-    monetization: Wallets, cameo flows, transactions, reconciliation
-    partnership: Sponsors, partners, personas, attribution, reporting
+    source: plan/_themes.yaml
+    reserved_zero: commons
+    other_values: repository-defined

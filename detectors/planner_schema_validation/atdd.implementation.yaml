@@ -10,7 +10,11 @@ contract_version: "1.0.0"
 emits_rule_ids:
   - atdd-bun.planner.schema
   - planner.train.naming
+  - planner.contract.registry-coherence
+  - planner.theme.theme-zero-mandatory
 realizes_convention:
   - planner.train.naming
+  - planner.contract.registry-coherence
+  - planner.theme.theme-zero-mandatory
 entrypoint: detect.mjs
 report: detect.mjs

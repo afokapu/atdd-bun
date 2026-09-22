@@ -20,8 +20,8 @@ async function countFiles(root: string, suffix: string): Promise<number> {
 
 test("planner package assets contain canonical nodes and schemas, never raw Python validators", async () => {
   const root = join(import.meta.dir, "..");
-  expect(await countFiles(join(root, "planner-nodes/nodes"), ".yaml")).toBe(197);
-  expect(await countFiles(join(root, "planner-schemas"), ".json")).toBe(18);
+  expect(await countFiles(join(root, "planner-nodes/nodes"), ".yaml")).toBe(193);
+  expect(await countFiles(join(root, "planner-schemas"), ".json")).toBe(20);
   expect(await countFiles(root, ".py")).toBe(0);
 });
 

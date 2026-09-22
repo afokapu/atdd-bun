@@ -1,13 +1,11 @@
 schema_version: 1.1.0
 rule_id: planner.theme.definition
 kind: family
-status: draft
-name: Theme — advisory semantic anchor
-statement: A theme is a canonical, single-digit (0-4) partition of the ATDD abstraction
-  stack that namespaces every artifact's URN and aligns it to exactly one archetype;
-  digit 0 (commons) is the mandatory, locked floor of cross-team primitives. This node
-  is an advisory semantic anchor — it enforces nothing directly; the enforceable parts
-  of this meaning are decomposed into the constraint/rule nodes that require it.
+status: active
+name: Repository-owned theme namespace
+statement: A theme is a repository-defined kebab-case namespace for plan artifacts. The only
+  reserved entry is index 0, which MUST be commons; repositories declare every other theme
+  in plan/_themes.yaml. Theme membership and identity-prefix consistency are enforceable.
 terms:
 - term_id: semantic_anchor
   label: Advisory semantic anchor
@@ -15,12 +13,11 @@ terms:
     bound to a validator; it is transitively protected by the enforceable constraint/rule
     nodes that require it.
 - term_id: theme
-  label: Theme
-  text: theme -> {canonical, urn-namespacing, archetype-aligned, commons-floored}.
+  label: Repository-owned theme
+  text: theme -> {kebab-case namespace, registry membership, identity prefix}.
   values:
-    canonical: one of the five canonical digits 0-4; 5-9 are retired (see planner.theme.canonical-taxonomy,
-      planner.theme.must-be-canonical).
-    urn-namespacing: the theme token prefixes the artifact URN namespace (see planner.theme.urn-namespace-matches).
-    archetype-aligned: each theme maps to one archetype (see planner.theme.archetype-alignment).
-    commons-floored: digit 0 is mandatory and locked to 'commons' (see planner.theme.theme-zero-mandatory,
-      planner.theme.commons-coach-boundary).
+    registry: plan/_themes.yaml
+    reserved_zero: commons
+    format: ^[a-z][a-z0-9-]*$
+    membership: every declared theme is a value in the repository registry
+    identity_prefix: the first segment of an artifact or contract identity equals its theme

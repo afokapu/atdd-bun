@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Planner theme registry",
+  "description": "Repository-owned theme map. Only index 0 is reserved; repositories define every other theme.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["themes"],
+  "properties": {
+    "themes": {
+      "type": "object",
+      "minProperties": 1,
+      "required": ["0"],
+      "properties": {
+        "0": {
+          "const": "commons",
+          "description": "The required, reserved cross-cutting theme."
+        }
+      },
+      "patternProperties": {
+        "^(?:[1-9]|[1-9][0-9]+)$": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

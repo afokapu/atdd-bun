@@ -3,11 +3,11 @@ rule_id: planner.theme.theme-zero-mandatory
 kind: constraint
 status: active
 name: Theme zero is mandatory
-statement: 'Theme digit 0 (commons) is the mandatory, non-removable floor of every resolved theme set:
-  consumers may add/override themes 1-9 but MUST keep commons at digit 0.'
+statement: 'plan/_themes.yaml MUST declare commons at theme index 0. Repositories may add any
+  valid theme at other indexes, but may not replace or remove the commons floor.'
 implementation:
   type: validator
-  ref: conventions/presence/test_theme_zero_mandatory::test_theme_zero_catches_injected_fault
+  ref: planner.static.validators.bun
 source:
   legacy_path: src/atdd/planner/conventions/theme.convention.yaml
   legacy_section: rules + taxonomy.theme_zero_token
@@ -15,8 +15,8 @@ source:
   extraction_mode: high_fidelity
   legacy_rule_id: planner.theme.theme-zero-mandatory
 content:
-  normative_text: Any resolved theme map — defaults alone or defaults merged with consumer overrides —
-    MUST contain commons at digit 0. The resolver pins digit 0 regardless of override input.
+  normative_text: The repository-owned map is authoritative. It has no package-supplied entries
+    except its required index-0 value, commons.
 metadata:
   aliases:
   - PLANNER-THEME-ZERO-001
@@ -25,7 +25,6 @@ metadata:
   # `strict` maps to, not a disposition value — schema enum is strict/
   # suppress-and-clean/advisory/documentation-only). Corrected to strict (#1225).
   disposition: strict
-  introduced_in: 3.92.0
 parity:
   source_fragments_preserved: true
   examples_preserved: false
@@ -34,7 +33,7 @@ parity:
   reviewed_at: '2026-06-16'
 terms:
 - term_id: resolved_theme_set
-  text: the theme map after merging defaults with consumer overrides.
+  text: the theme map declared in plan/_themes.yaml.
   values:
     floor: commons at digit 0
     removable: false

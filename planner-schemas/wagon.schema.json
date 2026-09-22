@@ -41,7 +41,7 @@
     "theme": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9-]*$",
-      "description": "High-level category to group related wagons for navigation and reporting. Kebab-case string. Built-in defaults (commons, mechanic, scenario, match, sensory, player, league, audience, monetization, partnership) may be overridden via the `themes` block in `.atdd/config.yaml`. Runtime validation resolves the effective map via `get_theme_map(config)` from `atdd.coach.utils.theme_map`."
+      "description": "Repository-defined category for navigation and reporting. It must be a kebab-case value declared in plan/_themes.yaml; only index 0 is reserved as commons."
     },
 
     "subject": {

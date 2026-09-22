@@ -20,7 +20,7 @@ content:
   - commons:ux:foundations:color  (theme->subsystem->category->item)
   - commons:identifiers.uuid  (aspect + variant)
   - commons:ux:foundations:color.primary  (deep hierarchy + variant)
-  - 'match:config  (simple form: theme:aspect)'
+  - 'orders:checkout  (simple form: theme:aspect)'
 parity:
   source_fragments_preserved: true
   examples_preserved: true

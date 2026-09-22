@@ -2,7 +2,7 @@ schema_version: "1.0.0"
 package: "@afokapu/atdd-bun"
 node_corpus:
   source: "src/atdd/planner/conventions/nodes/"
-  count: 197
+  count: 193
   policy: >-
     Every node is shipped as canonical planner reference material. A node is not
     represented as enforced merely because it is present in this corpus.
@@ -31,13 +31,35 @@ canonical_bun_enforcement:
       - multi-wagon strongly-connected-component detection
   - rule_id: planner.contract.registry-coherence
     origin: core-validator-port
-    coverage: partial
+    coverage: complete
     predicates:
       - duplicate contract producers are reported
-    unported:
-      - contracts/_contracts.yaml resolution
-      - null cross-wagon contract rejection
-      - unconsumed producer detection
+      - every contract reference resolves in contracts/_contracts.yaml
+      - null cross-wagon contracts are reported
+      - unconsumed internal contract producers are reported
+      - registry identity theme matches its identity namespace
+      - registry paths resolve to contract documents
+  - rule_id: planner.theme.must-be-canonical
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - every declared theme belongs to plan/_themes.yaml
+      - the package supplies no taxonomy besides reserved index 0
+  - rule_id: planner.theme.theme-zero-mandatory
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - plan/_themes.yaml index 0 is commons
+  - rule_id: planner.theme.urn-namespace-matches
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - a themed wagon's produced identities begin with that theme
+  - rule_id: planner.artifact-naming.theme-first-identity
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - artifact identity themes are declared in plan/_themes.yaml
   - rule_id: planner.wagon.urn
     origin: bun-custom-validator
     coverage: partial
@@ -76,7 +98,7 @@ canonical_bun_enforcement:
 
 reference_only:
   selection: "every canonical planner node not named in canonical_bun_enforcement"
-  count: 188
+  count: 180
 
 package_integrity_guard:
   implementation_id: planner.plan-integrity.bun

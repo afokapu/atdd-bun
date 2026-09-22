@@ -9,4 +9,5 @@ export { PLANNER_SCHEMA_RULE_ID, validatePlannerSchemas } from "./planner-schema
 export { defaultHookPolicy, hookEvents, hooksStatus, installHooks, runHook, uninstallHooks } from "./hooks";
 export type { HookEvent, HookPolicy } from "./hooks";
 export { ciInit, ciStatus } from "./ci";
+export { initializeRepository } from "./setup";
 export { releaseCheck } from "./release";

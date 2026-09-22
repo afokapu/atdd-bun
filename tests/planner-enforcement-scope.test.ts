@@ -19,8 +19,12 @@ test("planner scope distinguishes canonical realizations, partial coverage, and 
 
   expect(files).toHaveLength(scope.node_corpus.count);
   expect(scope.reference_only.count + scoped.length).toBe(scope.node_corpus.count);
-  expect(manifests.flatMap(manifest => manifest.realizes_convention ?? []).sort()).toEqual(scoped);
-  expect(scope.canonical_bun_enforcement.filter(item => item.coverage === "complete").map(item => item.rule_id)).toEqual(["planner.train.naming", "planner.train.registry-coherence"]);
+  expect([...new Set(manifests.flatMap(manifest => manifest.realizes_convention ?? []))].sort()).toEqual(scoped);
+  expect(scope.canonical_bun_enforcement.filter(item => item.coverage === "complete").map(item => item.rule_id)).toEqual([
+    "planner.train.naming", "planner.train.registry-coherence", "planner.contract.registry-coherence",
+    "planner.theme.must-be-canonical", "planner.theme.theme-zero-mandatory",
+    "planner.theme.urn-namespace-matches", "planner.artifact-naming.theme-first-identity",
+  ]);
   expect(implementationsFor(["planner"])).toEqual(["planner_plan_integrity", "planner_schema_validation", "planner_static_validators"]);
 });
 

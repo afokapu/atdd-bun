@@ -6,6 +6,7 @@ context: test
 action: duplicate
 goal: validate
 outcome: invalid
+theme: unknown
 produce:
   - name: dup:item
     contract: contract:shared:item

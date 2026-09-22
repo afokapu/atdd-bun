@@ -56,7 +56,7 @@ test("every planner convention node conforms to its canonical node-schema invari
     }
   }
 
-  expect(nodeFiles).toHaveLength(197);
+  expect(nodeFiles).toHaveLength(193);
   expect(failures).toEqual([]);
 });
 

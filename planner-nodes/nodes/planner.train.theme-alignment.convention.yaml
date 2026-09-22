@@ -12,8 +12,8 @@ source:
   extraction_mode: high_fidelity
 content:
   examples:
-  - train:scenario:story-to-scenario -> themes:[scenario] (all wagons scenario)
-  - train:match:solo -> themes:[match, mechanic]
+  - train:orders:checkout -> themes:[orders] (all wagons orders)
+  - train:commerce:fulfilment -> themes:[orders, inventory]
 parity:
   source_fragments_preserved: true
   examples_preserved: true

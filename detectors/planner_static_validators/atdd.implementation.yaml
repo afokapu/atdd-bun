@@ -11,6 +11,10 @@ emits_rule_ids:
   - planner.wagon.features
   - planner.wagon.no-consume-cycle
   - planner.contract.registry-coherence
+  - planner.theme.must-be-canonical
+  - planner.theme.theme-zero-mandatory
+  - planner.theme.urn-namespace-matches
+  - planner.artifact-naming.theme-first-identity
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
 realizes_convention:
@@ -20,6 +24,10 @@ realizes_convention:
   - planner.wagon.features
   - planner.wagon.no-consume-cycle
   - planner.contract.registry-coherence
+  - planner.theme.must-be-canonical
+  - planner.theme.theme-zero-mandatory
+  - planner.theme.urn-namespace-matches
+  - planner.artifact-naming.theme-first-identity
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
 entrypoint: detect.mjs

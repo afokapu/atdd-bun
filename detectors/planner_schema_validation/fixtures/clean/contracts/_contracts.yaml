@@ -1,0 +1,6 @@
+contracts:
+  - identity: orders:placed
+    path: contracts/orders/placed.schema.json
+    theme: orders
+    producers: [wagon:orders]
+    consumers: []

@@ -7,6 +7,7 @@ const finding = (rule_id: string, file: string, evidence: string): PlanFinding =
 const records = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
 const text = (value: unknown): string => typeof value === "string" ? value : "";
 const duplicate = (values: string[]) => [...new Set(values.filter((value, index) => value && values.indexOf(value) !== index))];
+const contractIdentity = (value: string) => value.startsWith("contract:") ? value.slice("contract:".length) : value;
 
 async function yamlFiles(root: string): Promise<string[]> {
   if (!existsSync(root)) return [];
@@ -22,6 +23,100 @@ async function trainRegistryFindings(root: string): Promise<PlanFinding[]> {
   for (const row of rows) { const path = text(row.path), train = text(row.train_id); if (!path || !train) continue; registered.add(path); if (!existsSync(join(absolute, path))) findings.push(finding("planner.train.registry-coherence", "plan/_trains.yaml", `registry train ${train} points to missing ${path}`)); }
   const trainRoot = join(absolute, "plan/_trains");
   for (const path of await yamlFiles(trainRoot)) { const rel = relative(absolute, path).replaceAll("\\", "/"), pieces = relative(trainRoot, path).split(/[\\/]/); if (pieces.some(piece => piece.startsWith("_")) || registered.has(rel)) continue; findings.push(finding("planner.train.registry-coherence", rel, `train document is not registered in plan/_trains.yaml`)); }
+  return findings;
+}
+
+type ContractRegistry = { identities: Set<string>; rows: Record<string, unknown>[]; file: string };
+
+async function contractRegistry(root: string): Promise<ContractRegistry | null> {
+  const file = "contracts/_contracts.yaml", path = join(resolve(root), file);
+  if (!existsSync(path)) return null;
+  try {
+    const data = Bun.YAML.parse(await readFile(path, "utf8")) as { contracts?: unknown };
+    const source = data?.contracts;
+    const rows = Array.isArray(source) ? records(source) : source && typeof source === "object"
+      ? Object.entries(source as Record<string, unknown>).flatMap(([identity, entry]) => entry && typeof entry === "object" && !Array.isArray(entry) ? [{ ...(entry as Record<string, unknown>), identity: text((entry as Record<string, unknown>).identity) || identity }] : [])
+      : [];
+    return { identities: new Set(rows.map(row => text(row.identity)).filter(Boolean)), rows, file };
+  } catch {
+    return null;
+  }
+}
+
+async function themeRegistryFindings(root: string, graph: Awaited<ReturnType<typeof validatePlan>>, registry: ContractRegistry | null): Promise<PlanFinding[]> {
+  const absolute = resolve(root), file = "plan/_themes.yaml", path = join(absolute, file);
+  const declared: Array<{ theme: string; file: string }> = [];
+  for (const artifact of graph.artifacts) {
+    if (artifact.kind === "wagon" || artifact.kind === "interlocking") {
+      const theme = text(artifact.data.theme); if (theme) declared.push({ theme, file: artifact.file });
+    } else if (artifact.kind === "train") {
+      for (const theme of Array.isArray(artifact.data.themes) ? artifact.data.themes.map(text) : []) if (theme) declared.push({ theme, file: artifact.file });
+    }
+  }
+  for (const row of registry?.rows ?? []) { const theme = text(row.theme); if (theme) declared.push({ theme, file: registry?.file ?? file }); }
+  if (!existsSync(path)) return declared.length ? [finding("planner.theme.must-be-canonical", file, "themes are declared but plan/_themes.yaml is absent; add themes: { '0': commons } and repository-defined entries")] : [];
+  try {
+    const doc = Bun.YAML.parse(await readFile(path, "utf8")) as { themes?: unknown };
+    const themes = doc?.themes && typeof doc.themes === "object" && !Array.isArray(doc.themes) ? doc.themes as Record<string, unknown> : {};
+    const values = Object.values(themes).map(text).filter(Boolean);
+    const findings: PlanFinding[] = [];
+    if (themes["0"] !== "commons") findings.push(finding("planner.theme.theme-zero-mandatory", file, "theme index 0 must be the reserved token commons"));
+    for (const name of duplicate(values)) findings.push(finding("planner.theme.must-be-canonical", file, `theme ${name} is declared at more than one index`));
+    const known = new Set(values);
+    for (const item of declared) if (!known.has(item.theme)) findings.push(finding("planner.theme.must-be-canonical", item.file, `theme ${item.theme} is not declared in plan/_themes.yaml`));
+    for (const artifact of graph.artifacts.filter(item => item.kind === "wagon")) {
+      const wagonTheme = text(artifact.data.theme);
+      for (const produced of records(artifact.data.produce)) {
+        const identities = [text(produced.name), text(produced.contract).replace(/^contract:/, ""), text(produced.telemetry).replace(/^telemetry:/, "")].filter(Boolean);
+        for (const identity of identities) {
+          const namespace = identity.split(":", 1)[0];
+          if (!known.has(namespace)) findings.push(finding("planner.artifact-naming.theme-first-identity", artifact.file, `artifact ${identity} begins with undeclared theme ${namespace}`));
+          if (wagonTheme && namespace !== wagonTheme) findings.push(finding("planner.theme.urn-namespace-matches", artifact.file, `artifact ${identity} begins with ${namespace}, but wagon ${text(artifact.data.wagon)} declares theme ${wagonTheme}`));
+        }
+      }
+      for (const consumed of records(artifact.data.consume)) {
+        const identity = text(consumed.name); if (!identity) continue;
+        const namespace = identity.split(":", 1)[0];
+        if (!known.has(namespace)) findings.push(finding("planner.artifact-naming.theme-first-identity", artifact.file, `artifact ${identity} begins with undeclared theme ${namespace}`));
+      }
+    }
+    return findings;
+  } catch {
+    return [finding("planner.theme.must-be-canonical", file, "could not parse plan/_themes.yaml")];
+  }
+}
+
+function contractRegistryFindings(root: string, wagons: PlanArtifact[], registry: ContractRegistry | null): PlanFinding[] {
+  const findings: PlanFinding[] = [], byName = new Map<string, string[]>();
+  for (const wagon of wagons) for (const item of records(wagon.data.consume)) {
+    const name = text(item.name); if (name) byName.set(name, [...(byName.get(name) ?? []), text(wagon.data.wagon)]);
+  }
+  const references: Array<{ contract: string; kind: "produce" | "consume"; name: string; wagon: PlanArtifact; item: Record<string, unknown> }> = [];
+  for (const wagon of wagons) for (const kind of ["produce", "consume"] as const) for (const item of records(wagon.data[kind])) {
+    const contract = text(item.contract), name = text(item.name);
+    if (contract) references.push({ contract, kind, name, wagon, item });
+  }
+  if (references.length && !registry) {
+    for (const reference of references) findings.push(finding("planner.contract.registry-coherence", reference.wagon.file, `${reference.kind} ${reference.name} references ${reference.contract}, but contracts/_contracts.yaml is absent`));
+    return findings;
+  }
+  const registered = registry?.identities ?? new Set<string>();
+  const duplicateIdentities = duplicate((registry?.rows ?? []).map(row => text(row.identity)));
+  for (const identity of duplicateIdentities) findings.push(finding("planner.contract.registry-coherence", registry?.file ?? "contracts/_contracts.yaml", `contract identity ${identity} is declared more than once`));
+  for (const reference of references) if (reference.contract.startsWith("contract:") && !registered.has(contractIdentity(reference.contract))) {
+    findings.push(finding("planner.contract.registry-coherence", reference.wagon.file, `${reference.kind} ${reference.name} references unregistered contract ${reference.contract}`));
+  }
+  for (const row of registry?.rows ?? []) {
+    const identity = text(row.identity), theme = text(row.theme), expected = identity.split(":", 1)[0];
+    if (identity && theme && theme !== expected) findings.push(finding("planner.contract.registry-coherence", registry.file, `contract ${identity} declares theme ${theme}; its identity namespace is ${expected}`));
+    const path = text(row.path); if (path && !existsSync(join(resolve(root), path))) findings.push(finding("planner.contract.registry-coherence", registry.file, `contract ${identity} points to missing ${path}`));
+  }
+  for (const wagon of wagons) for (const produced of records(wagon.data.produce)) {
+    const name = text(produced.name), contract = text(produced.contract), producer = text(wagon.data.wagon);
+    const consumers = (byName.get(name) ?? []).filter(consumer => consumer && consumer !== producer);
+    if (consumers.length && !contract) findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} has contract null but is consumed cross-wagon by ${consumers.sort().join(", ")}`));
+    if (contract && !consumers.length && text(produced.to || "external") !== "external") findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} declares ${contract} but has no cross-wagon consumer and is not marked to: external`));
+  }
   return findings;
 }
 
@@ -55,10 +150,11 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
       else if (!from.startsWith("system:") && !from.startsWith("appendix:") && from !== "internal") findings.push(finding("planner.wagon.produce-consume-artifacts", wagon.file, `${expected} has invalid consume source ${from}`));
     }
   }
-  // This is only the duplicate-producer predicate of the contract-registry
-  // convention. The scope manifest records the remaining predicates as unported.
+  const registry = await contractRegistry(root);
   for (const [contract, owners] of contractOwners) if (owners.length > 1) findings.push(finding("planner.contract.registry-coherence", wagonBySlug.get(owners[0])?.file ?? "plan/", `contract ${contract} is produced by ${owners.join(", ")}`));
   for (const [telemetry, owners] of telemetryOwners) if (owners.length > 1) findings.push(finding("planner.wagon.telemetry-filesystem", wagonBySlug.get(owners[0])?.file ?? "plan/", `telemetry ${telemetry} is produced by ${owners.join(", ")}`));
+  findings.push(...contractRegistryFindings(root, wagons, registry));
+  findings.push(...await themeRegistryFindings(root, graph, registry));
   findings.push(...await trainRegistryFindings(root));
 
   return findings;

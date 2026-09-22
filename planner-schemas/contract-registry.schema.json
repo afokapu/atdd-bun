@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Planner contract registry",
+  "description": "The authored registry for contract identity, path, theme, producers, and consumers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contracts"],
+  "properties": {
+    "contracts": {
+      "oneOf": [
+        { "type": "array", "items": { "$ref": "#/definitions/listEntry" } },
+        {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+(?:\\.[a-z][a-z0-9-]*)?$": { "$ref": "#/definitions/keyedEntry" }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "baseEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": { "type": "string", "pattern": "^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+(?:\\.[a-z][a-z0-9-]*)?$" },
+        "path": { "type": "string", "pattern": "^contracts/[a-z][a-z0-9-]*(?:/[a-z][a-z0-9-]*)*\\.schema\\.json$" },
+        "theme": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "producers": { "type": "array", "items": { "type": "string", "pattern": "^wagon:[a-z][a-z0-9-]*$" } },
+        "consumers": { "type": "array", "items": { "type": "string", "pattern": "^wagon:[a-z][a-z0-9-]*$" } }
+      }
+    },
+    "listEntry": {
+      "allOf": [
+        { "$ref": "#/definitions/baseEntry" },
+        { "required": ["identity", "path", "theme", "producers", "consumers"] }
+      ]
+    },
+    "keyedEntry": {
+      "allOf": [
+        { "$ref": "#/definitions/baseEntry" },
+        { "required": ["path", "theme", "producers", "consumers"] }
+      ]
+    }
+  }
+}

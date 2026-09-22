@@ -3,12 +3,14 @@ import { enforce, profileNames, type Profile } from "./enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { releaseCheck } from "./release";
+import { initializeRepository } from "./setup";
 
 const args = process.argv.slice(2);
 const usage = {
   command: "atdd-bun",
   usage: [
     "atdd-bun [profile ...] [--root <path>]",
+    "atdd-bun init [--replace]",
     "atdd-bun hooks <install|uninstall|status> [--replace]",
     "atdd-bun worktree <start|finish|status>",
     "atdd-bun ci <init|status> [--replace]",
@@ -43,6 +45,10 @@ if (args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
 }
 if (args[0] === "hooks") {
   const result = args[1] === "install" ? await installHooks(process.cwd(), args.includes("--replace")) : args[1] === "uninstall" ? await uninstallHooks() : args[1] === "status" ? await hooksStatus() : fail("hooks requires install, uninstall, or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "init") {
+  const result = await initializeRepository(process.cwd(), args.includes("--replace"));
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "hook") {

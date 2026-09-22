@@ -104,17 +104,44 @@ acceptances), train, and train interlocking. It then runs cross-artifact
 validators such as registry coherence and traceability. Hooks, direct CLI use,
 and CI invoke this same profile and therefore share the same schema source.
 
+### Theme and contract registry
+
+Theme vocabulary belongs to the repository, not the package. When a plan uses
+themes, declare them in `plan/_themes.yaml`; only index `0: commons` is
+reserved. Every other index and kebab-case name is repository-defined.
+
+```yaml
+themes:
+  "0": commons
+  "1": orders
+  "2": inventory
+```
+
+Every contract is recorded in `contracts/_contracts.yaml` with its identity,
+path, theme, producers, and consumers. The planner profile checks that contract
+references resolve, registry paths exist, a contract identity begins with its
+declared theme, and cross-wagon artifacts have contract evidence.
+
 ## Hooks: fast feedback, not merge authority
 
-Install hooks once in each worktree where you work:
+Run the explicit repository bootstrap once in each worktree where you work:
+
+```sh
+bun run atdd-bun init
+```
+
+It creates `.githooks/` dispatchers, sets a worktree-local `core.hooksPath`,
+and generates `.github/workflows/atdd-bun.yml` when it is absent. It never
+overwrites another hook path or an existing generated workflow unless you
+explicitly pass `--replace`. Installing the dependency alone deliberately does
+neither: package installation must not mutate a repository through postinstall.
+
+Use `hooks install` or `ci init` when only one surface is wanted:
 
 ```sh
 bun run atdd-bun hooks install
+bun run atdd-bun ci init
 ```
-
-This creates `.githooks/` dispatchers and sets a worktree-local
-`core.hooksPath`. It refuses to replace another configured hook path unless you
-explicitly pass `--replace`.
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete
 approval, affected-area validation, and configured traceability. To inspect or

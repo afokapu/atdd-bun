@@ -60,7 +60,7 @@
       "items": {
         "type": "string",
         "pattern": "^[a-z][a-z0-9-]*$",
-        "description": "Kebab-case theme name. Built-in defaults (commons, mechanic, scenario, match, sensory, player, league, audience, monetization, partnership) may be overridden via the `themes` block in `.atdd/config.yaml`. Runtime validation resolves the effective map via `get_theme_map(config)` from `atdd.coach.utils.theme_map`."
+        "description": "Repository-defined kebab-case theme declared in plan/_themes.yaml. The only reserved registry value is index 0: commons."
       }
     },
     "primary_wagon": {

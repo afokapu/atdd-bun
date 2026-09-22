@@ -6,6 +6,7 @@ context: test
 action: order
 goal: validate
 outcome: validated
+theme: orders
 produce:
   - name: orders:placed
     contract: contract:orders:placed
