@@ -5,17 +5,18 @@ to port ATDD's full planner yet.
 
 ## Portable planner kernel
 
-The package ships only the 197 canonical convention nodes in `planner-nodes/` and
-the 18 schemas in `planner-schemas/`. It does not ship Python validator files:
+The package ships 195 canonical convention nodes in `planner-nodes/` and
+21 schemas in `planner-schemas/`. It does not ship Python validator files:
 they are executable Python/pytest code, not portable package assets. Port each
 selected validator into Bun/TypeScript before enabling it in a `planner` profile.
 
 1. Plan artifact schemas and canonical paths: wagon, feature, WMBT, acceptance,
-   train, contract, and interlocking documents.
+   train, contract, interlocking, and journey-topology documents.
 2. URN and naming grammar, including wagon/feature/WMBT chains.
 3. Plan graph references: wagon-to-feature, WMBT-to-acceptance, train registry
    and participant/sequence references, contract registry references.
 4. Static interlocking route declarations and their digest/registry invariants.
+5. Journey topology closure across interlockings, bound through artifacts produced by the selected train.
 
 ## Port status
 
@@ -28,6 +29,7 @@ dirty fixture per emitted rule):
 - produce/consume destination and source validity, including direct self-cycles;
 - duplicate contract and telemetry ownership.
 - train registry/document coherence in both directions.
+- journey continuation closure across reachable interlocking routes.
 
 The current source surface has 63 Python validator modules and 372 test cases.
 The remaining modules are deliberately not represented as inert Python or as a
