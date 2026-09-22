@@ -137,16 +137,18 @@ bun run atdd-bun init
 ```
 
 It creates `.githooks/` dispatchers, sets a worktree-local `core.hooksPath`,
-and generates `.github/workflows/atdd-bun.yml` when it is absent. It never
-overwrites another hook path or an existing generated workflow unless you
+generates `.github/workflows/atdd-bun.yml`, and writes the coding-agent skill
+`.claude/skills/atdd/SKILL.md` when they are absent. It never overwrites another
+hook path, an existing generated workflow, or an existing skill unless you
 explicitly pass `--replace`. Installing the dependency alone deliberately does
 neither: package installation must not mutate a repository through postinstall.
 
-Use `hooks install` or `ci init` when only one surface is wanted:
+Use `hooks install`, `ci init`, or `agent init` when only one surface is wanted:
 
 ```sh
 bun run atdd-bun hooks install
 bun run atdd-bun ci init
+bun run atdd-bun agent init
 ```
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete
@@ -160,6 +162,16 @@ bun run atdd-bun hooks uninstall
 
 Hooks can be bypassed by Git and therefore are never the merge gate. The CI
 workflow and GitHub branch ruleset are the authority for merging.
+
+## Agent skill: the lifecycle in the agent's context
+
+`agent init` writes `.claude/skills/atdd/SKILL.md`, a short skill that coding
+agents load before changing code, tests, or `plan/`. It names the lifecycle
+PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE, the conventions each stage
+follows, and the `atdd-bun` profile that gates it. It points at the conventions
+shipped in this package instead of restating them, so it stays correct as they
+change; after upgrading, refresh it with `bun run atdd-bun agent init --replace`.
+The skill steers the agent; the profiles, hooks, and CI remain the enforcement.
 
 ## CI: the merge gate
 

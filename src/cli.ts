@@ -2,6 +2,7 @@
 import { enforce, profileNames, type Profile } from "./enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
+import { agentInit, agentStatus } from "./agent";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
 
@@ -14,6 +15,7 @@ const usage = {
     "atdd-bun hooks <install|uninstall|status> [--replace]",
     "atdd-bun worktree <start|finish|status>",
     "atdd-bun ci <init|status> [--replace]",
+    "atdd-bun agent <init|status> [--replace]",
     "atdd-bun release check",
   ],
   profiles: profileNames,
@@ -62,6 +64,10 @@ if (args[0] === "worktree") {
 }
 if (args[0] === "ci") {
   const result = args[1] === "init" ? await ciInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await ciStatus() : fail("ci requires init or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "agent") {
+  const result = args[1] === "init" ? await agentInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await agentStatus() : fail("agent requires init or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "release") {
