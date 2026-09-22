@@ -49,7 +49,7 @@ function journeyDocuments(croot) {
 function actionMapping(text, action) {
   const masked = maskComments(text);
   const key = escapeRegExp(action);
-  const re = new RegExp("(?:[\\\"']" + key + "[\\\"']|\\\\b" + key + "\\\\b)\\\\s*:\\\\s*\\\\{([\\\\s\\\\S]*?)\\\\}", "m");
+  const re = new RegExp("(?:[\\\"']" + key + "[\\\"']|\\b" + key + "\\b)\\s*:\\s*\\{([\\s\\S]*?)\\}", "m");
   const match = re.exec(masked);
   if (!match) return null;
   return { body: match[1], line: lineOfIndex(masked, match.index) };
