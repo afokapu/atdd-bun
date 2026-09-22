@@ -1,0 +1,16 @@
+schema_version: "1.0.0"
+kind: implementation
+implementation_id: planner.static.validators.bun
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+emits_rule_ids:
+  - planner.wagon.urn
+  - planner.wagon.urn-naming
+  - planner.wagon.produce-consume-artifacts
+  - planner.wagon.features
+  - planner.wagon.no-consume-cycle
+  - planner.contract.registry-coherence
+  - planner.wagon.telemetry-filesystem
+  - planner.train.registry-coherence
+entrypoint: detect.mjs
+report: detect.mjs

@@ -1,0 +1,35 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_green_traceability_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+emits_rule_ids:
+- coder.bun.green-header-order
+- coder.bun.green-header-purpose
+- coder.bun.green-header-runtime
+- coder.bun.green-header-tested-by
+- coder.bun.green-urn-layer
+- coder.bun.green-urn-marker
+- coder.bun.green-urn-name-matches
+- coder.bun.green-urn-pattern
+- coder.bun.green-urn-side
+- coder.bun.green-urn-wagon-feature
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+# All ten, as a LIST. The Vite sibling declares a SCALAR here
+# (`realizes_convention: coder.vite.green-urn-marker`) while emitting ten rule ids,
+# so its binder indexes ONE convention and the other nine bind to nothing — they
+# are authored, admitted, and silently unenforced. Verified against this same
+# binder: a scalar yielded "2 bound" for a 9-rule package, a list yielded "9 bound".
+- coder.bun.green-header-order
+- coder.bun.green-header-purpose
+- coder.bun.green-header-runtime
+- coder.bun.green-header-tested-by
+- coder.bun.green-urn-layer
+- coder.bun.green-urn-marker
+- coder.bun.green-urn-name-matches
+- coder.bun.green-urn-pattern
+- coder.bun.green-urn-side
+- coder.bun.green-urn-wagon-feature

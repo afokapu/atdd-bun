@@ -1,0 +1,55 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-header-purpose
+kind: rule
+status: active
+name: The header states the file's purpose in one line
+statement: >-
+  Every implementation file MUST carry a `Purpose:` description of at most 80 characters. Stack-neutral
+  obligation, Bun-specific detector; realized by `bun_green_traceability_detector` (core alias GREEN-
+  HEADER-002).
+terms:
+- term_id: purpose_line
+  text: >-
+    a single `Purpose:` line of at most 80 characters stating the file's one job.
+- term_id: length_cap
+  text: >-
+    the 80-character limit. It forces one job to be named, and a purpose that will not fit is
+    evidence the file has more than one.
+content:
+  summary: >-
+    A "one-line purpose" obligation: present, and 80 characters or fewer.
+  normative_text: |
+    The 80-character cap is the whole rule. An unbounded field becomes a paragraph, a paragraph goes stale, and a stale paragraph is worse than no description because it is believed. A single line that must fit forces the author to name the file's one job — and a file whose job will not fit in 80 characters is usually a file doing more than one thing, which makes this a design signal as much as a documentation rule.
+  fix_hint: |
+    State the one job in a single line:
+
+      // Purpose: render one order row fragment for htmx to swap
+
+    If it will not fit, that is evidence the file has more than one responsibility; split it rather than expanding the line.
+  exceptions:
+  - Exactly 80 characters passes; 81 does not.
+  - A missing description is reported at the URN line.
+  - Test files are excluded.
+metadata:
+  aliases:
+  # GREEN-HEADER-002 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-header-purpose. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-HEADER-002
+  - BUN-GREEN-HEADER-PURPOSE-001
+  severity: 2
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

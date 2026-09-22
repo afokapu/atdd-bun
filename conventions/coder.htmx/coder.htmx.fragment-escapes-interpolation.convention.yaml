@@ -1,0 +1,72 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.fragment-escapes-interpolation
+kind: rule
+status: active
+name: HTML fragments escape interpolated values before htmx swaps them into the DOM
+statement: >-
+  A template literal that emits HTML MUST NOT interpolate a bare variable or property chain
+  (`${user.name}`) directly into the markup; the value MUST pass through an escaping helper first. In a
+  full-stack Bun + htmx application the server renders fragments as template literals and htmx inserts
+  them into the live DOM via `innerHTML`, so there is no framework auto-escaping anywhere in the path.
+  This is the Bun/htmx-stack realization of the agnostic "untrusted data is escaped at the rendering
+  boundary" obligation, enforced by the `htmx_hypermedia_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: html_bearing_template
+  text: >-
+    a backtick template literal whose text contains an opening tag (`<div`, `<li …`). That is the
+    signal the literal is markup rather than a log line or a SQL string.
+- term_id: bare_interpolation
+  text: >-
+    an interpolation whose expression is only an identifier or a property chain — `${title}`,
+    `${order.customer.name}`. No call, no operator, no literal. This is raw data reaching markup.
+- term_id: composition
+  text: >-
+    an interpolation that is a CALL — `${escapeHtml(x)}`, `${rows.map(row).join("")}`. Either an escape
+    helper or fragment nesting; deliberately out of scope, because flagging it would bury the rule in
+    false positives on legitimate composition.
+content:
+  summary: >-
+    A "fragments escape their data" obligation, and the security-critical rule of this extension. The
+    realization is a zero-dependency Bun detector that extracts every template literal (brace-depth
+    aware, so a nested object inside an interpolation does not end it early), keeps the ones containing
+    an opening tag, and flags interpolations whose expression is a bare identifier or property chain.
+  normative_text: |
+    This obligation is IMPLICIT in a JSX stack and EXPLICIT here, and that shift is the whole reason the
+    rule exists. React escapes `{value}` in JSX automatically; a team moving to htmx carries over the
+    habit of interpolating values into markup without carrying over the escaping that used to happen
+    invisibly underneath. The result is stored XSS in exactly the code that looks most like what they
+    wrote before.
+    The rule is deliberately narrow so that it is precise rather than noisy: it catches the shape that
+    is ALWAYS wrong — raw data dropped straight into markup — and says nothing about calls, which may
+    be escaping helpers or nested fragments. A call that neither escapes nor nests (`${format(bio)}`)
+    passes this rule and must be caught by review; narrowing was the price of a signal a team will not
+    switch off.
+  fix_hint: |
+    Route the value through an escaping helper at the interpolation site:
+
+      `<li class="order">${order.title}</li>`                 // ✗ raw data into markup
+      `<li class="order">${escapeHtml(order.title)}</li>`     // ✓ escaped at the boundary
+
+    Escape at the RENDER site, never at the storage or fetch site: a value escaped early is
+    double-escaped when it reaches a non-HTML sink, and a value escaped late is escaped exactly once,
+    in the one place its destination is known. `strict` — this is the extension's security rule.
+  exceptions:
+  - Template literals containing no opening tag are not markup and are never scanned.
+  - Interpolations that are calls are treated as escaping or composition (see `composition`).
+  - Test files (`*.test.*`, `*.spec.*`) are excluded.
+metadata:
+  aliases:
+  # SECURITY-XSS-001 is the SHARED core alias — the same one carried by
+  # coder.security.xss (core) and coder.vite.security-xss (the Vite realization).
+  # Carrying it is how a stack realization declares lineage in this hub: the three
+  # rules are one obligation with three per-stack detectors, and tooling that
+  # reasons about the obligation finds them through the shared alias.
+  - HTMX-FRAGMENT-ESCAPE-001
+  - SECURITY-XSS-001
+  severity: 1
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

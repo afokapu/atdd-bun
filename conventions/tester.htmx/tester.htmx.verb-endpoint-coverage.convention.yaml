@@ -1,0 +1,54 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.verb-endpoint-coverage
+kind: rule
+status: active
+name: Every htmx endpoint declared in markup has a test
+statement: >-
+  Every endpoint declared by an htmx verb attribute (`hx-get`, `hx-post`, `hx-put`, `hx-patch`, `hx-
+  delete`) MUST be exercised by at least one test. Bun/htmx realization mirroring
+  `tester.convex.interlocking-route-coverage`; the declaration source differs, and that difference IS the
+  adaptation — a Convex route is declared in `plan/_trains/_interlockings/**/*.yaml`, an htmx endpoint is
+  declared in the MARKUP, so the markup is this stack's route space.
+terms:
+- term_id: route_space
+  text: >-
+    the set of endpoints the application actually exposes. For Convex it is the interlocking
+    YAML; for htmx it is every hx- verb attribute in the templates, because that attribute IS
+    the request.
+- term_id: coverage_no_op
+  text: >-
+    the behaviour when a scan mount holds markup but no test files: emit nothing rather than
+    report every endpoint uncovered. A coverage rule needs both sides, and a source-only scan is
+    not evidence of a missing test.
+content:
+  summary: >-
+    Collects every hx- verb endpoint from templates and source, collects the text of every test file in
+    the same mount, and reports an endpoint no test mentions. A literal match counts, as does a match up
+    to a dynamic segment, so `/orders/1` covers `/orders/:id`.
+  normative_text: |
+    An htmx endpoint is not reached through a router table a tool can enumerate; it is an attribute on an element. That makes the route space easy to grow and easy to forget — a developer adds
+    `hx-get="/invoices/overdue"` to a template and nothing anywhere records that a new server surface exists.
+    This is the rule that notices, and it is the direct counterpart of the Convex coverage rule. That it reads markup rather than a plan file is not a boundary violation but the honest location of the declaration in this stack.
+    The no-op matters as much as the check: on a source-only mount the rule stays silent, both because a coverage claim needs a suite to measure against, and because a tester-persona rule must not produce findings on a tree containing no tests.
+  fix_hint: |
+    Write a test that exercises the endpoint, or delete the attribute if the surface is not real:
+
+      <div hx-get="/invoices/overdue" hx-target="#late"></div>   <!-- declared -->
+
+      const res = await fetch("/invoices/overdue");                // exercised
+      expect(res.status).toBe(200);
+  exceptions:
+  - A mount containing no test files is skipped entirely.
+  - A dynamic segment matches on its static prefix, so a test hitting a concrete id covers the template.
+  - An absolute-URL endpoint is `coder.htmx.verb-endpoint-same-origin`'s finding, not this rule's.
+metadata:
+  aliases:
+  # Mirrored from convex.extension.tester.base :: tester.convex.interlocking-route-coverage
+  # ADDED for this stack: core has no node for hypermedia endpoint coverage.
+  - BUN-ENDPOINT-COVERAGE-001
+  severity: 2
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_tester_detector

@@ -1,0 +1,74 @@
+schema_version: 1.1.0
+rule_id: planner.docs.reference-integrity
+kind: rule
+status: active
+name: The site builds deterministically and every internal reference resolves
+statement: >-
+  The corpus MUST render with asciidoctor, and every internal cross-reference MUST resolve. A build
+  failure or an unresolvable internal reference is a FAIL. An ABSENT toolchain, or a build failure
+  the capability cannot attribute to a specific document, is `COULD_NOT_CHECK` — never `PASS`, and
+  never `FAIL` (spec 2 §3, *What the capability owes core*, and §7).
+terms:
+- term_id: internal_reference
+  text: >-
+    a cross-reference from one document in the corpus to another (`xref:`, `<<anchor>>`). External
+    links are out of scope; their liveness is a network property, not a corpus property.
+- term_id: unattributable_failure
+  text: >-
+    a render failure the capability cannot pin to a document — a crashed renderer, an unreadable
+    tree, a toolchain that is not installed. It is reported as `COULD_NOT_CHECK`, which BLOCKS.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: 'ABSENT — `command -v asciidoctor` exits 1 on this machine. The capability therefore returns COULD_NOT_CHECK here today, which BLOCKS, and that is the specified behaviour rather than a defect. Re-take this probe in the CI image before escalating; asciidoctor absence on a developer machine is expected and is not a reason to weaken the rule.'
+    measurement_target: 'this machine (the extension''s own toolchain probe)'
+    measurement_command: 'command -v asciidoctor'
+    escalate_when: 'asciidoctor is available in CI and a full render of the migrated corpus completes with zero unresolvable internal references. Note that the COULD_NOT_CHECK path already BLOCKS at the capability seam regardless of this disposition — advisory governs the reported findings, not the capability''s verdict contract.'
+content:
+  summary: >-
+    Reference integrity is why asciidoctor (Ruby) is the reference implementation rather than a pure
+    Python renderer: unresolvable internal references must be VALIDATION FAILURES, and the Python
+    options detect them weakly. A Ruby runtime in CI is the cost, accepted deliberately (spec 2 §9
+    Decision 4).
+  normative_text: |
+    THE VERDICT DISTINCTION IS THE POINT OF THIS RULE, and it is the thing most likely to be got
+    wrong. *There is no obligation here* (`NOT_APPLICABLE`, permits) and *I could not see whether the
+    obligation was met* (`COULD_NOT_CHECK`, blocks) must never collapse into one another.
+
+    This repository has that bug in at least three places, which is why spec 2 §3 states it so
+    emphatically: #1745, where `coach.pr.merge-blocks-on-pre-smoke-close` degrades to advisory on a
+    lookup failure and REPORTS IT AS A PASS; #1774, where *no mirror found* is read as *nothing to
+    lose* and 15 nodes are invisible to the succession guard; #1716, where checks pass when they
+    cannot observe and C011 compares the store against itself.
+
+    An unresolvable lookup must remain DATA — a named, reportable state that reaches the report,
+    never an empty clean result. A missing asciidoctor is not a clean corpus. It is an unexamined one.
+  fix_hint: |
+    For a reported reference, fix the target or the reference:
+
+      xref:architecture/shared-control-rooot.adoc[]   # ✗ unresolvable — FAIL
+      xref:architecture/shared-control-root.adoc[]    # ✓ resolves
+
+    For `COULD_NOT_CHECK`, install the toolchain rather than suppressing the verdict:
+
+      gem install asciidoctor
+
+    Do not "fix" a COULD_NOT_CHECK by making the capability return PASS when the renderer is absent.
+    That is the #1745 defect, re-committed.
+  exceptions:
+  - External links are not resolved. Their liveness is a network property and checking it would make
+    the gate non-deterministic.
+  - '`docs/dist/**` is the render OUTPUT and is never an input to the render.'
+metadata:
+  aliases:
+  - DOCS-RENDER-001
+  severity: 1
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

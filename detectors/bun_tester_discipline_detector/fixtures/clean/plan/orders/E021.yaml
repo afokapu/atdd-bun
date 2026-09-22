@@ -1,0 +1,9 @@
+urn: wmbt:orders:E021
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E021
+acceptances:
+  - identity:
+      urn: acc:orders:E021-INPUT-001-rejects-malformed
+      id: E021-INPUT-001-rejects-malformed
+      purpose: Declared so a test binding to it resolves
+      phase: UNIT

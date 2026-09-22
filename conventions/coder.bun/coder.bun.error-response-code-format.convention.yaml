@@ -1,0 +1,46 @@
+schema_version: 1.1.0
+rule_id: coder.bun.error-response-code-format
+kind: rule
+status: active
+name: Error codes are UPPER_SNAKE_CASE
+statement: >-
+  An `error_code` value MUST be UPPER_SNAKE_CASE. Stack-neutral obligation, and the second of only two
+  rules in this family that PORTS verbatim: the payload is JSON, so the pattern and the case test carry
+  over from the python-pytest sibling `coder.error-response.code-format` unchanged. Realized by
+  `bun_security_hygiene_detector` (core alias ERROR-CODE-FORMAT-001).
+terms:
+- term_id: error_code
+  text: >-
+    the machine key a client branches on. Once it does, the spelling is API surface.
+- term_id: upper_snake_case
+  text: >-
+    `^[A-Z][A-Z0-9_]+$`. The convention itself is arbitrary; that it is uniform is not.
+content:
+  summary: >-
+    Matches `"error_code": "<value>"` (and the `errorCode` spelling) and tests the value against
+    `^[A-Z][A-Z0-9_]+$`.
+  normative_text: |
+    An error code is a machine key, and the moment a client branches on it its spelling becomes API surface. An inconsistent set — `notFound` beside `NOT_FOUND` — produces two codes for one condition, and no amount of testing reconciles them because both are 'working'.
+    The case convention itself is arbitrary; that it is uniform is not.
+  fix_hint: |
+    Use UPPER_SNAKE_CASE consistently:
+
+      { error_code: "orderNotFound" }   // wrong
+      { error_code: "ORDER_NOT_FOUND" } // right
+  exceptions:
+  - Only the `error_code` / `errorCode` key is checked; other string values are out of scope.
+  - Human-readable messages belong in a separate field and are not constrained.
+  - Test files are excluded.
+metadata:
+  aliases:
+  # ERROR-CODE-FORMAT-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - ERROR-CODE-FORMAT-001
+  severity: 4
+  # PORTED verbatim from the python-pytest sibling — the pattern is
+  # language-neutral, so both providers produce the same findings.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector

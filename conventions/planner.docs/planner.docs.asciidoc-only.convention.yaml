@@ -1,0 +1,71 @@
+schema_version: 1.1.0
+rule_id: planner.docs.asciidoc-only
+kind: rule
+status: active
+name: AsciiDoc is the only authored format beneath docs/
+statement: >-
+  A file authored beneath `docs/` MUST be AsciiDoc (`.adoc`). An authored `.md` beneath `docs/`,
+  outside the generated `docs/dist/` tree, is a violation. This is the format half of the
+  documentation model handoff spec 2 §4 names; it is an EXTENSION obligation because core is
+  forbidden to know what a `.adoc` is (companion §4, *Deliberately excluded*).
+terms:
+- term_id: authored_file
+  text: >-
+    a file a human wrote and committed beneath `docs/`. The test is location, not content: anything
+    under `docs/` that is not under `docs/dist/` is authored.
+- term_id: generated_output
+  text: >-
+    everything beneath `docs/dist/`. It is rendered by the build (spec 2 §7), normally excluded from
+    git, and never subject to the authored-format rule.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '71 markdown beneath docs/, 18 non-dotfile markdown at the repository root (89 total; 90 counting .atdd-launch-prompt.md), 0 .adoc anywhere. The corpus is 0% compatible, which is why this rule ships advisory.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: 'find docs -name ''*.md'' -type f | wc -l ; find . -maxdepth 1 -name ''*.md'' -type f | wc -l ; find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
+    escalate_when: 'No authored `.md` remains beneath `docs/` outside `docs/dist/` in the consuming repository — i.e. the migration of spec 2 §1 has landed and the corpus is compatible with `strict`.'
+    measurement_note: 'Spec 2 §1 records 71 + 18 = 89 as of the same date and this run reproduces it exactly for the non-dotfile corpus. Re-take this measurement at the escalation checkpoint; do not escalate on the number recorded here (spec 2 §8, and companion §7 on stale measurements).'
+content:
+  summary: >-
+    One authored format, mechanically checked. The rule exists because a mixed corpus cannot carry a
+    relationship graph: `doc-id` and the `:implements:` / `:supersedes:` edges of
+    `planner.docs.graph-target-resolves` are AsciiDoc attributes, and a markdown file has nowhere to
+    put them. Format uniformity is the precondition for every other rule in this extension.
+  normative_text: |
+    The rule is deliberately a LOCATION test rather than a content test. Asking "is this really
+    prose documentation?" is semantic and undecidable; asking "is this path under docs/ and not
+    under docs/dist/, and does it end .md?" is deterministic and cheap. Spec 2 §4 chose the
+    decidable form on purpose, and the same reasoning is why the undeclared-change rule
+    (planner.docs.undeclared-change) is stated as the enforceable inverse of "should this have been
+    declared?".
+
+    `docs/dist/**` is excluded because it is build output, not authorship. Excluding it by path —
+    rather than by gitignore status — keeps the check identical whether or not the tree has been
+    built, which is what makes it deterministic in CI.
+  fix_hint: |
+    Convert the file and keep its content:
+
+      docs/architecture/shared-control-root.md      # ✗ authored markdown under docs/
+      docs/architecture/shared-control-root.adoc     # ✓ authored AsciiDoc
+
+    A historical document does not become current by being converted. Convert it INTO
+    `docs/archive/` and give it `:status:` accordingly — spec 2 §2 *Out of scope* is explicit that
+    migration preserves history and never promotes it.
+  exceptions:
+  - Everything beneath `docs/dist/` is generated output and is never scanned.
+  - Markdown OUTSIDE `docs/` is untouched by this rule. `README.md`, `CONTRIBUTING.md` and the
+    repository-root corpus are out of its scope; they are migrated by the adoption step, not
+    rejected by this detector.
+metadata:
+  aliases:
+  - DOCS-FORMAT-001
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

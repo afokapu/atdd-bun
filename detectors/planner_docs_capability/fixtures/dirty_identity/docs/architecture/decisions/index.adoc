@@ -1,0 +1,7 @@
+= Decisions
+:doc-id: architecture.decisions.index
+:status: current
+
+Derived registry — regenerated, never typed.
+
+* ADR-20260906-001 — Shared Control Root

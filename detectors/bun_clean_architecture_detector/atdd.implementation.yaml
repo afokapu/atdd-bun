@@ -1,0 +1,42 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_clean_architecture_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# CLEAN-ARCHITECTURE family: layering, composition, DTOs, boundaries and naming.
+# Mirrored rule-for-rule from coder.convex.* and coder.vite.*, the two existing
+# realizations of the same core obligations. Nothing here is invented.
+#
+# These rules read the DECLARED dependency, so they include type-only imports: an
+# `import type` from domain into integration is erased at runtime but is still a
+# design coupling a reader must follow. That is the opposite call from
+# dead-code-reachability, deliberately — the two rules ask different questions.
+emits_rule_ids:
+- coder.bun.boundaries-http-client
+- coder.bun.commons-application-no-integration
+- coder.bun.commons-cross-feature-imports-in
+- coder.bun.commons-domain-no-framework-import
+- coder.bun.commons-domain-no-outbound
+- coder.bun.composition-consumer
+- coder.bun.composition-root
+- coder.bun.design-hierarchy-import
+- coder.bun.dto-mapper
+- coder.bun.dto-placement
+- coder.bun.dto-purity
+- coder.bun.layer-naming
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+- coder.bun.boundaries-http-client
+- coder.bun.commons-application-no-integration
+- coder.bun.commons-cross-feature-imports-in
+- coder.bun.commons-domain-no-framework-import
+- coder.bun.commons-domain-no-outbound
+- coder.bun.composition-consumer
+- coder.bun.composition-root
+- coder.bun.design-hierarchy-import
+- coder.bun.dto-mapper
+- coder.bun.dto-placement
+- coder.bun.dto-purity
+- coder.bun.layer-naming

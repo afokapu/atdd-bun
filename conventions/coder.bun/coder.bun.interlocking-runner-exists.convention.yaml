@@ -1,0 +1,64 @@
+schema_version: 1.1.0
+rule_id: coder.bun.interlocking-runner-exists
+kind: rule
+status: active
+name: InterlockingRunner route-control layer exists with a resolveTrain entry point (Bun)
+statement: >-
+  When a consumer Bun application declares guarded interlocking routes (a `JOURNEY_MAP` entry that is an
+  `{interlockingId, path}` route object in the Station Master composition root `server.ts`), the
+  consumer runtime MUST ship an `InterlockingRunner` route-control layer — a `class InterlockingRunner`
+  defined under `src/trains/**` that exposes a `resolveTrain(...)` entry point. This is the
+  Bun-stack realization of the agnostic core obligation `coder.train.interlocking-runner-exists`
+  (core afokapu/atdd#1251, Part of #1246); the zero-dependency JS detector that enforces it is the
+  atdd.workspace.bun implementation referenced below.
+implementation:
+  type: validator
+  ref: coder.bun.interlocking-runner-exists
+content:
+  summary: >-
+    An agnostic "the InterlockingRunner runtime exists" obligation, rendered for the Bun application. The
+    JS realization scans the consumer's `src/trains/**/*.ts` runtime and flags a consumer that
+    declares an interlocking route (a JOURNEY_MAP route object) but ships no `InterlockingRunner` class,
+    or ships one that lacks a `resolveTrain` method. Member of the `bun_interlocking_infrastructure`
+    FAMILY detector (checks/interlocking_runner_exists.mjs).
+  normative_text: |
+    Core runtime spec afokapu/atdd#1251: an interlocking is executable only as a route-control component.
+    Its entry point is `InterlockingRunner.resolveTrain(action, inputs, state)`, which evaluates guarded
+    routes and resolves exactly one admissible train before delegation. A Bun consumer that declares
+    interlocking routes without this class — or with a class that has no resolveTrain — has no
+    route-control layer at all. WHICH runtime files are inspected and HOW the class/method are recognized
+    is the per-stack detector's concern (Bun: a regex-over-source scan of the `src/trains/**`
+    selector plus the `server.ts` JOURNEY_MAP).
+  fix_hint: |
+    Add the route-control layer:
+
+      // src/trains/interlocking.ts
+      export class InterlockingRunner {
+        constructor(private readonly interlockingYamlPath: string) {}
+        resolveTrain(action: string, inputs: Record<string, unknown>, state?: unknown): InterlockingResolution { ... }
+      }
+
+    This rule is `strict`: a newly introduced interlocking route without an InterlockingRunner +
+    resolveTrain is not suppressible and fails CI.
+  exceptions:
+    - A pure direct-train consumer (no interlocking route object in JOURNEY_MAP and no InterlockingRunner
+      class) carries no obligation and is not flagged.
+    - Generated and vendored trees (`_generated/`, `node_modules/`, `dist/`, `build/`, `.next/`) are never scanned.
+metadata:
+  aliases:
+    - BUN-INTERLOCKING-RUNNER-EXISTS-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1251
+terms:
+  - term_id: interlocking_runner
+    text: >-
+      a `class InterlockingRunner` under `src/trains/` exposing `resolveTrain(...)`; the route-control
+      component that selects one admissible train and delegates execution to TrainRunner.
+  - term_id: journey_map
+    text: >-
+      the `JOURNEY_MAP` action->route mapping in `server.ts`; values are either a direct trainId
+      string or an `{interlockingId, path}` route object.

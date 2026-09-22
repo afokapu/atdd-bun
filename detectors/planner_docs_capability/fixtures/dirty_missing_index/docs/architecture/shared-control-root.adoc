@@ -1,0 +1,8 @@
+= Shared Control Root
+:doc-id: architecture.shared-control-root
+:status: current
+:implements: purpose.worktrees
+:depends-on: architecture.state-store
+:supersedes: archive.2025-control-root
+
+One control root shared across worktrees.

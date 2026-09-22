@@ -1,0 +1,68 @@
+schema_version: 1.1.0
+rule_id: planner.docs.identity-required
+kind: rule
+status: active
+name: Every authored document declares a doc-id and a status
+statement: >-
+  An authored `.adoc` beneath `docs/` MUST declare both a `:doc-id:` and a `:status:` attribute with
+  non-empty values. `doc-id` is the document's node identity in the relationship graph (spec 2 §5.1);
+  `status` is what makes the current-versus-historical boundary readable at all.
+terms:
+- term_id: doc_id
+  text: >-
+    the value of the `:doc-id:` AsciiDoc attribute — a dotted identifier such as
+    `architecture.shared-control-root`. It is the ONLY node identity the documentation graph uses;
+    paths are never node identities.
+- term_id: status
+  text: >-
+    the value of the `:status:` attribute — `current`, `superseded`, or `historical`. It answers "is
+    this accepted truth today?" and is the flag issue #1782 exists to introduce.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '0 .adoc files exist, so 0 documents declare a doc-id and the rule currently has an empty corpus to check. It ships advisory because it will fire on every file the moment conversion begins and before the attributes are backfilled.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
+    escalate_when: 'Every authored `.adoc` beneath `docs/` declares both attributes — reachable only after the migration lands, since the attribute is authored during conversion.'
+content:
+  summary: >-
+    Identity and currency, declared in the document itself. Without `doc-id` there is no graph:
+    `planner.docs.graph-target-resolves` resolves every edge against the set of DECLARED ids, and a
+    document that declares none can neither be pointed at nor be found missing.
+  normative_text: |
+    `status:` alone is deliberately NOT sufficient to make archive/ honest, and this node should not
+    be read as claiming otherwise. Spec 2 §5.2 is explicit: a status attribute says *this is
+    superseded*; it cannot say *by what*. The `supersedes` edge carries that, and it is validated by
+    planner.docs.graph-target-resolves. This rule establishes the identity that edge needs; it does
+    not by itself discharge #1782.
+
+    Both attributes are required TOGETHER because a document with an id and no status is a node
+    whose currency is unknown, and a document with a status and no id is a claim nothing can
+    reference. Each half is useless alone.
+  fix_hint: |
+    Declare both in the document header, above the first section:
+
+      = Shared Control Root
+      :doc-id: architecture.shared-control-root
+      :status: current
+
+    Choose the id from the area the document lives in (`architecture.`, `purpose.`, `delivery.`,
+    `archive.`) so that the id and the tree agree. Nothing enforces that agreement today; it is a
+    convention that keeps ids readable, not a checked rule.
+  exceptions:
+  - Generated output beneath `docs/dist/` is never scanned.
+  - A file with no AsciiDoc header at all is still a violation, not a skip. Silence about a document
+    that declares nothing is the failure mode this extension exists to refuse.
+metadata:
+  aliases:
+  - DOCS-IDENTITY-001
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

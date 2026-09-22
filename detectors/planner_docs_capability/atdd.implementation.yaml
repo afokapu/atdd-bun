@@ -1,0 +1,57 @@
+schema_version: "1.1.0"
+kind: implementation
+
+# Bun-native realization of the standard documentation obligations. The package
+# exposes the capability API directly; it does not use the ATDD workspace protocol.
+implementation_id: planner.docs.impl
+targets_workspace: atdd.workspace.bun
+contract_version: "1.1.0"
+
+# The obligations this implementation OWNS — all nine, since no other implementation
+# realizes them and each has a convention node in ../../conventions/. Ownership is
+# what the core composer binds; emits_rule_ids below is co-emission and does not
+# create a binding.
+realizes_convention:
+  - planner.docs.asciidoc-only
+  - planner.docs.identity-required
+  - planner.docs.doc-id-unique
+  - planner.docs.graph-target-resolves
+  - planner.docs.area-index-required
+  - planner.docs.adr-registry-derived
+  - planner.docs.artifact-path-shape
+  - planner.docs.undeclared-change
+  - planner.docs.reference-integrity
+
+# The filesystem report emits the six corpus-observable rules. The Bun capability
+# API additionally evaluates declaration-only rules and reference integrity.
+emits_rule_ids:
+  - planner.docs.asciidoc-only          # disposition: advisory (authored .md under docs/)
+  - planner.docs.identity-required      # disposition: advisory (no :doc-id: / :status:)
+  - planner.docs.doc-id-unique          # disposition: advisory (duplicate doc-id)
+  - planner.docs.graph-target-resolves  # disposition: advisory (edge names an undeclared id)
+  - planner.docs.area-index-required    # disposition: advisory (area exists, no index.adoc)
+  - planner.docs.adr-registry-derived   # disposition: advisory (registry drifted from :decides:)
+
+# TWO SURFACES, ONE DETECTOR.
+#
+#   entrypoint  the CAPABILITY seam. Core calls
+#               StandardDocumentationCapability.check(declaration, change_set,
+#               repo_root) and reads back a verdict + findings. Discovered over the
+#               entry point declared in pyproject.toml, NOT by this path — the path
+#               is recorded here so a reader can find the code.
+#   report      the runnable v1.1 report-emitting pytest the provider CLI collects:
+#               scans ATDD_SCAN_ROOTS and writes the RAW report to
+#               ATDD_VIOLATIONS_REPORT. Corpus rules only; the declaration rules
+#               need a declaration and a change set, which exist at the seam.
+#
+# Neither surface depends on #1623. Only the operator verbs (`atdd docs build`,
+# `atdd docs check`, spec 2 §7) do, and they are deliberately not shipped here.
+entrypoint: detect.mjs
+report: detect.mjs
+
+# The Ruby dependency of spec 2 §9 Decision 4. Its ABSENCE is a specified,
+# reportable state (COULD_NOT_CHECK, which blocks) and never a silent pass.
+external_toolchain:
+  - name: asciidoctor
+    required_for: planner.docs.reference-integrity
+    absent_verdict: COULD_NOT_CHECK

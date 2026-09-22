@@ -1,0 +1,53 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-layer
+kind: rule
+status: active
+name: The URN layer segment is one of the five architectural layers
+statement: >-
+  The `{layer}` segment of a URN MUST be one of `domain`, `application`, `integration`, `presentation`,
+  `assembly`. Stack-neutral obligation, Bun-specific detector; realized by
+  `bun_green_traceability_detector` (core alias GREEN-URN-006).
+terms:
+- term_id: layer_segment
+  text: >-
+    segment 5: domain, application, integration, presentation or assembly.
+- term_id: layering_input
+  text: >-
+    the fact the boundary and dependency-flow rules read to judge an import. A layer outside the
+    vocabulary makes the file unreachable by every layering rule.
+content:
+  summary: >-
+    A "layer is declared from the closed vocabulary" obligation, checked against segment 5.
+  normative_text: |
+    The layer segment is what the boundary and dependency-flow rules read to decide whether an import is legal. A file declaring a layer outside the vocabulary is not merely mislabelled — it is unreachable by every layering rule, so it becomes a hole through which any dependency may pass unchallenged.
+  fix_hint: |
+    Use a layer from the vocabulary:
+
+      // URN: component:orders:checkout:OrderRow:backend:widgets       // ✗
+      // URN: component:orders:checkout:OrderRow:backend:presentation  // ✓
+  exceptions:
+  - URNs that are not six segments are skipped.
+  - The vocabulary is fixed by core, not by this extension; a new layer is a core change.
+metadata:
+  aliases:
+  # GREEN-URN-006 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-layer. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-006
+  - BUN-GREEN-URN-LAYER-001
+  severity: 3
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

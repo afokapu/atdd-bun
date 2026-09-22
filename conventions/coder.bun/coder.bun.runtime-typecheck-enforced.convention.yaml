@@ -1,0 +1,91 @@
+schema_version: 1.1.0
+rule_id: coder.bun.runtime-typecheck-enforced
+kind: rule
+status: active
+name: A TypeScript Bun project actually typechecks its types
+statement: >-
+  A Bun project containing TypeScript sources MUST have a typechecker it can run and MUST wire a
+  no-emit typecheck into its check path — TypeScript (or an equivalent native preview) as a
+  dependency, a `tsconfig.json`, and some script that runs a no-emit typecheck. Bun executes `.ts`
+  by STRIPPING types; it transpiles and never checks, and it bundles no `tsc`. Absent this, a Bun
+  stack is by default less type-safe than a tsc-based one.
+terms:
+- term_id: typechecker
+  text: >-
+    a tool that verifies types without emitting output — `tsc --noEmit`, `tsgo --noEmit`,
+    `vue-tsc`, `svelte-check`, `astro check`, or `tsc --build`. The obligation is that types ARE
+    checked; WHICH checker is the project's business.
+- term_id: check_path
+  text: >-
+    the scripts a developer or CI runs to validate the project. A typecheck that exists but is
+    never invoked is not wired in — it is a tool sitting beside the build, not part of it.
+- term_id: demonstrably_not_strict
+  text: >-
+    a `tsconfig.json` that either sets `"strict": false` outright, or enables no flag of the strict
+    family AND extends no base config. A tsconfig that `extends` something is NOT judged: this
+    rule's detector cannot resolve the base, and reporting what it cannot see would be a false
+    positive.
+- term_id: disposition_rationale
+  text: >-
+    advisory because this states a stack norm rather than a defect, and because the consuming
+    projects have not been surveyed. The measurement below was TAKEN on 2026-09-06, not recalled.
+  values:
+    measured_2026_09_06: >-
+      0 consumer Bun projects surveyed. This hub is a package repository and contains no Bun
+      application to measure — its own .ts files are deliberately-wrong detector fixtures, which
+      is exactly why this rule is authored for consumers and never run against the hub.
+    measurement_target: afokapu/atdd-extensions @ main (the hub itself — deliberately not a consumer)
+    measurement_command: "find official -name '*.ts' -not -path '*/fixtures/*' | wc -l"
+    escalate_when: >-
+      A consumer Bun project has been surveyed, typescript + a wired no-emit typecheck are present,
+      and the team accepts blocking on it. Escalating to strict is a MAJOR change class.
+content:
+  summary: >-
+    Bun's own gap, stated as a convention. `bun test`, `bun install`, `bun build`, `Bun.serve` and a
+    TS/JSX transpiler all ship; a typechecker does not. So `resolveTrain()` can return something
+    structurally wrong and Bun will run it happily.
+  normative_text: |
+    THIS IS COMPLEMENTARY TO THE OTHER BUN DETECTORS, NOT OVERLAPPING, and the distinction is the
+    reason the rule exists. Every detector in this stack is regex-over-source: they verify SHAPE.
+    `coder.bun.interlocking-resolution-model-exists` confirms an `InterlockingResolution` declaring
+    its eight fields is present — it cannot confirm that what `resolveTrain` actually returns
+    conforms to it. Only a typechecker can, and only if one is actually run.
+
+    DELIBERATELY UNFORCED, in four ways. This rule states a norm, not a blessed incantation:
+
+      SCOPE       only a tree that is genuinely a TypeScript project — a package.json AND at
+                  least one .ts/.tsx source. A JS-only Bun app carries no obligation at all.
+      HOW         any recognised no-emit typechecker in any script satisfies it, as does a
+                  script simply named `typecheck` / `check-types` / `types`.
+      WHERE       TypeScript counts from `dependencies` or `devDependencies`.
+      STRICTNESS  reported only when demonstrably off. A tsconfig that `extends` a base is left
+                  alone, because the detector cannot resolve the base and a rule that reports
+                  what it cannot see is worse than one that stays quiet.
+
+    WHERE IT APPLIES. The consumer repository, never this hub. The hub is a package repository: it
+    has no Bun application, its detectors are `.mjs`, and its `.ts` files are deliberately-wrong
+    fixtures that must NOT typecheck — `fixtures/dirty/interlocking_resolution_model/...` exists
+    precisely to be malformed.
+  fix_hint: |
+    Three small additions to a consumer project:
+
+      package.json   "devDependencies": { "typescript": "^5.6.0" }
+                     "scripts": { "typecheck": "tsc --noEmit",
+                                  "check": "bun run typecheck && bun test" }
+      tsconfig.json  { "compilerOptions": { "strict": true, "noEmit": true } }
+
+    Any equivalent satisfies it — `svelte-check`, `astro check`, `vue-tsc`, or extending a strict
+    base config. What must not happen is types being stripped and never checked anywhere.
+  exceptions:
+  - A Bun project with no TypeScript sources is out of scope entirely.
+  - A tsconfig that `extends` a base config is never reported for strictness (see terms).
+  - This hub is not a consumer and is never scanned by this rule; its .ts files are fixtures.
+metadata:
+  aliases:
+  - BUN-TYPECHECK-ENFORCED-001
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: coder.bun.runtime-typecheck-enforced

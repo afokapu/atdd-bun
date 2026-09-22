@@ -1,0 +1,9 @@
+{
+  "sec_hardcoded_secret": "coder.bun.security-hardcoded-secret",
+  "sec_sql_injection": "coder.bun.security-sql-injection",
+  "sec_missing_auth": "coder.bun.security-missing-auth",
+  "log_console": "coder.bun.logging-console",
+  "log_structured": "coder.bun.logging-structured",
+  "err_bare_string": "coder.bun.error-response-bare-string",
+  "err_code_format": "coder.bun.error-response-code-format"
+}

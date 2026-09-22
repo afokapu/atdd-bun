@@ -1,0 +1,18 @@
+{
+  "t_urn_identity": "tester.bun.test-carries-urn-identity",
+  "t_acceptance_binding": "tester.bun.acceptance-binding-declared",
+  "t_test_phase_declared": "tester.bun.test-phase-declared",
+  "t_acceptance_covers_tag": "tester.bun.acceptance-covers-tag-well-formed",
+  "t_red_behavioral": "tester.bun.red-behavioral-assertion",
+  "t_smoke_observable": "tester.bun.smoke-observable-assertion",
+  "t_smoke_no_substitution": "tester.bun.smoke-no-collaborator-substitution",
+  "t_test_no_self_skip": "tester.bun.test-no-self-skip",
+  "t_isolation_no_live_state": "tester.bun.test-isolation-no-live-state",
+  "t_red_fails_first": "tester.bun.red-fails-first",
+  "t_routing_runtime": "tester.bun.routing-runtime-family",
+  "t_security_auth": "tester.bun.security-auth",
+  "t_security_input": "tester.bun.security-input",
+  "t_telemetry_emit": "tester.bun.telemetry-emit",
+  "t_test_imports_bun_test": "tester.bun.test-imports-bun-test",
+  "t_acceptance_resolves": "tester.bun.acceptance-resolves-to-declared"
+}

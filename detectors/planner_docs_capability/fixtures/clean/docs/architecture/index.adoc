@@ -1,0 +1,5 @@
+= Architecture
+:doc-id: architecture.index
+:status: current
+
+STRUCTURE.

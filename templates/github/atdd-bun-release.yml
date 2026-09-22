@@ -1,0 +1,16 @@
+# Optional repository-owned release handoff. Configure credentials and publishing policy in this repository.
+name: ATdd-Bun Release
+on:
+  push:
+    branches: [main, master]
+jobs:
+  atdd-bun-release:
+    needs: []
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run atdd-bun release check
+      # Repository owners may add tag/release/publish steps and credentials here.

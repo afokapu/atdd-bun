@@ -1,0 +1,14 @@
+{
+  "a_commons_domain_no_outbound": "coder.bun.commons-domain-no-outbound",
+  "a_commons_application_no_integration": "coder.bun.commons-application-no-integration",
+  "a_commons_cross_feature": "coder.bun.commons-cross-feature-imports-in",
+  "a_domain_no_framework": "coder.bun.commons-domain-no-framework-import",
+  "a_hierarchy_import": "coder.bun.design-hierarchy-import",
+  "a_composition_root": "coder.bun.composition-root",
+  "a_composition_consumer": "coder.bun.composition-consumer",
+  "a_dto_purity": "coder.bun.dto-purity",
+  "a_dto_placement": "coder.bun.dto-placement",
+  "a_dto_mapper": "coder.bun.dto-mapper",
+  "a_boundaries_http_client": "coder.bun.boundaries-http-client",
+  "a_layer_naming": "coder.bun.layer-naming"
+}

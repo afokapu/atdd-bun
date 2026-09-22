@@ -1,0 +1,33 @@
+schema_version: 1.1.0
+rule_id: planner.coverage.every-wmbt-must-have
+kind: rule
+status: active
+name: WMBT - Acceptance Coverage
+statement: Every WMBT must have at least one acceptance criterion (except status:draft).
+implementation:
+  type: validator
+  ref: conventions/coverage/test_hierarchy_coverage::test_fault_injection_convention_catches
+source:
+  legacy_path: src/atdd/planner/conventions/coverage.convention.yaml
+  legacy_section: rules
+  legacy_sha: 27e800378c584902
+  extraction_mode: high_fidelity
+  legacy_rule_id: planner.coverage.every-wmbt-must-have
+content:
+  normative_text: 'Requirement: every WMBT must have at least one acceptance (except status:draft).'
+  exceptions:
+  - wmbts_without_acceptance allow-list
+metadata:
+  aliases:
+  - COVERAGE-PLAN-2.4
+  severity: 3
+  disposition: strict
+parity:
+  source_fragments_preserved: true
+  examples_preserved: false
+  implementation_preserved: true
+  fix_hint_preserved: false
+  reviewed_at: '2026-06-16'
+terms:
+- term_id: wmbt_acceptance_coverage
+  text: every non-draft WMBT carries at least one acceptance.

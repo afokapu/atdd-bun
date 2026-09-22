@@ -1,0 +1,43 @@
+schema_version: 1.1.0
+rule_id: coder.bun.complexity-length
+kind: rule
+status: active
+name: TypeScript functions stay at or below 50 code lines
+statement: >-
+  Every TypeScript/TSX function MUST be at most 50 lines of code, excluding blank and comment lines.
+  Stack-neutral obligation, NATIVE BUN detector transcribed from the python-pytest sibling
+  `coder.refactor.complexity-length-typescript` and verified numerically identical. Realized by
+  `bun_ts_metrics_detector` (core alias COMPLEXITY-LENGTH-TS-001).
+terms:
+- term_id: code_line
+  text: >-
+    a line inside the function body that is neither blank nor a comment.
+- term_id: internal_seam
+  text: >-
+    a boundary inside a long function, usually marked by the comment introducing each block.
+    Each is a candidate helper whose comment is its name.
+content:
+  summary: >-
+    Counts non-blank, non-comment lines between the function's signature and its matching closing brace,
+    found by a string- and comment-aware brace matcher so a `}` inside a string never closes a body early.
+  normative_text: |
+    Length is the crudest of the three per-function metrics and the hardest to argue with: a function longer than a screen cannot be read as one unit, so it is read in fragments and its invariants are reconstructed from memory each time.
+    It catches a different fault from complexity. A long function may be perfectly linear — fifty sequential assignments score 1 on cyclomatic complexity — and still be doing five things that wanted names.
+  fix_hint: |
+    Split the function along its internal seams. The comment lines inside a long function usually mark them exactly: each block a comment introduces is a candidate helper, and its comment is the helper's name.
+  exceptions:
+  - Blank lines and comment lines are not counted.
+  - Test files and vendored/build directories are outside the scan.
+metadata:
+  aliases:
+  # COMPLEXITY-LENGTH-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - COMPLEXITY-LENGTH-TS-001
+  severity: 2
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

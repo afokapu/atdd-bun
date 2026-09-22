@@ -1,0 +1,5 @@
+= Documentation
+:doc-id: index
+:status: current
+
+The canonical tree: Purpose, Architecture, Delivery, Archive.

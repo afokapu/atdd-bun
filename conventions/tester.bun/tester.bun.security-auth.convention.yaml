@@ -1,0 +1,46 @@
+schema_version: 1.1.0
+rule_id: tester.bun.security-auth
+kind: rule
+status: active
+name: Security tests assert on denial
+statement: >-
+  A test identified as a security test by its URN kind segment (`-SEC-`, `-RLS-`, `-AUTH-`) MUST contain
+  an authentication/authorisation assertion — an expectation tied to 401, 403, unauthorised, forbidden,
+  denied, permission, `.rejects` or `toThrow`. Bun realization of core `tester.security.auth`, mirroring
+  `tester.convex.security-auth`.
+terms:
+- term_id: security_test
+  text: >-
+    a test whose URN carries a SEC, RLS or AUTH kind segment.
+- term_id: denial_assertion
+  text: >-
+    an expectation tied to 401, 403, unauthorised, forbidden, denied, permission, .rejects or
+    toThrow. Its absence makes the test a silent green gap.
+content:
+  summary: >-
+    Identifies security tests from the URN and flags those whose body contains no denial assertion.
+  normative_text: |
+    A security test that only walks the happy path is a SILENT GREEN GAP — the worst shape a test can have. It passes CI, the gate counts it as covering the security acceptance, and it proves nothing about the denial path, which is the only path the acceptance is actually about.
+    Identification is by URN kind segment rather than filename, consistent with the rest of this package: the header is authoritative.
+  fix_hint: |
+    Assert the refusal, not the permission:
+
+      const res = await fetch("/orders", { method: "POST" });   // anonymous
+      expect(res.status).toBe(403);
+
+    A happy-path case is welcome too — but it cannot be the only one.
+  exceptions:
+  - Only tests whose URN carries a SEC / RLS / AUTH kind segment are scanned.
+  - Any of the listed denial signals satisfies the rule.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from convex.extension.tester.base :: tester.convex.security-auth
+  # Core obligation: tester.security.auth
+  - TESTER-SECURITY-AUTH-001
+  - BUN-SECURITY-AUTH-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

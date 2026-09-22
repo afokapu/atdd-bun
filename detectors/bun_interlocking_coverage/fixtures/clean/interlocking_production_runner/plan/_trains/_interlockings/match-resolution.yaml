@@ -1,0 +1,51 @@
+# Interlocking route space (core afokapu/atdd#1248). Two admissible routes; each requires a covering
+# e2e test. entrypoint.exposed:true -> the resolve_match action requires a smoke test.
+schema_version: 1.0.0
+interlocking_id: interlocking:match-resolution
+title: Match resolution route interlocking
+status: checked
+
+entrypoint:
+  surfaces: [backend]
+  exposed: true
+  actions:
+    - resolve_match
+  reason: null
+
+route_resolution:
+  strategy: fail_on_multiple_match
+
+routes:
+  - route_id: nominal-all-voted
+    priority: 1
+    projection:
+      expected_sequence_digest: "d285d26427cb21fedb4c5b56edc673743f6d63c85686bdeb37f5e8c5ed4736d8"
+    category: nominal
+    guard_ref: guard:all-voted
+    train_id: 3007-match-resolution-standard
+    train_path: plan/_trains/3007-match-resolution-standard.yaml
+  - route_id: alternate-timeout
+    priority: 2
+    projection:
+      expected_sequence_digest: "417c29734ac10c6a6c9a59dc3c568011aa9bdf4bc46e753f351657679d791672"
+    category: alternate
+    guard_ref: guard:timer-expires
+    train_id: 3207-match-resolution-timeout
+    train_path: plan/_trains/3207-match-resolution-timeout.yaml
+
+theme: match-resolution
+lifelines:
+  - ref: user:actor
+  - ref: wagon:match-resolution
+messages:
+  - id: msg:match-resolution-request
+    kind: boundary
+    from: user:actor
+    to: wagon:match-resolution
+    intent: The actor requests Match Resolution
+    payload:
+      contract: match-resolution:request-v1
+
+source:
+  path: official/atdd.workspace.bun/implementations/bun_interlocking_coverage/fixtures/clean/interlocking_production_runner/plan/_trains/_interlockings/match-resolution.yaml
+  content_digest: "8bc1d15141bd8d3a33ffc144a4014f727eb6ee85ccf637ba0303c0750bad4999"

@@ -1,0 +1,50 @@
+schema_version: 1.1.0
+rule_id: tester.bun.acceptance-covers-tag-well-formed
+kind: rule
+status: active
+name: Per-case @covers tags are well-formed acceptance URNs
+statement: >-
+  A `// @covers` tag above an `it()` MUST name a well-formed `acc:{wagon}:{ACCEPTANCE-ID}` URN. Stack-
+  neutral obligation, Bun-specific detector implementing the two-level binding model. Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: covers_tag
+  text: >-
+    `// @covers acc:…` above an `it()`, binding one CASE rather than the file.
+- term_id: two_level_binding
+  text: >-
+    file header plus per-case tags. Gives many-cases-to-one-acceptance precision without forcing
+    one acceptance per file.
+content:
+  summary: >-
+    Collects the `// @covers` comment block immediately above each `it()` / `test()` and validates every
+    tag against `acc:{wagon}:{ACCEPTANCE-ID}`.
+  normative_text: |
+    The two-level model is the point. The file header binds the FILE to its acceptances; a `@covers` tag binds ONE test case. That gives many-cases-to-one-acceptance precision without forcing one acceptance per file — the design issue #1783 argued for, and the reason a real 65-spec suite can adopt ATDD without a rename.
+    A malformed tag is `strict` because it is the worst of both worlds: it binds nothing, while looking to a reviewer exactly like a binding that works.
+  fix_hint: |
+    Use the full acceptance URN, not a bare id:
+
+      // @covers E005-UNIT-001                    // wrong — no scheme, no wagon
+      // @covers acc:orders:E005-UNIT-001         // right
+
+    Several tags on one line are allowed; a case may cover more than one acceptance.
+  exceptions:
+  - Cases with no `@covers` tag are not required to have one — the file header binding still applies.
+  - Only the tag's SHAPE is validated; resolution against `plan/` is a graph-level concern.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.coverage.every-acceptance-criterion-must`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-COVERS-TAG-WELL-FORMED-001
+  severity: 3
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

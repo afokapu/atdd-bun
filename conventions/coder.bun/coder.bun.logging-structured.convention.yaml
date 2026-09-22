@@ -1,0 +1,49 @@
+schema_version: 1.1.0
+rule_id: coder.bun.logging-structured
+kind: rule
+status: active
+name: Log calls carry a structured context object
+statement: >-
+  A logger call MUST NOT pass only a bare string; it MUST carry a context object. Stack-neutral
+  obligation, RE-REALIZED for Bun: the receiver names and log methods carry over from the python-pytest
+  sibling `coder.logging.structured`, but the argument shape does not — a JS logger takes a context OBJECT
+  where the Python one takes `extra=` or kwargs. Realized by `bun_security_hygiene_detector` (core alias
+  LOGGING-STRUCTURED-001).
+terms:
+- term_id: context_object
+  text: >-
+    the second argument carrying the fields a line will be searched by. A JS logger takes an
+    object where a Python one takes `extra=`.
+- term_id: bare_string_log
+  text: >-
+    a logger call whose only argument is a string literal. Greppable and nothing more, at the
+    one moment it matters.
+content:
+  summary: >-
+    Flags a call on a logger receiver (`logger` / `log` / `_logger` / `_log` / `LOG`) whose sole argument
+    is a string literal.
+  normative_text: |
+    A log line's value is realised at exactly one moment: when someone is searching for it during an incident. A bare string can only be grepped; a line carrying `{ orderId, userId }` can be filtered, grouped and joined to a trace.
+    The rule asks only that SOME context is attached — it cannot judge whether the right fields were chosen. The useful discipline is to ask what you would filter by at 3am and put that in the object.
+  fix_hint: |
+    Attach the fields the line would be searched by:
+
+      logger.info("order processed");                              // wrong
+      logger.info("order processed", { orderId, userId, ms });      // right
+  exceptions:
+  - A call already passing a second argument is not flagged.
+  - Non-logger receivers are out of scope.
+  - Disposition is `suppress-and-clean`, matching the Python sibling: a ratchet holds existing lines flat.
+metadata:
+  aliases:
+  # LOGGING-STRUCTURED-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - LOGGING-STRUCTURED-001
+  severity: 2
+  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
+  # AST for constructs this stack does not have. Same obligation, new detector.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector

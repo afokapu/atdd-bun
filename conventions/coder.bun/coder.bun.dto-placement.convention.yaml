@@ -1,0 +1,39 @@
+schema_version: 1.1.0
+rule_id: coder.bun.dto-placement
+kind: rule
+status: active
+name: DTOs are declared in contracts/
+statement: >-
+  A `*DTO` type MUST be declared inside a `contracts/` module, not inside a feature's internal layer. Bun
+  realization mirroring `coder.convex.dto-placement`; core obligation `coder.dto.placement`.
+terms:
+- term_id: contracts_module
+  text: >-
+    a path segment `contracts` — where a boundary shape belongs, since it is owned by neither
+    side.
+- term_id: private_type_leak
+  text: >-
+    a DTO declared inside one feature's layer that another feature imports anyway, running the
+    boundary through somebody's internals.
+content:
+  summary: >-
+    Flags a `*DTO` declaration in a file whose path contains no `contracts` segment.
+  normative_text: |
+    A DTO belongs to the contract, not to either side of it. Declared inside one feature's layer it becomes that feature's private type that another feature imports anyway — and the boundary it was meant to define now runs through somebody's internals.
+  fix_hint: |
+    Move the type to `contracts/` and import it from both sides.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.dto-placement
+  # Core obligation: coder.dto.placement
+  - BUN-DTO-PLACEMENT-001
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

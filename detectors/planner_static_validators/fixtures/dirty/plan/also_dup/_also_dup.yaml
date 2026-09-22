@@ -1,0 +1,15 @@
+wagon: dup
+urn: wagon:dup
+description: A second duplicate wagon
+subject: agent:planner
+context: test
+action: duplicate
+goal: validate
+outcome: invalid
+produce:
+  - name: other:item
+    contract: contract:shared:item
+    telemetry: telemetry:shared:item
+consume: []
+wmbt:
+  total: 0

@@ -1,0 +1,54 @@
+schema_version: 1.1.0
+rule_id: coder.bun.security-sql-injection
+kind: rule
+status: active
+name: SQL is parameterised, never interpolated or concatenated
+statement: >-
+  SQL passed to a query sink MUST NOT be built by interpolating a template literal or concatenating
+  strings. Stack-neutral obligation, RE-REALIZED for Bun: the python-pytest sibling walks a Python AST for
+  `execute` / `executemany` / `raw` / `execute_sql` and its own manifest scopes it "python stack only".
+  Bun's sinks are `bun:sqlite` (`query` / `run` / `exec` / `prepare`), `Bun.sql` and the postgres/mysql
+  clients. Realized by `bun_security_hygiene_detector` (core alias SECURITY-SQL-INJECTION-001).
+terms:
+- term_id: query_sink
+  text: >-
+    a call that executes SQL: bun:sqlite's query / run / exec / prepare, or a postgres/mysql
+    client method.
+- term_id: tagged_template
+  text: >-
+    `sql`…`` — a template invoking a function that PARAMETERISES each substitution. Safe by
+    construction, and visually almost identical to the untagged form that is not.
+content:
+  summary: >-
+    Flags a query-sink call whose first argument is a template literal containing both a SQL keyword and a
+    `${}` interpolation, or a quoted SQL string followed by `+`.
+  normative_text: |
+    The load-bearing subtlety is that a TAGGED template is safe and an untagged one is not, and they look almost identical:
+
+        sql`SELECT * FROM orders WHERE id = ${id}`      // safe — Bun.sql BINDS the value
+        db.query(`SELECT * FROM orders WHERE id = ${id}`)  // injectable — the value is spliced
+
+    A tagged template invokes a function that parameterises each substitution; an untagged one produces a string before the sink ever sees it. The detector therefore flags only the second shape. This distinction has no Python analogue at all, which is why the rule had to be re-realized rather than translated.
+  fix_hint: |
+    Use the tagged template or explicit parameters:
+
+      db.query(`SELECT * FROM orders WHERE id = ${id}`)      // wrong
+      db.query("SELECT * FROM orders WHERE id = ?").get(id)  // right — bound parameter
+      await sql`SELECT * FROM orders WHERE id = ${id}`        // right — Bun.sql binds
+  exceptions:
+  - Tagged templates (`sql`...``) are parameterised by construction and are never flagged.
+  - Template literals with no SQL keyword are not SQL and are skipped.
+  - Static SQL with no interpolation is not injectable.
+metadata:
+  aliases:
+  # SECURITY-SQL-INJECTION-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - SECURITY-SQL-INJECTION-001
+  severity: 4
+  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
+  # AST for constructs this stack does not have. Same obligation, new detector.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector

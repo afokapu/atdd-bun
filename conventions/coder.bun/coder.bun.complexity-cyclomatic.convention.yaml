@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: coder.bun.complexity-cyclomatic
+kind: rule
+status: active
+name: TypeScript function cyclomatic complexity stays at or below 10
+statement: >-
+  Every TypeScript/TSX function MUST keep its cyclomatic complexity at or below 10, so the number of
+  independent paths through any one function stays testable. Stack-neutral obligation, NATIVE BUN
+  detector: the thresholds and the counting rule are transcribed from the python-pytest sibling
+  `coder.refactor.complexity-cyclomatic-typescript` and verified to produce identical numbers, so this
+  repo enforces its own metrics without a Python interpreter. Realized by `bun_ts_metrics_detector` (core
+  alias COMPLEXITY-CYCLOMATIC-TS-001).
+terms:
+- term_id: decision_point
+  text: >-
+    a construct adding an independent path: if / else if / for / while / do / catch / case, a
+    `&&` / `||` / `??`, or a ternary.
+- term_id: trivial_function
+  text: >-
+    a function under three code lines. Not scored, because a two-line arrow is not a complexity
+    problem.
+content:
+  summary: >-
+    Complexity is 1 plus each decision keyword (if / else if / for / while / do / catch / case), each
+    boolean or nullish operator (&& / || / ??) and each ternary. Functions under 3 code lines are skipped.
+  normative_text: |
+    The obligation and its arithmetic are unchanged from the Python realization — deliberately, because a repo that switches providers must not see its numbers move. What changes is only WHO runs the count.
+    Cyclomatic complexity is a proxy for how many test cases a function needs before its behaviour is pinned. Above roughly ten paths, complete coverage stops being written, and the untested paths are where defects settle.
+  fix_hint: |
+    Reduce the branching of the flagged function:
+
+      * extract nested decision blocks into named helpers,
+      * replace long if / else-if ladders or switch arms with a dispatch map,
+      * collapse compound &&/||/?? conditions into well-named predicates.
+  exceptions:
+  - Functions with fewer than 3 code lines are not scored.
+  - Test files and vendored/build directories are outside the scan.
+  - Pre-existing counts are held flat by a ratchet baseline, not by lowering the threshold.
+metadata:
+  aliases:
+  # COMPLEXITY-CYCLOMATIC-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - COMPLEXITY-CYCLOMATIC-TS-001
+  severity: 3
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

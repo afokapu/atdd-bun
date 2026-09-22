@@ -1,0 +1,9 @@
+urn: wmbt:orders:E024
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E024
+acceptances:
+  - identity:
+      urn: acc:orders:E024-RED-001
+      id: E024-RED-001
+      purpose: Declared so a test binding to it resolves
+      phase: RED

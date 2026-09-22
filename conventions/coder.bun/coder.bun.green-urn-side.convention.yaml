@@ -1,0 +1,54 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-side
+kind: rule
+status: active
+name: The URN side segment is frontend or backend
+statement: >-
+  The `{side}` segment of a URN MUST be `frontend` or `backend`. Stack-neutral obligation, Bun-specific
+  detector; realized by `bun_green_traceability_detector` (core alias GREEN-URN-005).
+terms:
+- term_id: side_segment
+  text: >-
+    segment 4: `frontend` or `backend`. Which half of the application the file belongs to.
+- term_id: stack_spanning_repo
+  text: >-
+    a repo where one language and one runtime serve both halves, so side cannot be inferred from
+    the stack and must be declared per file.
+content:
+  summary: >-
+    A "side is declared from the closed vocabulary" obligation, checked against segment 4.
+  normative_text: |
+    The vocabulary is unchanged from the Python and Vite realizations, and it matters MORE in a full-stack Bun app than in either. A Vite repo is frontend by construction and a python-pytest service is backend by construction, so the segment is close to redundant there. Here one repo, one language and one runtime span both halves, and the only thing that says which side a module belongs to is this segment — so it must be declared per file and cannot be inferred from the stack.
+  fix_hint: |
+    Declare the side explicitly:
+
+      // URN: component:orders:checkout:OrderRow:server:presentation    // ✗ not a side
+      // URN: component:orders:checkout:OrderRow:backend:presentation   // ✓
+
+    Server-rendered htmx fragments are `backend` (they are produced by the server); markup and behaviour that live in the browser are `frontend`.
+  exceptions:
+  - URNs that are not six segments are skipped.
+  - "`Runtime:` is a different axis — a `backend` file may declare `Runtime: isomorphic`."
+metadata:
+  aliases:
+  # GREEN-URN-005 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-side. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-005
+  - BUN-GREEN-URN-SIDE-001
+  severity: 3
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

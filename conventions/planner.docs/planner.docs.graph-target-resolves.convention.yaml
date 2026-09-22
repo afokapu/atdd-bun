@@ -1,0 +1,87 @@
+schema_version: 1.1.0
+rule_id: planner.docs.graph-target-resolves
+kind: rule
+status: active
+name: Every relationship target resolves against a declared doc-id, and no node is ever fabricated
+statement: >-
+  Every relationship attribute on an authored document (`:decides:`, `:supersedes:`, `:implements:`,
+  `:depends-on:`) MUST name a `doc-id` that some document in the corpus actually declares. A target
+  outside that set is a REPORTED finding. It is NEVER synthesized into a node, and never silently
+  dropped. This is the one hard requirement of spec 2 §5.4 and the flagship rule of this extension.
+terms:
+- term_id: declared_id_set
+  text: >-
+    the set of `:doc-id:` values read from the authored corpus, built BEFORE any edge is resolved.
+    It is closed and enumerable — which is precisely why the documentation graph can hold a
+    discipline the traceability graph does not.
+- term_id: relationship_attribute
+  text: >-
+    one of the four confirmed verbs of spec 2 §5.2 — `decides`, `supersedes`, `implements`,
+    `depends-on`. `refines` is deliberately NOT shipped (spec 2 §9 Decision 3).
+- term_id: fabrication
+  text: >-
+    creating a graph node for a target no document declares, so that an edge appears to resolve. The
+    defect this rule exists to make impossible.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '0 .adoc files, so 0 authored edges and 0 unresolved targets. The number that motivates this rule is the OTHER graph''s, quoted in full under normative_text and measured on the same date: 147 of 168 containment edges invented, 44 fabricated nodes out of 3208.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
+    escalate_when: 'A full corpus scan reports zero unresolved relationship targets. The no-fabrication half is NOT subject to escalation — it is a property of the resolver, true from the first commit, and is asserted by the #1758 regression test rather than deferred to a disposition flip.'
+content:
+  summary: >-
+    Resolve or report — never invent. The graph is DERIVED from the `.adoc` attributes and rebuilt on
+    demand (spec 2 §5.3); a persisted graph would be a second registry, and a second registry drifts.
+    The resolver builds the declared-id set first, then admits an edge only if its target is in that
+    set, and reports every edge that is not.
+  normative_text: |
+    This is not a stylistic preference. It is a defect that has ALREADY HAPPENED in this
+    repository's other graph, and the reason spec 2 §5.4 states it as non-negotiable.
+
+    Reproduced live on the ATDD working tree, 2026-09-06 (#1758):
+
+      total nodes                                 : 3208
+      fabricated nodes                            :   44   (feature 28 · wagon 6 · train 6 · test 4)
+      feature -> component CONTAINS (urn-structure):  168
+        parent DECLARED                           :   21   ( 12.5% )
+        parent INVENTED                           :  147   ( 87.5% )
+
+    147 of 168 containment edges point at features no file declares, hanging off 28 invented nodes.
+    The mechanism is four lines in `src/atdd/coach/utils/graph/graph_builder.py:215` — `_ensure_node`
+    synthesizes a bare node for any URN the graph has not seen, `add_edge` calls it on BOTH endpoints
+    of every edge, and so any edge naming a non-existent target conjures the target into being.
+
+    WHY FABRICATION IS WORSE THAN ABSENCE. An absent parent leaves a node orphaned, and an orphan
+    check catches it. A fabricated parent makes the node look CONNECTED. Fabrication defeats the
+    check more thoroughly than absence does — which is why the test for this rule asserts the NODE
+    COUNT directly and not merely the finding.
+
+    Do NOT reuse `graph_builder.py`. It is the substrate that lacks this discipline. The resolver
+    lives in this extension, and there is exactly ONE of it (spec 2 §5.4, citing #1755 on the seven
+    reimplementations of lifecycle resolution).
+  fix_hint: |
+    Either declare the target, or fix the reference:
+
+      :implements: purpose.wortrees      # ✗ typo; nothing declares this id — REPORTED
+      :implements: purpose.worktrees     # ✓ resolves against a declared doc-id
+
+    When the target genuinely does not exist yet, the reference is premature. Author the target
+    document first. An edge to a document you intend to write is indistinguishable, to every reader
+    and every tool, from an edge to a document that was deleted.
+  exceptions:
+  - An attribute that is absent is not an unresolved edge. Only declared relationships are resolved.
+  - Nothing is exempt from the no-fabrication half. There is no configuration that permits synthesis.
+metadata:
+  aliases:
+  - DOCS-GRAPH-001
+  severity: 1
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

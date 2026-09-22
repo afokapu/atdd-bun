@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: coder.bun.logging-console
+kind: rule
+status: active
+name: No console logging in application source
+statement: >-
+  Application source MUST NOT call `console.log` / `info` / `warn` / `error` / `debug` / `trace` / `dir`.
+  Stack-neutral obligation, RE-REALIZED for Bun: the python-pytest sibling walks the AST for a bare
+  `print(...)`; the Bun equivalent is `console.*`. Realized by `bun_security_hygiene_detector` (core alias
+  LOGGING-PRINT-001).
+terms:
+- term_id: unlevelled_output
+  text: >-
+    a `console.*` call: no level, no timestamp, no request correlation. In a full-stack app the
+    same module may write to the operator's stdout or the user's devtools.
+- term_id: structured_logger
+  text: >-
+    the project logger that owns levels, timestamps and correlation.
+content:
+  summary: >-
+    Scans source with strings and comments MASKED, so `console.log` inside a comment or a string literal
+    never trips the rule.
+  normative_text: |
+    The obligation is the same as the Python one but the consequence is sharper. A Bun server writes `console.log` straight to stdout with no level, no timestamp and no request correlation, so production logs become a single unfilterable stream — and in a full-stack app the same module may run on the server AND in the browser, where `console` output reaches the user's devtools instead of the operator's.
+    `console.error` is included: it is still unlevelled and uncorrelated, and being on stderr does not make it queryable.
+  fix_hint: |
+    Route through the logger, which owns levels, timestamps and correlation:
+
+      console.log("processing", order.id);                 // wrong
+      logger.info("processing order", { orderId: order.id }); // right
+  exceptions:
+  - Occurrences inside comments or string literals are masked and never flagged.
+  - Test files and vendored/build directories are excluded.
+  - A CLI whose stdout IS its user interface should scope itself out via the consumer scope map.
+metadata:
+  aliases:
+  # LOGGING-PRINT-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - LOGGING-PRINT-001
+  severity: 2
+  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
+  # AST for constructs this stack does not have. Same obligation, new detector.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector

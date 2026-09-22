@@ -1,0 +1,1 @@
+{ "name": "second-package-no-typecheck", "scripts": { "start": "bun run index.ts" } }

@@ -1,0 +1,2 @@
+rule_id: trace.source.tested-by-present
+statement: Each identified implementation component declares a testing witness.

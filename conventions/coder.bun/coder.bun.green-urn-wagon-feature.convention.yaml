@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-wagon-feature
+kind: rule
+status: active
+name: URN wagon and feature segments are kebab-case identifiers
+statement: >-
+  The `{wagon}` and `{feature}` segments of a URN MUST match `^[a-z][a-z0-9-]*$`. Stack-neutral
+  obligation, Bun-specific detector; realized by `bun_green_traceability_detector` (core alias GREEN-
+  URN-003).
+terms:
+- term_id: kebab_identifier
+  text: >-
+    `^[a-z][a-z0-9-]*$` — the plan's own grammar for wagon and feature names.
+- term_id: silent_join_failure
+  text: >-
+    the state where a header reads correctly to a human but binds to nothing, because a case- or
+    separator-sensitive key did not match.
+content:
+  summary: >-
+    A "URN identifiers are kebab-case" obligation. The detector applies the pattern to segments 1 and 2 of
+    a well-formed six-segment URN, naming whichever fail.
+  normative_text: |
+    Wagon and feature are join keys into `plan/`, and a join key that is case- or separator-sensitive fails silently: `Orders` and `orders` are two different wagons to a string match, so a header with the wrong casing binds to nothing while reading correctly to a human. Kebab-case is the plan's own grammar, so the header must use it exactly.
+  fix_hint: |
+    Lower-case and hyphenate:
+
+      // URN: component:Orders:Check_Out:OrderRow:backend:presentation  // ✗
+      // URN: component:orders:check-out:OrderRow:backend:presentation  // ✓
+
+    The `{Name}` segment is deliberately NOT kebab — it mirrors the filename and keeps its own casing.
+  exceptions:
+  - URNs that are not six well-formed segments are skipped (owned by `green-urn-pattern`).
+  - The name, side and layer segments are governed by their own rules.
+metadata:
+  aliases:
+  # GREEN-URN-003 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-wagon-feature. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-003
+  - BUN-GREEN-URN-WAGON-FEATURE-001
+  severity: 3
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

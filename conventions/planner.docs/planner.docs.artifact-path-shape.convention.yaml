@@ -1,0 +1,82 @@
+schema_version: 1.1.0
+rule_id: planner.docs.artifact-path-shape
+kind: rule
+status: active
+name: Declared documentation artifacts name AsciiDoc paths inside the canonical tree
+statement: >-
+  A documentation artifact declared at RATIFY MUST name a `path` that begins `docs/` and ends
+  `.adoc`; an artifact with `action: archive` MUST name a `path` beneath `docs/archive/`. Core stores
+  these paths as opaque strings and never interprets them (companion §3); interpreting them is this
+  extension's job, because only the extension knows the tree.
+terms:
+- term_id: declaration
+  text: >-
+    the `documentation:` block recorded in the store at RATIFY (companion §3), in one of its two
+    total forms — `impact: change` with artifacts, or `impact: none` with a reason.
+- term_id: artifact
+  text: >-
+    one entry of `artifacts:` — an `action` (`create`, `modify`, `archive`), a `path`, and for
+    `archive` a `from` naming the document being retired.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '0 declarations exist to check. The `documentation:` block lands with the core unit (companion spec, work item B) and this rule has an empty input until it does. Advisory is the only honest disposition for a rule whose subject does not exist yet.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: '(the declaration is core''s, companion §3, and is not yet implemented)'
+    escalate_when: 'Documentation declarations are being recorded at RATIFY in the consuming repository and a full pass over recent plans reports zero malformed artifact paths.'
+content:
+  summary: >-
+    The declaration is a promise about paths. This rule checks the promise is well formed BEFORE the
+    work is done, so a malformed declaration is caught at RATIFY rather than discovered at COMPLETE
+    when the paths do not match the change set.
+  normative_text: |
+    The division of labour with core is exact and worth stating, because getting it wrong is what
+    #1782 originally proposed. Core checks that every declared path APPEARS IN THE CHANGE SET
+    (companion §4, check 4) — path-agnostic, format-agnostic, and non-vacuous with no extension
+    installed. This rule checks that the path is SHAPED like documentation. Core cannot: it does not
+    know what `docs/` is, or what a `.adoc` is, and companion §8's anti-theatre test greps core for
+    exactly those tokens and requires zero hits.
+
+    The archive constraint is the load-bearing half. `action: archive` with a destination outside
+    `docs/archive/` is how history quietly gets promoted into current truth — the single outcome
+    spec 2 §2 names as most likely to happen under time pressure, and the one that recreates the
+    problem #1782 exists to solve.
+  fix_hint: |
+    Shape the declaration to the tree:
+
+      documentation:
+        impact: change
+        artifacts:
+          - action: create
+            path: docs/architecture/shared-control-root.adoc     # ✓ under docs/, ends .adoc
+          - action: archive
+            from: docs/old-spec.md
+            path: docs/archive/old-spec.adoc                     # ✓ archive lands in archive/
+
+    An archived document keeps its content and gains `:status:`. It does not gain a place in
+    `purpose/`, `architecture/` or `delivery/` — those are for documents that are accepted truth today.
+  exceptions:
+  - >-
+    `impact: none` declares no artifacts and is not checked by this rule. Core enforces that a
+    reason is present; core does not judge the reason's quality, and neither does this extension.
+  - >-
+    An ABSENT declaration is not `impact: none`. `impact: none` is core considering the question
+    and declaring no documentation change — a positive statement, which permits. A missing
+    declaration is core having said nothing, so no declaration-dependent rule can be evaluated and
+    the capability returns COULD_NOT_CHECK, which BLOCKS. The corpus rules are still evaluated and
+    still reported: "genuinely nothing to check" is false whenever there is a corpus to read.
+  - The `from` path of an archive artifact is NOT required to end `.adoc` — it names the legacy
+    document being retired, which is exactly the markdown the migration is converting.
+metadata:
+  aliases:
+  - DOCS-DECLARATION-001
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

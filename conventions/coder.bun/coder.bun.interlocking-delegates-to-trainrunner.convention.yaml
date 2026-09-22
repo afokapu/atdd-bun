@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.bun.interlocking-delegates-to-trainrunner
+kind: rule
+status: active
+name: InterlockingRunner delegates execution to TrainRunner and never executes wagons itself (Bun)
+statement: >-
+  An `InterlockingRunner` MUST NOT execute wagons directly or duplicate the TrainRunner step loop. The
+  InterlockingRunner-defining module MUST NOT import a `src/<wagon>/wagon.ts` module, call
+  `runTrain(...)`, loop over `<expr>.sequence` as an executor, or otherwise invoke wagon steps;
+  TrainRunner remains the only wagon-step executor. This is the Bun-stack realization of the agnostic
+  core obligation `coder.train.interlocking-delegates-to-trainrunner` (core afokapu/atdd#1251); the JS
+  detector that enforces it is the atdd.workspace.bun implementation referenced below.
+implementation:
+  type: validator
+  ref: coder.bun.interlocking-delegates-to-trainrunner
+content:
+  summary: >-
+    An agnostic "route-control, not execution" obligation, rendered for the Bun application. The JS
+    realization scans each InterlockingRunner-defining module under `src/trains/**` and flags a direct
+    wagon import, a `runTrain(...)` call, or a `for (... of <expr>.sequence)` executor loop. Member of the
+    `bun_interlocking_infrastructure` FAMILY detector (checks/interlocking_delegates.mjs).
+  normative_text: |
+    Core runtime spec afokapu/atdd#1251 — the InterlockingRunner "must not": execute wagon steps, choose
+    the next train step inside a train, bypass TrainRunner, or duplicate TrainRunner's execution loop. It
+    resolves one admissible train and DELEGATES to `TrainRunner.execute(selectedTrainId, ...)`. The
+    production TrainRunner is the single component that runs wagons and carries Cargo between them. WHICH
+    module is scanned (the InterlockingRunner-defining files) and HOW the forbidden patterns are
+    recognized is the per-stack detector's concern; the TrainRunner module's own step loop is legitimate
+    and not flagged.
+  fix_hint: |
+    Delegate instead of executing:
+
+      execute(action, inputs, state) {
+        const res = this.resolveTrain(action, inputs, state);
+        return new TrainRunner(res.trainPath).execute(res.trainId, inputs);  // delegate, do not loop
+      }
+
+    Do NOT import a wagon module, call `runTrain(...)`, or loop over `train.sequence` in interlocking code.
+    This rule is `strict`: a newly introduced direct-execution pattern is not suppressible and fails CI.
+  exceptions:
+    - The production `TrainRunner` module is the legitimate wagon-step executor; only
+      InterlockingRunner-defining modules are scanned for direct execution.
+metadata:
+  aliases:
+    - BUN-INTERLOCKING-DELEGATES-TRAINRUNNER-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1251
+terms:
+  - term_id: direct_wagon_execution
+    text: >-
+      an InterlockingRunner module importing a wagon module, calling `runTrain(...)`, or looping over
+      `<expr>.sequence` as a step executor — competing with TrainRunner.

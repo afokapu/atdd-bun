@@ -1,0 +1,52 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.fragment-asserts-returned-markup
+kind: rule
+status: active
+name: htmx endpoint tests assert on the returned fragment
+statement: >-
+  A test case that performs an HTTP request and asserts on the response status MUST also assert on the
+  response BODY. Bun/htmx-specific obligation with no counterpart in any other stack's tester extension.
+  Realized by `bun_tester_discipline_detector`.
+terms:
+- term_id: fragment_contract
+  text: >-
+    the returned markup itself — hx-attributes, the element ids later out-of-band swaps target,
+    and the structure. In htmx this IS the interface, where a JSON API has a payload.
+- term_id: status_only_test
+  text: >-
+    a case asserting on status or ok and never reaching the body. It proves the route exists and
+    nothing about what the user will see.
+content:
+  summary: >-
+    Flags a case that fetches, asserts on `status`/`ok`, and never reaches `.text()` / `.json()` / a
+    `toContain` / `toMatch` / markup assertion.
+  normative_text: |
+    In a JSON API the response contract is the payload, and status plus a parsed field is a complete test. In htmx THE RESPONSE CONTRACT IS THE MARKUP: the server returns a fragment and htmx swaps it into the live DOM, so the hx-attributes, the element ids that later out-of-band swaps target, and the structure itself are the interface.
+    A test asserting `expect(res.status).toBe(200)` and stopping has proven the route exists and nothing about what the user will see. In particular it will not notice when a refactor drops the `id` that a sibling fragment's `hx-swap-oob` needs — which fails silently at runtime, exactly as `coder.htmx.swap-oob-carries-id` describes.
+    This rule exists because the stack moved the contract from the payload into the markup. That is the clearest case in this whole extension of an obligation that could not have been inherited from another stack.
+  fix_hint: |
+    Assert on the fragment, not just the status line:
+
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain('id="order-1"');   // the id a later oob swap targets
+  exceptions:
+  - Cases that do not perform an HTTP request are out of scope.
+  - Cases that never assert on status are out of scope.
+  - Reaching the body in any form — `.text()`, `.json()`, a markup matcher — satisfies the rule.
+metadata:
+  aliases:
+  # No core counterpart: this obligation exists because htmx moves the response
+  # contract from the payload into the markup. Stack-native, not inherited.
+  - BUN-FRAGMENT-ASSERTS-MARKUP-001
+  severity: 3
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_tester_detector

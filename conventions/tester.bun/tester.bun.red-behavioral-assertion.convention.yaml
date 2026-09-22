@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: tester.bun.red-behavioral-assertion
+kind: rule
+status: active
+name: RED tests assert behaviour, not existence
+statement: >-
+  A test whose Phase is RED MUST assert behaviour; a case whose assertions are all existence checks
+  (`toBeDefined` / `toBeTruthy` / `toBeFalsy` / `toBeNull` / `toBeUndefined`), or which asserts nothing at
+  all, is refused. Stack-neutral obligation, Bun-specific detector over `bun:test` matchers. Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: vacuous_assertion
+  text: >-
+    an existence check — toBeDefined, toBeTruthy, toBeFalsy, toBeNull, toBeUndefined. Passes the
+    moment a stub is exported.
+- term_id: behavioural_assertion
+  text: >-
+    an assertion on what the code DOES, which is the one that must fail before the
+    implementation exists.
+content:
+  summary: >-
+    For each `it()` in a RED-phase file, brace-matches the case body and reports it when it contains no
+    `expect(` at all, or when every `expect(` is an existence matcher.
+  normative_text: |
+    RED's entire job is to fail before the implementation exists. `expect(checkout).toBeDefined()` passes the moment an empty function is exported, so it goes green against a stub — the test was never RED in any meaningful sense, and the acceptance it claims to prove is unproven from that point forward.
+    The rule is deliberately narrow: it fires only when EVERY assertion in the case is vacuous. A case that checks existence and then checks behaviour is fine, because the behavioural assertion is the one that must fail.
+  fix_hint: |
+    Assert the behaviour that does not yet exist:
+
+      expect(checkout).toBeDefined();                        // passes against a stub
+      expect(() => checkout({ items: [] })).toThrow("CART_EMPTY");  // must fail first
+  exceptions:
+  - Only RED-phase files are scanned.
+  - A case mixing existence and behavioural assertions is not flagged.
+  - Files with no declared phase are skipped — that is `phase-declared`'s finding.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.red.behavioral-assertion-required`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-RED-BEHAVIORAL-ASSERTION-001
+  severity: 3
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

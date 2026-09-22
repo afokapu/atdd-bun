@@ -1,0 +1,2 @@
+rule_id: trace.source.tested-by-resolves
+statement: Each implementation testing witness resolves to an identified Bun test.

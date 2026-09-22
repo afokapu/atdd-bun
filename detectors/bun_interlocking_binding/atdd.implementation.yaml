@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_interlocking_binding
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# Bun/TS realization of the core python `interlocking_binding.py` detector, mirroring
+# convex.workspace.runtime's convex_interlocking_binding 1:1. ONE rule_id, FIVE binding
+# directions — the failing direction is named in the evidence, never in a new rule_id.
+#
+# PERSONA NOTE — RESOLVED. Four directions read SOURCE (src/trains/**, server.ts) and
+# the declared route space (plan/**). The fifth, `trace_to_declaration`, READS e2e trace
+# tests, as it does in the python original and the Convex mirror, because the obligation
+# is FIVE-way closure and dropping a direction would make the rule a partial claim.
+#
+# It originally ANCHORED its finding on the .test.ts it had read, which broke this
+# provider's persona doctrine for real: a consumer adopting atdd.extension.coder.bun
+# without the tester extension would have seen a coder rule_id land on a test file. The
+# finding is now anchored at the interlocking YAML — the honest artifact, since the claim
+# is about closure of the route space — with the offending test file and line named in
+# the evidence. Reading a test is fine; reporting on one is not, and nothing is lost.
+#
+# conformance/test_persona_scoping.py now proves this over MIXED trees, not only the
+# test-only tree whose emptiness let the violation through.
+realizes_convention:
+- coder.bun.interlocking-bilateral-binding
+emits_rule_ids:
+- coder.bun.interlocking-bilateral-binding
+- coder.bun.runtime-executes-the-declaration
+entrypoint: detect.mjs
+report: detect.mjs

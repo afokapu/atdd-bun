@@ -1,0 +1,41 @@
+schema_version: 1.1.0
+rule_id: coder.bun.commons-domain-no-outbound
+kind: rule
+status: active
+name: Commons domain modules import nothing outward
+statement: >-
+  A module under a `commons/domain/` or `shared/domain/` tree MUST NOT import from the commons
+  `application/` or `integration/` layers. Bun realization mirroring `coder.convex.commons-domain-no-
+  outbound`; core obligation `coder.commons.domain-layer-purity`.
+terms:
+- term_id: commons_domain
+  text: >-
+    a module under a `commons/domain/` or `shared/domain/` tree — the shared centre holding
+    rules.
+- term_id: outbound_import
+  text: >-
+    an import resolving into the application or integration layer. Dependencies point inward
+    only.
+content:
+  summary: >-
+    Flags an import from a commons domain module that resolves into the application or integration layer.
+  normative_text: |
+    Dependencies point INWARD only. The domain is the centre: it holds the rules, and it must not know what orchestrates them or what transports them.
+    An outward import inverts that and makes the rules unusable without the machinery — which shows up first as a domain test that needs a database.
+  fix_hint: |
+    Move the shared thing into the domain, or invert the dependency by defining a port in the domain that the outer layer implements.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.commons-domain-no-outbound
+  # Core obligation: coder.commons.domain-layer-purity
+  - BUN-COMMONS-DOMAIN-NO-OUTBOUND-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

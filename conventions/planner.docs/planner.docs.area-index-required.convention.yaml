@@ -1,0 +1,67 @@
+schema_version: 1.1.0
+rule_id: planner.docs.area-index-required
+kind: rule
+status: active
+name: Each authored area carries an index.adoc
+statement: >-
+  Each authored area of the canonical tree — `docs/`, `docs/purpose/`, `docs/architecture/`,
+  `docs/architecture/decisions/`, `docs/delivery/`, `docs/archive/` — MUST contain an `index.adoc`.
+  Other canonical filenames are defined when useful and are NOT instantiated merely to satisfy an
+  empty taxonomy (spec 2 §4).
+terms:
+- term_id: authored_area
+  text: >-
+    a directory of the canonical tree that holds authored documents. `docs/dist/` is not one; it is
+    generated output.
+- term_id: index
+  text: >-
+    `index.adoc` — the area's entry point and the node the rendered site navigates to. For
+    `docs/architecture/decisions/` it is additionally a DERIVED registry, governed by
+    `planner.docs.adr-registry-derived`.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '`docs/` exists and holds 71 markdown files; none of purpose/, architecture/, delivery/ or archive/ exists, and there is no index.adoc anywhere. 0 of 6 canonical areas are present, so the rule currently reports nothing and will begin reporting as the tree is created.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: 'ls -d docs docs/purpose docs/architecture docs/delivery docs/archive 2>&1'
+    escalate_when: 'The canonical tree exists in the consuming repository and every existing authored area carries an index.adoc.'
+content:
+  summary: >-
+    An area without an index is an area the rendered site cannot navigate into and a reader cannot
+    enter. The rule checks the six canonical areas only; it does not require an index in every
+    subdirectory an author happens to create.
+  normative_text: |
+    The rule is scoped to the canonical areas DELIBERATELY, and the restraint is the point. Spec 2 §4
+    warns against instantiating filenames to fill an empty taxonomy, and a rule demanding an index in
+    every directory would do exactly that — it would push authors to create ceremonial files for
+    directories that hold two related documents and need no landing page.
+
+    An area that does not exist is not a violation. The tree grows when a real requirement justifies
+    an area (spec 2 §2, *Out of scope*, on images / reference / operations domains). This rule fires
+    only when an area EXISTS and has no index.
+  fix_hint: |
+    Add the index and give it identity like any other document:
+
+      docs/architecture/index.adoc
+        = Architecture
+        :doc-id: architecture.index
+        :status: current
+
+    If the area has no content to introduce, the question is whether the area should exist yet, not
+    what to write in its index.
+  exceptions:
+  - '`docs/dist/` is generated output and is never required to carry an index.'
+  - An area that does not exist in the tree is not reported. Only an existing area missing its index is.
+metadata:
+  aliases:
+  - DOCS-TREE-001
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

@@ -1,0 +1,49 @@
+schema_version: 1.1.0
+rule_id: coder.bun.complexity-nesting
+kind: rule
+status: active
+name: TypeScript function nesting depth stays at or below 4
+statement: >-
+  Every TypeScript/TSX function MUST keep its maximum control-flow nesting depth at or below 4. Stack-
+  neutral obligation, NATIVE BUN detector transcribed from the python-pytest sibling
+  `coder.refactor.complexity-nesting-typescript` and verified numerically identical. Realized by
+  `bun_ts_metrics_detector` (core alias COMPLEXITY-NESTING-TS-001).
+terms:
+- term_id: control_depth
+  text: >-
+    the maximum brace depth reached on lines carrying a control keyword, measured relative to
+    the function's own base depth.
+- term_id: guard_clause
+  text: >-
+    an inverted condition returning early. The usual way to remove a level without changing
+    behaviour.
+content:
+  summary: >-
+    Depth is measured by brace balance on lines that also carry a control keyword (if / else / for / while
+    / do / switch / try / catch / finally), relative to the function's own base depth.
+  normative_text: |
+    Nesting is the metric readers feel most directly: at depth five a reader must hold five simultaneous conditions to know whether a line executes, which is past what working memory does reliably.
+    It is also the most mechanically fixable — a guard clause or an extracted helper usually removes a level without changing behaviour, which is why the threshold is enforced rather than advised.
+  fix_hint: |
+    Flatten the control flow:
+
+      * invert conditions into early-return guard clauses,
+      * extract the innermost block into its own function,
+      * replace a nested loop with a single pass over a prepared collection.
+  exceptions:
+  - Functions with fewer than 3 code lines are not scored.
+  - Comment lines are ignored when measuring brace balance.
+  - Test files and vendored/build directories are outside the scan.
+metadata:
+  aliases:
+  # COMPLEXITY-NESTING-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - COMPLEXITY-NESTING-TS-001
+  severity: 3
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

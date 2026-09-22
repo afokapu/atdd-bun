@@ -1,0 +1,7 @@
+<!-- URN: component:orders:checkout:panel:frontend:presentation -->
+<!-- Tested-By: -->
+<!-- - test:orders:checkout:E040-SMOKE-001-panel -->
+<!-- Runtime: browser -->
+<!-- Purpose: the orders panel htmx swaps into -->
+<div hx-get="/orders" hx-target="#orders" hx-indicator="#spin"></div>
+<button hx-post="/orders" hx-indicator="#spin">Add</button>

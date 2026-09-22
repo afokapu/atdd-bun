@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.verb-destructive-confirms
+kind: rule
+status: active
+name: Destructive htmx requests declare a confirmation
+statement: >-
+  Every element carrying `hx-delete` MUST also carry `hx-confirm` (or `hx-prompt`). In a hypermedia
+  application a delete is one attribute on a clickable element: there is no form submit, no route
+  transition and no framework guard between the user's click and the destructive request.
+  `hx-confirm` IS that guard, and it is declarative precisely so it cannot be forgotten. This is the
+  Bun/htmx-stack realization of the agnostic "a destructive action requires explicit intent"
+  obligation, enforced by the `htmx_hypermedia_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: destructive_verb
+  text: >-
+    `hx-delete`. `hx-post`/`hx-put`/`hx-patch` are mutating but not inherently destructive — they are
+    governed by `coder.htmx.verb-mutation-signals-progress` instead.
+- term_id: declared_confirmation
+  text: >-
+    `hx-confirm="…"` (a yes/no gate) or `hx-prompt="…"` (a gate requiring typed input). Either
+    satisfies the obligation; which one is a product decision about how much friction the action
+    deserves.
+content:
+  summary: >-
+    A "deletes are confirmed" obligation. The realization is a zero-dependency Bun detector that finds
+    each `hx-delete`, extracts the enclosing opening tag with a quote-aware scan, and flags the element
+    when that tag carries neither `hx-confirm` nor `hx-prompt`.
+  normative_text: |
+    In a component framework a destructive action typically passes through a handler, and the
+    confirmation lives in that handler where a reviewer sees it. htmx removes the handler — which is
+    the point — and with it removes the place the confirmation used to live. The obligation therefore
+    has to be relocated onto the element and enforced there, or it is simply lost in the migration.
+    The rule checks CO-LOCATION on the same element, not mere presence in the file: a confirmation on
+    a neighbouring control protects nothing.
+  fix_hint: |
+    Put the confirmation on the element that issues the delete:
+
+      <button hx-delete="/orders/7">Delete</button>                            <!-- ✗ unguarded -->
+      <button hx-delete="/orders/7" hx-confirm="Delete order 7?">Delete</button>   <!-- ✓ -->
+
+    For high-value deletions prefer `hx-prompt` so the user must type something meaningful rather than
+    reflexively clicking OK. `strict` — an unguarded delete is not suppressible.
+  exceptions:
+  - An element carrying `hx-prompt` instead of `hx-confirm` satisfies the rule.
+  - A delete implemented as a `hx-post` to an explicit `/…/delete` route is not detected by this rule;
+    that is a naming choice the rule cannot see, and it is why the verb should be `hx-delete`.
+metadata:
+  aliases:
+  - HTMX-DELETE-CONFIRM-001
+  severity: 2
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

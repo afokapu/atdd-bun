@@ -1,0 +1,10 @@
+= Release
+:doc-id: delivery.release
+:status: current
+
+The delivery area exists and holds this document — but carries no index.adoc.
+
+This file is what makes the fixture REAL. Expressing "the area exists with no
+index" as an empty directory made the defect invisible to git, so the fixture
+arrived empty on a fresh clone and the rule it proves never fired. A fixture that
+only works on the machine that authored it proves nothing.

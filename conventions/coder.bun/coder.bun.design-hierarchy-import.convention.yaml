@@ -1,0 +1,42 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-hierarchy-import
+kind: rule
+status: active
+name: Imports point inward through the layer hierarchy
+statement: >-
+  A module MUST import only inward: presentation -> application -> domain; integration -> application,
+  domain; assembly (the composition root) may reach any layer. Bun realization mirroring
+  `coder.convex.design-hierarchy-import`; core obligation `coder.backend.imports-respect-dependency-
+  allowed`.
+terms:
+- term_id: inward_import
+  text: >-
+    presentation -> application -> domain; integration -> application, domain. The permitted
+    direction.
+- term_id: assembly_exemption
+  text: >-
+    the composition root's freedom to reach any layer. Something must know about everything;
+    confining that to one place is the point of having a root.
+content:
+  summary: >-
+    Resolves each import to its target layer and flags an edge the hierarchy does not permit.
+  normative_text: |
+    This is the general rule the commons rules apply to one tree. It is stated separately because it governs FEATURE code as well, where most layering damage actually happens.
+    The assembly exemption is what makes the rest workable: something must be allowed to know about everything, and confining that to the composition root is the whole point of having one.
+  fix_hint: |
+    Depend inward, or invert the dependency with a port. If neither is possible the two modules probably belong in one layer.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.design-hierarchy-import
+  # Core obligation: coder.backend.imports-respect-dependency-allowed
+  - BUN-DESIGN-HIERARCHY-IMPORT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

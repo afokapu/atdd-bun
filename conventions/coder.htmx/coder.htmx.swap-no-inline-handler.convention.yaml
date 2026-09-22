@@ -1,0 +1,59 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.swap-no-inline-handler
+kind: rule
+status: active
+name: htmx-driven markup declares behaviour with hx-attributes, not inline handlers
+statement: >-
+  Markup that uses htmx MUST NOT carry inline HTML event handlers (`onclick="…"`, `onsubmit="…"`,
+  `onchange="…"`, …). Behaviour in a hypermedia application is declared with `hx-trigger` and `hx-on`,
+  which participate in htmx's event and swap lifecycle; an inline handler does not. This is the
+  Bun/htmx-stack realization of the agnostic "behaviour is declared where the framework can see it"
+  obligation, enforced by the `htmx_hypermedia_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: htmx_driven_markup
+  text: >-
+    a file that contains at least one `hx-` attribute. The rule is SELF-SCOPING to these files: a plain
+    non-htmx page elsewhere in the repo is not this rule's business.
+- term_id: inline_event_handler
+  text: >-
+    a lowercase HTML attribute of the form `on<event>="…"` carrying JavaScript in markup. Deliberately
+    lowercase-only, so React's camelCase JSX prop `onClick={…}` — a different mechanism with different
+    lifecycle semantics — is never flagged.
+content:
+  summary: >-
+    A "no inline JS handlers in hypermedia markup" obligation. The realization is a zero-dependency Bun
+    detector that first confirms the file contains an `hx-` attribute, then flags any lowercase
+    `on<event>="` attribute in it.
+  normative_text: |
+    An inline handler is destroyed the moment htmx swaps the element that carries it, and any state it
+    closed over goes with it. Worse, the reverse also happens: a handler attached to an element that is
+    swapped OUT can remain live on a detached node, so a stale click keeps firing against markup the
+    user can no longer see. htmx has an explicit answer for both — `hx-on` for element-scoped
+    behaviour, `hx-trigger` for the request itself — and those survive swaps because htmx re-processes
+    the new content.
+    Mixing the two models is also why htmx codebases drift back toward a JS layer: each inline handler
+    is a small piece of behaviour that is invisible to the hypermedia lifecycle, and they accumulate.
+  fix_hint: |
+    Move the behaviour onto an htmx attribute:
+
+      <button hx-get="/rows/1" onclick="track('open')">Open</button>          <!-- ✗ dies on swap -->
+      <button hx-get="/rows/1" hx-on::after-request="track('open')">Open</button>   <!-- ✓ -->
+
+    For behaviour that is genuinely presentational and not request-related, attach it in a delegated
+    listener on a stable ancestor that is never swapped. Disposition is `suppress-and-clean`: existing
+    handlers are held flat by a ratchet baseline while they are migrated.
+  exceptions:
+  - Files containing no `hx-` attribute are never scanned (self-scoping).
+  - React/JSX camelCase props (`onClick={…}`, `onSubmit={…}`) are a different mechanism and are out of
+    scope.
+  - Test files (`*.test.*`, `*.spec.*`) are excluded.
+metadata:
+  aliases:
+  - HTMX-NO-INLINE-HANDLER-001
+  severity: 3
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

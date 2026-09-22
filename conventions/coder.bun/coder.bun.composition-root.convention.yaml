@@ -1,0 +1,42 @@
+schema_version: 1.1.0
+rule_id: coder.bun.composition-root
+kind: rule
+status: active
+name: Wiring is confined to a composition root
+statement: >-
+  Instantiation of a feature's collaborators (`*Repository`, `*Client`, `*Service`, `*Adapter`,
+  `*Gateway`, `*Store`, `*Provider`, `*Factory`) MUST happen only in a composition root —
+  `composition.ts`, `wagon.ts`, `server.ts`, `index.ts`. Bun realization mirroring
+  `coder.convex.composition-root`; core obligation `coder.refactor.composition-root`.
+terms:
+- term_id: composition_root
+  text: >-
+    composition.ts, wagon.ts, server.ts or index.ts. server.ts counts because Bun.serve IS the
+    assembly point of a full-stack Bun app.
+- term_id: collaborator
+  text: >-
+    a *Repository, *Client, *Service, *Adapter, *Gateway, *Store, *Provider or *Factory — the
+    things whose wiring must be confined.
+content:
+  summary: >-
+    Flags a `new <Collaborator>()` outside a composition root, over string- and comment-masked source.
+  normative_text: |
+    `server.ts` is a root in this stack specifically because `Bun.serve` IS the assembly point of a full-stack Bun app — the place routes and their dependencies are wired. The Convex sibling has no equivalent because its function tree has no single entry.
+    Wiring scattered across a codebase is not a style problem: it is why a test cannot substitute anything, and why a second deployment shape becomes a rewrite.
+  fix_hint: |
+    Construct the collaborator in the composition root and pass it to whatever needs it.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.composition-root
+  # Core obligation: coder.refactor.composition-root
+  - BUN-COMPOSITION-ROOT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

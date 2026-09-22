@@ -1,0 +1,8 @@
+= ADR-20260906-001: Shared Control Root
+:doc-id: architecture.decisions.adr-001
+:status: current
+:adr-id: ADR-20260906-001
+:date: 2026-09-06
+:decides: architecture.shared-control-root
+
+Accepted.

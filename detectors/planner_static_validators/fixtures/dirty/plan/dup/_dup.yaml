@@ -1,0 +1,26 @@
+wagon: dup
+urn: wagon:wrong
+description: A deliberately invalid static planner fixture
+subject: agent:planner
+context: test
+action: duplicate
+goal: validate
+outcome: invalid
+produce:
+  - name: dup:item
+    contract: contract:shared:item
+    telemetry: telemetry:shared:item
+    to: wagon:missing
+  - name: dup:item
+    contract: contract:shared:item
+    telemetry: telemetry:shared:item
+consume:
+  - name: dup:item
+    from: wagon:dup
+  - name: bad:item
+    from: mystery:missing
+wmbt:
+  total: 1
+features:
+  - urn: feature:dup:item
+  - urn: feature:dup:item

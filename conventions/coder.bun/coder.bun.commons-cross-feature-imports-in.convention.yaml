@@ -1,0 +1,39 @@
+schema_version: 1.1.0
+rule_id: coder.bun.commons-cross-feature-imports-in
+kind: rule
+status: active
+name: Commons features are not reached into from siblings
+statement: >-
+  A module at `commons/<layer>/<feature>/…` MUST NOT import directly into a SIBLING feature's internals;
+  cross-feature use goes through the layer root. Bun realization mirroring `coder.convex.commons-cross-
+  feature-imports-in`; core obligation `coder.boundaries.no-cross-wagon-imports`.
+terms:
+- term_id: commons_feature
+  text: >-
+    a directory under `commons/<layer>/`, whose internals belong to it alone.
+- term_id: layer_root
+  text: >-
+    the surface a feature deliberately exposes. Cross-feature use goes through it, or two
+    features are coupled through a path neither published.
+content:
+  summary: >-
+    Resolves each import and flags one whose target sits inside a different commons feature directory.
+  normative_text: |
+    A feature's internals are its own. The layer root is the surface it deliberately exposes, and reaching past it couples two features through a path that neither of them chose to publish — which is how a shared module quietly becomes unsplittable.
+  fix_hint: |
+    Import from the layer root, and if the thing you need is not exported there, that is the decision to make explicit — export it, or move it.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.commons-cross-feature-imports-in
+  # Core obligation: coder.boundaries.no-cross-wagon-imports
+  - BUN-COMMONS-CROSS-FEATURE-IMPORTS-IN-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

@@ -1,0 +1,17 @@
+wagon: confirm-order
+urn: wagon:orders
+description: Take a customer order from basket to confirmed checkout
+subject: customer:active
+context: in-checkout, basket-priced
+action: confirms the priced basket
+goal: advance the order to a confirmed state
+outcome: order confirmed and its row fragment rendered
+produce:
+  - name: orders:confirmed-order
+    contract: contract:orders:confirmed-order-v1
+    telemetry: telemetry:orders:order-confirmed
+consume:
+  - name: orders:priced-basket
+    from: wagon:pricing
+wmbt:
+  - wmbt:orders:E001

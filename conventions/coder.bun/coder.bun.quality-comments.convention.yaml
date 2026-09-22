@@ -1,0 +1,44 @@
+schema_version: 1.1.0
+rule_id: coder.bun.quality-comments
+kind: rule
+status: active
+name: TypeScript files carry at least a 10% comment ratio
+statement: >-
+  Every TypeScript/TSX file MUST have a comment ratio of at least 10% of non-blank lines. Stack-neutral
+  obligation, NATIVE BUN detector transcribed from the python-pytest sibling `coder.refactor.quality-
+  comments-typescript` and verified numerically identical. Realized by `bun_ts_metrics_detector` (core
+  alias REFACTOR-QUALITY-COMMENTS-TS-001).
+terms:
+- term_id: comment_ratio
+  text: >-
+    comment lines over non-blank lines, counting line comments, block comments and `*`
+    continuations.
+- term_id: floor_against_absence
+  text: >-
+    what this rule is. It cannot tell a good comment from a bad one; it catches the file that
+    documents nothing.
+content:
+  summary: >-
+    Counts line comments, block comments and continuation lines beginning `*` against all non-blank lines.
+  normative_text: |
+    A ratio is a blunt instrument for a quality that is not quantitative, and it is used here for one narrow reason: a file with NO comments at all is common and is almost always a file whose non-obvious decisions were never written down. Ten percent is low enough that any file with a real header and a few explanatory lines clears it.
+    The rule cannot tell a good comment from a bad one. It is a floor against absence, not a measure of quality, and it should not be read as encouragement to restate code in prose.
+  fix_hint: |
+    Explain the decisions the code cannot state: why this approach over the obvious one, what invariant the block maintains, which upstream constraint forces the shape. In a Bun + htmx file the GREEN header already contributes several lines toward the ratio.
+  exceptions:
+  - Blank lines are excluded from both numerator and denominator.
+  - Continuation lines beginning `*` inside a block comment count as comment lines.
+  - Test files and vendored/build directories are outside the scan.
+metadata:
+  aliases:
+  # REFACTOR-QUALITY-COMMENTS-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - REFACTOR-QUALITY-COMMENTS-TS-001
+  severity: 2
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

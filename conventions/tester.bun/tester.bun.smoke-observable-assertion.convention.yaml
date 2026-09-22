@@ -1,0 +1,54 @@
+schema_version: 1.1.0
+rule_id: tester.bun.smoke-observable-assertion
+kind: rule
+status: active
+name: SMOKE tests assert on operator-observable output
+statement: >-
+  A test whose Phase is SMOKE MUST assert on an operator-observable channel — HTTP response status or
+  body, rendered markup, stdout/stderr, exit code — and not only on objects the test constructed itself.
+  Stack-neutral obligation, Bun/htmx-specific channel vocabulary. Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: observable_channel
+  text: >-
+    an HTTP response status or body, rendered markup, stdout/stderr, an exit code, or persisted
+    state.
+- term_id: self_constructed_object
+  text: >-
+    a value the test built itself. Asserting on it proves the constructor works, which is a unit
+    test's job under a SMOKE label.
+content:
+  summary: >-
+    Reports a SMOKE case that makes assertions but touches none of the observable channels.
+  normative_text: |
+    A SMOKE test exists to prove the system does something a person could witness. A case that builds an object and asserts on its fields has proven that the constructor works — which is a unit test's job — while carrying the label that tells the gate real behaviour was exercised.
+    The observable vocabulary is stack-specific and that is the whole reason this rule is re-realized rather than shared: for this stack the canonical observation is an HTTP response and the markup inside it, because that markup is what htmx puts in front of the user.
+  fix_hint: |
+    Assert what an operator would see:
+
+      const order = buildOrder({ sku: "x" });
+      expect(order.sku).toBe("x");       // internal
+
+      const res = await fetch("/orders");
+      expect(res.status).toBe(200);
+      expect(await res.text()).toContain("order-1");   // observable
+  exceptions:
+  - Only SMOKE-phase files are scanned.
+  - Cases with no assertions are skipped — other rules own that.
+  - Disposition is `suppress-and-clean`: a ratchet holds an existing suite flat while it is migrated.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.smoke.operator-observable-assertion`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-SMOKE-OBSERVABLE-ASSERTION-001
+  severity: 3
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

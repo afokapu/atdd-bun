@@ -1,0 +1,5 @@
+= Delivery
+:doc-id: delivery.index
+:status: current
+
+HOW — development through release and deployment.

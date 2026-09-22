@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-pattern
+kind: rule
+status: active
+name: The URN has all six segments in the canonical order
+statement: >-
+  A `URN:` marker MUST read `component:{wagon}:{feature}:{Name}:{side}:{layer}` — literal `component`
+  first, then exactly five non-empty segments. Stack-neutral obligation, Bun-specific detector; realized
+  by `bun_green_traceability_detector` (core alias GREEN-URN-002).
+terms:
+- term_id: six_segment_urn
+  text: >-
+    `component:{wagon}:{feature}:{Name}:{side}:{layer}` — the literal `component` plus five non-
+    empty segments.
+- term_id: join_key
+  text: >-
+    a URN segment used to resolve the file against plan/. A missing segment does not degrade: it
+    resolves to nothing while still looking traceable.
+content:
+  summary: >-
+    A "the URN is well-formed" obligation. The detector splits the marker on `:` and requires six
+    segments, the first literally `component`, none empty. Files with no marker are skipped — their
+    finding belongs to `green-urn-marker`, and reporting both would double-count one fault.
+  normative_text: |
+    Each segment is a join key. Wagon and feature locate the work item, name identifies the component, side and layer place it in the architecture. A URN missing a segment does not degrade gracefully — it resolves to nothing, and the file is as unbound as one with no marker at all, while LOOKING traceable in review.
+  fix_hint: |
+    Supply every segment:
+
+      // URN: component:orders:checkout:OrderRow                       // ✗ four segments
+      // URN: component:orders:checkout:OrderRow:backend:presentation  // ✓
+  exceptions:
+  - A file with no `URN:` marker is skipped (owned by `green-urn-marker`).
+  - Segment CONTENT is validated by the wagon-feature, name, side and layer rules; this rule checks shape only.
+metadata:
+  aliases:
+  # GREEN-URN-002 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-pattern. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-002
+  - BUN-GREEN-URN-PATTERN-001
+  severity: 3
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

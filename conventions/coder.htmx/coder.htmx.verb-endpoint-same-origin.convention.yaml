@@ -1,0 +1,58 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.verb-endpoint-same-origin
+kind: rule
+status: active
+name: htmx verb attributes address same-origin paths, never absolute URLs
+statement: >-
+  Every htmx verb attribute (`hx-get`, `hx-post`, `hx-put`, `hx-patch`, `hx-delete`) MUST address a
+  same-origin path (`/api/orders`) and MUST NOT carry a hardcoded absolute or protocol-relative URL
+  (`https://host/…`, `//host/…`). htmx swaps the response body directly into the live DOM, so the
+  endpoint's origin is a trust boundary, not a configuration detail. This is the Bun/htmx-stack
+  realization of the agnostic "a client must not hardcode a foreign origin" obligation; the detector
+  that enforces it is the `htmx_hypermedia_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: verb_attribute
+  text: >-
+    one of `hx-get` / `hx-post` / `hx-put` / `hx-patch` / `hx-delete` — the attributes that make an
+    element issue an HTTP request.
+- term_id: same_origin_path
+  text: >-
+    a root-relative path beginning `/`, resolved by the browser against the origin that served the
+    document. The correct form for every hypermedia control in the app.
+content:
+  summary: >-
+    An "htmx endpoints are same-origin paths" obligation. The realization is a zero-dependency Bun
+    detector that scans `.html`/`.htm` templates and `.ts`/`.tsx`/`.js`/`.jsx`/`.mjs` source for a verb
+    attribute whose value begins `http://`, `https://` or `//`.
+  normative_text: |
+    A hardcoded foreign origin in a verb attribute fails three ways at once. It is a CORS failure the
+    moment the other origin stops sending permissive headers. It is an untrusted-HTML injection point,
+    because htmx inserts whatever comes back straight into the DOM — the response is markup, not data,
+    and there is no parse step that would reject it. And it is the standard mechanism by which a staging
+    host reaches production, since a baked-in `https://staging.example.com` is invisible to every
+    environment variable and every config review.
+    Cross-origin calls that are genuinely required belong behind a same-origin proxy route on the Bun
+    server, where the origin decision is made in one auditable place rather than scattered across
+    templates.
+  fix_hint: |
+    Replace the absolute URL with the path, and proxy if the upstream really is remote:
+
+      <div hx-get="https://api.example.com/orders">      <!-- ✗ foreign origin in markup -->
+      <div hx-get="/api/orders">                          <!-- ✓ same-origin path -->
+
+    On the Bun side, route `/api/orders` through `Bun.serve` and let THAT handler call upstream. The
+    rule is `strict`: an absolute-URL endpoint is not suppressible.
+  exceptions:
+  - A path-only value (`/orders`, `./orders`, `orders`) is same-origin and never flagged.
+  - Non-verb htmx attributes (`hx-target`, `hx-swap`, `hx-trigger`) are out of scope — they carry
+    selectors and modifiers, not endpoints.
+metadata:
+  aliases:
+  - HTMX-ENDPOINT-ORIGIN-001
+  severity: 2
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

@@ -1,0 +1,5 @@
+= Worktrees
+:doc-id: purpose.worktrees
+:status: current
+
+Why parallel work needs isolated trees.

@@ -1,0 +1,9 @@
+urn: wmbt:orders:E009
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E009
+acceptances:
+  - identity:
+      urn: acc:orders:E009-UNIT-001
+      id: E009-UNIT-001
+      purpose: Declared so a test binding to it resolves
+      phase: UNIT

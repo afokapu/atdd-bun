@@ -1,0 +1,46 @@
+schema_version: 1.1.0
+rule_id: tester.bun.test-no-self-skip
+kind: rule
+status: active
+name: Tests do not disable themselves
+statement: >-
+  A test MUST NOT disable itself with `.skip` / `.todo` / `.failing`, nor bail out early on an environment
+  check. Stack-neutral obligation, Bun-specific detector over `bun:test` modifiers. Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: self_skip
+  text: >-
+    `.skip` or `.todo` on it / test / describe. Deliberately excludes `.fails` / `.failing`,
+    which core's RED vocabulary lists as accepted markers.
+- term_id: guarded_bail
+  text: >-
+    `if (!process.env.X) return` inside a test — the same fault in disguise, and the more common
+    one, since it does nothing in exactly the environment nobody watches.
+content:
+  summary: >-
+    Flags `it.skip` / `test.skip` / `describe.skip` (and `.todo` / `.failing`), and a guarded `if
+    (…process.env…) return` bail-out inside a test.
+  normative_text: |
+    A skipped test reports GREEN. That is the entire problem: the suite passes, the gate sees no failure, and the acceptance is recorded as covered by a test that did not run.
+    The environment-guard form is included because it is the same fault in disguise and is far more common in practice — `if (!process.env.DATABASE_URL) return;` at the top of a live smoke means the test silently does nothing in exactly the environment where nobody is watching. If a test genuinely cannot run somewhere, that belongs in the runner's configuration where it is visible, not hidden inside the test body.
+  fix_hint: |
+    Remove the modifier and let the test run, or delete the test. If it must not run in some environment, exclude it at the runner level so the exclusion is visible in configuration rather than invisible in a green suite.
+  exceptions:
+  - A skip in a fixture or helper that is not itself a test case is out of scope.
+  - Runner-level exclusion (a config filter) is the supported way to not run a test.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.acceptance-violation.live-smoke-acceptance`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-NO-SELF-SKIP-001
+  severity: 3
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

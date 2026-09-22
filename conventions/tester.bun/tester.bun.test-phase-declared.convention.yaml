@@ -1,0 +1,45 @@
+schema_version: 1.1.0
+rule_id: tester.bun.test-phase-declared
+kind: rule
+status: active
+name: Every test declares its ATDD phase
+statement: >-
+  A test file carrying a URN MUST declare `// Phase:` with one of RED, UNIT, SMOKE, E2E. Stack-neutral
+  obligation, Bun-specific detector. Realized by `bun_tester_discipline_detector`.
+terms:
+- term_id: phase_field
+  text: >-
+    `// Phase:` with RED, UNIT, SMOKE or E2E.
+- term_id: phase_gated_rule
+  text: >-
+    a rule that only applies to one phase. Without a declared phase a test is exempt from the
+    whole quality surface by omission.
+content:
+  summary: >-
+    Requires a `Phase:` field from the closed vocabulary.
+  normative_text: |
+    The phase is not documentation — it is what selects which other rules apply. A RED test must fail first and must assert behaviour; a SMOKE test must assert something operator-observable and must not substitute collaborators. Without a declared phase none of those obligations can be evaluated, so an undeclared test is exempt from the entire quality surface by omission.
+    That is why this rule exists separately from the URN rule: a test can be perfectly identified and still be ungoverned.
+  fix_hint: |
+    Declare the phase the test belongs to:
+
+      // Phase: SMOKE
+  exceptions:
+  - Files with no URN are skipped.
+  - The vocabulary is fixed by core; a new phase is a core change, not an extension one.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.filename.test-carries-urn-identity`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-PHASE-DECLARED-001
+  severity: 2
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

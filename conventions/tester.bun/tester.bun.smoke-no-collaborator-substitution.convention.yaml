@@ -1,0 +1,45 @@
+schema_version: 1.1.0
+rule_id: tester.bun.smoke-no-collaborator-substitution
+kind: rule
+status: active
+name: SMOKE tests do not substitute production collaborators
+statement: >-
+  A test whose Phase is SMOKE MUST NOT substitute a production collaborator — `mock.module`, `spyOn`,
+  `jest.mock`/`spyOn`, `vi.mock`/`spyOn`. Stack-neutral obligation, Bun-specific substitution vocabulary
+  (`bun:test` exposes `mock` and `spyOn` where pytest uses `monkeypatch`). Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: substitution
+  text: >-
+    mock.module, spyOn, jest.mock/spyOn, vi.mock/spyOn — replacing a production collaborator.
+- term_id: false_evidence
+  text: >-
+    what a substituted SMOKE test gives the gate: credit that the real path works, when the real
+    path is precisely what was replaced.
+content:
+  summary: >-
+    Flags any substitution call in a SMOKE-phase file, reporting the exact line.
+  normative_text: |
+    Substituting a collaborator turns a SMOKE test into a unit test wearing a SMOKE label. The damage is not that the test is bad — it may be an excellent unit test — but that the gate counts it as evidence the real path works, when the real path is precisely the part that was replaced.
+    This is the failure that makes a green suite compatible with a broken deployment, which is the specific outcome ATDD's phase separation exists to prevent.
+  fix_hint: |
+    Let the SMOKE test exercise the real collaborator against real infrastructure, and move the substituted version into a UNIT-phase test where the substitution is honest and expected.
+  exceptions:
+  - Only SMOKE-phase files are scanned; UNIT tests may substitute freely.
+  - Disposition matches core's `suppress-and-clean`: a ratchet holds existing cases flat.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.smoke.no-collaborator-substitution`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-SMOKE-NO-COLLABORATOR-SUBSTITUTION-001
+  severity: 4
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

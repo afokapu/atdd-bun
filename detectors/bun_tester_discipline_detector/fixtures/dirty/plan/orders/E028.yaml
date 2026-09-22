@@ -1,0 +1,9 @@
+urn: wmbt:orders:E028
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E028
+acceptances:
+  - identity:
+      urn: acc:orders:E028-TELEMETRY-001
+      id: E028-TELEMETRY-001
+      purpose: Declared so a test binding to it resolves
+      phase: UNIT

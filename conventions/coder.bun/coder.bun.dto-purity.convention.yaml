@@ -1,0 +1,40 @@
+schema_version: 1.1.0
+rule_id: coder.bun.dto-purity
+kind: rule
+status: active
+name: DTOs are pure immutable data
+statement: >-
+  A `*DTO` type or interface MUST have no method members and no non-`readonly` fields. Bun realization
+  mirroring `coder.convex.dto-purity`; core obligation `coder.dto.purity`.
+terms:
+- term_id: dto
+  text: >-
+    a `*DTO` type or interface — the shape crossing a boundary.
+- term_id: pure_data
+  text: >-
+    no method members, every field readonly. A method means behaviour crossed too; a mutable
+    field means the receiver can change what the sender said.
+content:
+  summary: >-
+    Parses each `*DTO` declaration body, splits its members on `;`/newline/`,`, and flags method members
+    or non-readonly fields.
+  normative_text: |
+    A DTO is the shape crossing a boundary. A method on it means behaviour crossed too, and the two sides are now coupled to an implementation rather than to data. A mutable field means the receiver can change what the sender said.
+    Both faults look harmless in one file and become impossible to unpick once a second consumer exists.
+  fix_hint: |
+    Strip methods to free functions in the layer that needs them, and mark every field `readonly`.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.dto-purity
+  # Core obligation: coder.dto.purity
+  - BUN-DTO-PURITY-001
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

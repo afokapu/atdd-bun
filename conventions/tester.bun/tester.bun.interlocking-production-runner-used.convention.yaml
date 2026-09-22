@@ -1,0 +1,76 @@
+schema_version: 1.1.0
+rule_id: tester.bun.interlocking-production-runner-used
+kind: rule
+status: active
+name: Interlocking tests exercise the production runners, not mocks (Bun)
+statement: >-
+  A test that exercises an interlocking MUST drive the production runtime objects — `InterlockingRunner`
+  (route resolution) and `TrainRunner` (linear train execution), the core afokapu/atdd#1251 call model —
+  and MUST NOT substitute a mock, a substituted runner, or a
+  hand-built route resolver for them. This is the Bun-stack realization of the agnostic core
+  obligation `tester.interlocking.production-runner-used`; its JS detector (a member of the
+  `bun_interlocking_coverage` FAMILY) scans the consumer's `e2e/**/*.ts` interlocking tests and flags
+  any that fail to reference both production runner symbols or that carry a forbidden substitution
+  pattern. An interlocking test that mocks the route-control path is a DESCRIPTIVE green.
+implementation:
+  type: validator
+  ref: tester.bun.interlocking-production-runner-used
+content:
+  summary: >-
+    A "interlocking tests use the production runners, not mocks" obligation, rendered for the Bun
+    backend. The JS realization scans each interlocking-related `e2e/**/*.ts` test and enforces two
+    checks: it references both `InterlockingRunner` and `TrainRunner`, and it carries none of the
+    forbidden substitution patterns (comments masked).
+  normative_text: |
+    The core runtime call model (afokapu/atdd#1251) is `Station Master -> InterlockingRunner.resolveTrain
+    -> TrainRunner.execute`. A test that claims to exercise an interlocking route but replaces either
+    runner with a test double exercises the double, not production route control.
+
+    REQUIRED production symbols an interlocking test must reference:
+      - InterlockingRunner
+      - TrainRunner
+
+    FORBIDDEN substitution patterns (any one is a violation):
+      - MockInterlockingRunner / MockTrainRunner
+      - mock.module(...) replacing a runner module — bun:test's own idiom, and the one that
+        matters most here: it swaps the ENTIRE route-control module
+      - spyOn(...) / mock(...) / mock.restore(...) aimed at a runner (bun:test)
+      - vi.mock(...) / jest.mock(...) around a runner module, for a suite migrating in
+      - vi.spyOn(...) / jest.spyOn(...) replacing runner behavior (resolveTrain / execute)
+      - a hand-built route resolver replacing InterlockingRunner (a locally defined `resolveTrain`
+        function or a `*Resolver` class standing in for the production runner)
+
+    WHICH per-stack discovery applies (here: Bun `e2e/**/*.ts` scanned for the production symbols and
+    the forbidden patterns) is delegated to this realization.
+  fix_hint: |
+    Rewrite the flagged interlocking test to drive the real runners: import and call
+    `new InterlockingRunner(interlockingYamlPath).resolveTrain(action, inputs)` to get the selected
+    trainId, then `new TrainRunner(selectedTrainId).execute(...)`. Delete any `MockInterlockingRunner` /
+    `MockTrainRunner`, any `mock.module` / `spyOn` / `mock` / `mock.restore` (bun:test) or
+    `vi.mock` / `vi.spyOn` / jest equivalent aimed at the runners or their `resolveTrain` / `execute`
+    methods, and any locally hand-built route resolver. This rule is `strict`: an interlocking test that
+    mocks the route-control path is a descriptive green proving nothing about production and blocks.
+  exceptions:
+    - Non-interlocking e2e tests (no reference to any interlocking route/train/interlocking token and no
+      runner symbol) are out of scope — they are not interlocking tests.
+    - Per-stack renderings other than Bun are owned by their own workspace packages.
+metadata:
+  aliases:
+    - BUN-TESTER-INTERLOCKING-PRODUCTION-RUNNER-USED-001
+  severity: 1
+  disposition: strict
+  introduced_in: 0.1.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1251
+terms:
+  - term_id: production_runner
+    text: >-
+      one of the two runtime objects in the core afokapu/atdd#1251 call model — `InterlockingRunner`
+      (resolves a guarded route to exactly one trainId) and `TrainRunner` (executes the selected train).
+  - term_id: forbidden_substitution
+    text: >-
+      a test double that replaces a production runner: `MockInterlockingRunner`/`MockTrainRunner`, a
+      `mock.module`/`spyOn`/`mock` (bun:test) or `vi.mock`/`vi.spyOn` (or jest) aimed at a runner
+      or its `resolveTrain`/`execute`, or a hand-built
+      route resolver standing in for InterlockingRunner.

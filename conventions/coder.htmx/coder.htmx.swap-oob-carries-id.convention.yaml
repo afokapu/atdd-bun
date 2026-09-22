@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.swap-oob-carries-id
+kind: rule
+status: active
+name: Out-of-band swap elements declare the id they swap into
+statement: >-
+  Every element carrying `hx-swap-oob` MUST also carry an `id`. htmx matches an out-of-band element to
+  its destination BY ID; an oob element with no id has no destination, so htmx discards it silently —
+  no error, no console warning, no swap. This is the Bun/htmx-stack realization of the agnostic
+  "a declarative binding must name its target" obligation, enforced by the `htmx_hypermedia_detector`
+  family implementation on `atdd.workspace.bun`.
+terms:
+- term_id: out_of_band_swap
+  text: >-
+    `hx-swap-oob` marks an element in a response for swapping somewhere OTHER than the requesting
+    element's target — the mechanism for updating a cart badge, a flash region or a sidebar count from
+    a response whose main target is elsewhere.
+- term_id: silent_discard
+  text: >-
+    htmx's behaviour when no element in the document matches the oob element's id: it drops the
+    fragment and continues. The failure is invisible at every layer — the server logs a 200, the
+    network tab shows the markup arriving, and the page does not change.
+content:
+  summary: >-
+    An "oob swaps name their destination" obligation. The realization is a zero-dependency Bun detector
+    that locates each `hx-swap-oob` occurrence, extracts the enclosing opening tag with a quote-aware
+    scan (so a `>` inside an attribute value does not end the tag early), and flags the element when
+    that tag carries no `id="…"` or JSX `id={…}`.
+  normative_text: |
+    This is the highest-frequency silent bug in an htmx codebase, and it presents to the developer as
+    "the server is definitely returning it but the page doesn't update" — which sends people to debug
+    the server, the route, and the response headers, none of which are wrong.
+    The obligation is that an out-of-band fragment names its destination. WHERE the id must appear is
+    part of the rule: on the oob element itself, not on a wrapper, because htmx reads the id from the
+    element carrying the attribute.
+  fix_hint: |
+    Give the oob element the id of the element it replaces:
+
+      <div class="cart-count" hx-swap-oob="true">3</div>   <!-- ✗ no destination; dropped -->
+      <div id="cart-count" hx-swap-oob="true">3</div>      <!-- ✓ swaps into #cart-count -->
+
+    The id must match an element that EXISTS in the current document; an id that matches nothing is
+    dropped just as silently, which this rule cannot see and a smoke test must. `strict`.
+  exceptions:
+  - An element whose id is supplied dynamically as a JSX expression (`id={rowId}`) satisfies the rule —
+    the binding is present; whether it resolves is a runtime concern.
+  - "`hx-swap` (in-band) is out of scope: it swaps into `hx-target`, a selector, not an id."
+metadata:
+  aliases:
+  - HTMX-OOB-ID-001
+  severity: 2
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

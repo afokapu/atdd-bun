@@ -1,0 +1,73 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.verb-endpoint-is-routed
+kind: rule
+status: active
+name: A mutating htmx endpoint is served by the Station Master surface (Bun/htmx)
+statement: >-
+  An endpoint declared by a STATE-CHANGING htmx verb (`hx-post`, `hx-put`, `hx-patch`, `hx-delete`)
+  MUST be served by the Station Master surface — the module declaring the `JOURNEY_MAP`. htmx
+  declares its route space in the MARKUP, which is what makes it hypermedia; without this, that
+  markup can mint a state-advancing route the journey space never admitted, and the affordance posts
+  into nothing.
+implementation:
+  type: validator
+  ref: coder.htmx.verb-endpoint-is-routed
+content:
+  summary: >-
+    Binds htmx's markup route space to the declared journey space. The JS realization finds the
+    module declaring a `JOURNEY_MAP`, collects every statically written mutating verb endpoint, and
+    flags one the Station Master names nowhere. Member of the `htmx_hypermedia_detector` FAMILY
+    detector (checks/htmx_verb_endpoint_is_routed.mjs).
+  normative_text: |
+    `tester.htmx.verb-endpoint-coverage` states this stack's premise plainly — "an htmx endpoint is
+    declared in the MARKUP, so the markup is this stack's route space". That is right, and it is
+    also the hole. Measured on a consumer: an `hx-post="/orders/void-all"` carrying a confirm, an
+    indicator and a passing test, bound to no wagon, train or interlocking, passed EVERY gated
+    bun+htmx rule.
+
+    This is the parallel-route-space shape the hub already rejects elsewhere. The interlocking
+    families fail a consumer that declares reachability in a second, private field instead of the
+    declared one; htmx had the same hole with none of the teeth.
+
+    MUTATIONS ONLY, DELIBERATELY. `hx-get` fetches a fragment — presentation — and requiring every
+    read to be routed by the Station Master would fail ordinary htmx. The mutating verbs advance
+    state, which is what a journey does, so those are the ones that owe a route.
+
+    STATIC PATHS ONLY. An endpoint built by interpolation (`/orders/${id}/void`) cannot be compared
+    to a server route by text, and guessing would report on correct code. Those are skipped, exactly
+    as the Vite family treats an unresolvable trainId as advisory rather than inventing a verdict.
+
+    The Station Master is found by the JOURNEY_MAP it DECLARES, never by filename. Matching is on
+    the whole path or its distinctive terminal segment: matching any segment was the first attempt
+    and made the rule vacuous, because a Station Master importing from `./src/orders/` made every
+    `/orders/*` endpoint look routed.
+
+    NOT_APPLICABLE when no Station Master surface resolves — a consumer with no JOURNEY_MAP has no
+    journey space to be outside of.
+  fix_hint: |
+    Route the endpoint from the Station Master, or drop the affordance:
+
+      if (req.method === "POST" && path === "/orders/confirm") {
+        if (!authorize(req)) return Response.json({ code: "unauthorized" }, { status: 401 });
+        return orderRowFragment("1");
+      }
+
+    A button added to markup ahead of its handler is the common cause. This rule is `strict`: a
+    state-changing affordance the server never routes is not suppressible and fails CI.
+  exceptions:
+    - "`hx-get` endpoints are NOT reported; fetching a fragment is presentation, not a journey."
+    - An endpoint written with interpolation is skipped rather than guessed at, preserving the
+      advisory treatment this hub gives statically unresolvable bindings.
+metadata:
+  aliases:
+    - HTMX-VERB-ENDPOINT-ROUTED-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.2.0
+  core_design_refs:
+    - afokapu/atdd#1246
+terms:
+  - term_id: journey_space
+    text: >-
+      the routes the Station Master admits, declared by the module carrying `JOURNEY_MAP`, which a
+      state-changing htmx endpoint must be served by.

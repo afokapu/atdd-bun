@@ -1,0 +1,64 @@
+schema_version: 1.1.0
+rule_id: coder.bun.runtime-server-is-bun-serve
+kind: rule
+status: active
+name: The HTTP server is Bun.serve, not a node-compat framework
+statement: >-
+  A full-stack Bun application MUST serve HTTP with `Bun.serve` and MUST NOT construct a server with
+  Express, Fastify, Koa or `node:http`/`node:https` `createServer`. `Bun.serve` is the only server in
+  this stack with access to Bun's native routing, WebSocket upgrade, streaming and `HTMLRewriter` —
+  the last of which is how htmx fragments are transformed server-side. This is the Bun-stack
+  realization of the agnostic "the application uses its runtime's native primitives rather than a
+  compatibility shim" obligation, enforced by the `bun_fullstack_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: foreign_server
+  text: >-
+    `express()`, `fastify(`, `new Koa(`, `http.createServer(`, `https.createServer(` or a bare
+    `createServer(` — any construction that puts a node-compat HTTP server in front of the app.
+- term_id: node_compat_path
+  text: >-
+    Bun's Node.js compatibility layer. It works, which is exactly why this drift is silent: the app
+    runs, the tests pass, and the stack has quietly become "Node with a faster interpreter".
+content:
+  summary: >-
+    A "the server is Bun.serve" obligation. The realization is a zero-dependency Bun detector that
+    scans source with strings and comments MASKED (so a framework name inside a migration note or an
+    error message never trips it) and flags any foreign server construction.
+  normative_text: |
+    This is not a taste rule, and it is the load-bearing one for the stack decision itself. Running
+    Express under Bun keeps the entire npm middleware dependency surface, forfeits the native
+    primitives, and — most consequentially — invalidates the deployment story that motivated the move:
+    `bun run server.ts`, no bundle step, no `node_modules` at runtime. Once one route is served by a
+    foreign framework, the middleware ecosystem follows it, and the migration silently stops halfway.
+    For htmx specifically the cost is concrete rather than philosophical: `HTMLRewriter` is a streaming
+    HTML transformer available only through the Bun server, and it is the natural place to assemble and
+    post-process fragments.
+  fix_hint: |
+    Replace the framework server with the native one:
+
+      const app = express();                       // ✗ node-compat path
+      app.get("/orders", (req, res) => …);
+      app.listen(3000);
+
+      Bun.serve({                                   // ✓ native
+        port: 3000,
+        routes: { "/orders": (req) => new Response(renderOrders(), htmlHeaders) },
+      });
+
+    Middleware becomes plain function composition around the handler. `strict` — the rule exists to
+    hold the stack decision, so it is not suppressible.
+  exceptions:
+  - A `createServer(` call that is not an HTTP server (a test double, an unrelated factory) is a known
+    imprecision of the name-based match; rename it or scope it out via the consumer scope map.
+  - Test files are excluded — spinning a throwaway server in a test is not an application server.
+  - Names appearing inside strings or comments are masked and never flagged.
+metadata:
+  aliases:
+  - BUN-NATIVE-SERVER-001
+  severity: 2
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_fullstack_detector

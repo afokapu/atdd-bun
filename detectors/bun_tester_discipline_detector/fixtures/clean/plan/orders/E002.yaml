@@ -1,0 +1,9 @@
+urn: wmbt:orders:E002
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E002
+acceptances:
+  - identity:
+      urn: acc:orders:E002-RED-001-rejects-empty-cart
+      id: E002-RED-001-rejects-empty-cart
+      purpose: Declared so a test binding to it resolves
+      phase: RED

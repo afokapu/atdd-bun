@@ -1,0 +1,8 @@
+# DIRTY fixture for tester.bun.interlocking-train-sequence-is-exercised.
+# The sequence is DECLARED here, and no test below asserts the order it runs in:
+# reorder these wagons and the suite stays green.
+train_id: 3007-match-resolution-standard
+sequence:
+  - wagon: collect-votes
+  - wagon: tally-votes
+  - wagon: publish-result

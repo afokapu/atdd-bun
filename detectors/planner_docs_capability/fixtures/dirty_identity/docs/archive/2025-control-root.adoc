@@ -1,0 +1,5 @@
+= 2025 Control Root
+:doc-id: archive.2025-control-root
+:status: superseded
+
+The per-worktree control root, retired.

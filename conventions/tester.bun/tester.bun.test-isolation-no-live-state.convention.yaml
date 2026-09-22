@@ -1,0 +1,50 @@
+schema_version: 1.1.0
+rule_id: tester.bun.test-isolation-no-live-state
+kind: rule
+status: active
+name: Tests do not write to shared live state
+statement: >-
+  A test MUST NOT mutate `process.env` nor write to a filesystem path outside a temp directory. Stack-
+  neutral obligation, RE-REALIZED for this stack: core's sibling detects Python bare-mode-init patterns,
+  which do not exist here. Realized by `bun_tester_discipline_detector`.
+terms:
+- term_id: shared_live_state
+  text: >-
+    process.env, or a filesystem path outside a temp directory — anything a later test also
+    sees.
+- term_id: displaced_failure
+  text: >-
+    the signature of pollution: a DIFFERENT test fails, later, often only under a different
+    order, and the failure points at the victim rather than the culprit.
+content:
+  summary: >-
+    Flags `process.env.X =` assignments and write-family `fs` calls whose literal path is not scoped to
+    `tmpdir` / `/tmp` / `import.meta.dir` / `__fixtures__` / `.tmp`.
+  normative_text: |
+    A polluting test does not fail. It makes a DIFFERENT test fail, later, often only when the suite runs in a different order — and the failure points at the victim rather than the culprit. That asymmetry is why this is the family's `strict` rule, matching core: the cost of finding one of these after the fact is measured in days.
+    `process.env` mutation is called out separately because it is the most common form and the least obviously wrong: it looks local, and it is global.
+  fix_hint: |
+    Scope every write to a temp directory the test owns and cleans up, and pass configuration explicitly instead of mutating the environment:
+
+      process.env.DATABASE_URL = "postgres://live";   // leaks into every later test
+      const db = connect({ url: testUrl });             // explicit, scoped
+  exceptions:
+  - Paths containing `tmpdir`, `/tmp`, `import.meta.dir`, `__fixtures__` or `.tmp` are test-scoped and allowed.
+  - Reads are never flagged; only the write family.
+  - A non-literal path cannot be judged by this detector and is not reported.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.test-isolation.no-polluting-patterns`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-TEST-ISOLATION-NO-LIVE-STATE-001
+  severity: 4
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

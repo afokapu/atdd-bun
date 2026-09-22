@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_interlocking_infrastructure
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# Bun/TS realization of the core python `interlocking_infrastructure.py` AST detector,
+# mirroring convex.workspace.runtime's convex_interlocking_infrastructure 1:1 — five
+# strict coder.bun.interlocking-* rule_ids from ONE implementation (Core FAMILY pattern).
+#
+# CODER PERSONA. This family reads SOURCE only — src/trains/**, server.ts, src/**/wagon.ts
+# — and never opens a test file. conformance/test_persona_scoping.py enforces that; the
+# tester side of interlocking lives in bun_interlocking_coverage.
+emits_rule_ids:
+- coder.bun.interlocking-runner-exists
+- coder.bun.interlocking-resolution-model-exists
+- coder.bun.station-master-interlocking-routing
+- coder.bun.interlocking-delegates-to-trainrunner
+- coder.bun.interlocking-does-not-carry-cargo
+- coder.bun.wagon-honours-its-contract
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+- coder.bun.interlocking-runner-exists
+- coder.bun.interlocking-resolution-model-exists
+- coder.bun.station-master-interlocking-routing
+- coder.bun.interlocking-delegates-to-trainrunner
+- coder.bun.interlocking-does-not-carry-cargo

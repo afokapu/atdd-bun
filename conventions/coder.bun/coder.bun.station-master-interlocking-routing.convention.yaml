@@ -1,0 +1,62 @@
+schema_version: 1.1.0
+rule_id: coder.bun.station-master-interlocking-routing
+kind: rule
+status: active
+name: Station Master routes both direct and interlocking journeys, delegating to TrainRunner (Bun)
+statement: >-
+  The Station Master composition root (`server.ts`) MUST support both direct train routing and
+  interlocking-enabled routing: its `JOURNEY_MAP` MUST admit a direct `trainId` string AND an
+  `{interlockingId, path}` route object, and when an interlocking route is present the Station Master MUST
+  reference `InterlockingRunner` and ultimately reference `TrainRunner` for the selected train. This is
+  the Bun-stack realization of the agnostic core obligation
+  `coder.train.station-master-interlocking-routing` (core afokapu/atdd#1251); the JS detector that
+  enforces it is the atdd.workspace.bun implementation referenced below.
+implementation:
+  type: validator
+  ref: coder.bun.station-master-interlocking-routing
+content:
+  summary: >-
+    An agnostic "Station Master is wired for interlocking" obligation, rendered for the Bun application.
+    The JS realization scans `server.ts`: when JOURNEY_MAP declares an interlocking route object, the
+    module MUST reference `InterlockingRunner` (else unlinked) and `TrainRunner` (else no delegation).
+    Member of the `bun_interlocking_infrastructure` FAMILY detector (checks/interlocking_station_routing.mjs).
+  normative_text: |
+    Core runtime spec afokapu/atdd#1251 — the additive call model:
+
+        Station Master -> InterlockingRunner.resolveTrain(action, inputs, state)
+                       -> TrainRunner.execute(selectedTrainId, ...)
+
+    The existing direct mapping (`JOURNEY_MAP[action] = "<trainId>"`) remains valid; the interlocking
+    mapping (`{interlockingId, path}`) is additive. In BOTH cases the final train execution is performed
+    by TrainRunner. A Station Master that declares an interlocking route but never routes through
+    InterlockingRunner, or never reaches TrainRunner, breaks the contract. WHICH entrypoint is inspected
+    and HOW the routing is recognized is the per-stack detector's concern.
+  fix_hint: |
+    Route through the runner and delegate:
+
+      import { InterlockingRunner } from "./trains/interlocking";
+      import { TrainRunner } from "./trains/runner";
+      export const JOURNEY_MAP = {
+        start_match: "3001-solo-match-complete",                              // direct
+        resolve_match: { interlockingId: "...", path: "...yaml" },            // interlocking
+      };
+      // interlocking branch: new InterlockingRunner(path).execute(...) -> TrainRunner.execute(...)
+
+    This rule is `strict`: an unlinked or non-delegating Station Master is not suppressible and fails CI.
+  exceptions:
+    - Applies only when JOURNEY_MAP declares at least one interlocking route object; a pure direct-train
+      Station Master carries no interlocking obligation.
+metadata:
+  aliases:
+    - BUN-STATION-MASTER-INTERLOCKING-ROUTING-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1251
+terms:
+  - term_id: station_master
+    text: >-
+      the composition root (`server.ts`) whose JOURNEY_MAP routes both direct trainId strings and
+      interlocking route objects, referencing InterlockingRunner and ultimately calling TrainRunner.

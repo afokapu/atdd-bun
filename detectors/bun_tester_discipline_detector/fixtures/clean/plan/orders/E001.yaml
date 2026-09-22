@@ -1,0 +1,9 @@
+urn: wmbt:orders:E001
+feature: feature:orders:checkout
+statement: minimize likelihood of an unattributed test for E001
+acceptances:
+  - identity:
+      urn: acc:orders:E001-SMOKE-001-renders-row
+      id: E001-SMOKE-001-renders-row
+      purpose: Declared so a test binding to it resolves
+      phase: SMOKE

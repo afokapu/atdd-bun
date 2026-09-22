@@ -1,0 +1,4 @@
+{
+  "name": "dirty-typecheck",
+  "scripts": { "check": "bun test", "start": "bun run server.ts" }
+}

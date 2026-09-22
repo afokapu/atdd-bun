@@ -1,0 +1,49 @@
+schema_version: 1.1.0
+rule_id: coder.bun.dead-code-reachability
+kind: rule
+status: active
+name: Every TypeScript file is reachable from a structural root
+statement: >-
+  Every TypeScript/TSX file MUST be reachable, forwards or backwards, from a structural root (`index`,
+  `wagon`, `composition`, `main`, `app`) through the module import graph. Stack-neutral obligation, NATIVE
+  BUN detector; the traversal and root vocabulary are transcribed from the python-pytest sibling
+  `coder.dead-code.reachability-typescript`, but the import graph is built by Bun's in-process TypeScript
+  parser rather than by regex. Realized by `bun_ts_metrics_detector` (core alias DEAD-CODE-REACHABILITY-
+  TS-001).
+terms:
+- term_id: structural_root
+  text: >-
+    a file the graph is walked from: index, wagon, composition, main or app.
+- term_id: type_only_import
+  text: >-
+    an `import type` edge. Erased at compile time, so it creates no runtime edge and cannot keep
+    a module alive — a distinction a regex cannot make and Bun's parser can.
+content:
+  summary: >-
+    Builds the file import graph, walks it from the structural roots in both directions, and reports every
+    file in neither reachable set. Import specifiers resolve relative or through the `@/` alias; npm
+    specifiers are outside the graph.
+  normative_text: |
+    This rule is MORE ACCURATE than its Python sibling, and the difference is worth stating because it is the one place the port is not a transcription.
+    The Python detector reads imports with five regexes — the best a Python process can do without a TypeScript parser. A regex cannot distinguish `import type { T } from "./t"` from a value import, so a module whose only referrer is a TYPE import is counted as reachable. But a type-only import is erased at compile time and creates no runtime edge, so that module is dead and the regex reports it alive.
+    Bun ships a real TypeScript parser in-process, which returns the actual import records and omits type-only ones. Same obligation, measured correctly — and available only because the runtime is Bun. Verified on a fixture where the Python detector finds one dead file and this one finds two.
+  fix_hint: |
+    Either wire the file into the graph — import it from the module that should own it — or delete it. A file reachable only through a type import is a types module whose values have already been removed; move the type into the module that uses it.
+  exceptions:
+  - "`index.ts` / `index.tsx` are structural (like `__init__.py`) and are never reported."
+  - Test files are entrypoints, not dead code, and are excluded.
+  - A scan root containing no structural root is skipped rather than reporting every file as dead.
+  - npm/bare specifiers are outside the graph by construction.
+metadata:
+  aliases:
+  # DEAD-CODE-REACHABILITY-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - DEAD-CODE-REACHABILITY-TS-001
+  severity: 2
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

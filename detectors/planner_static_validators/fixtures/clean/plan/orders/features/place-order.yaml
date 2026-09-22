@@ -1,0 +1,4 @@
+urn: feature:orders:place-order
+wagon: wagon:orders
+wmbts:
+  - wmbt:orders:E001

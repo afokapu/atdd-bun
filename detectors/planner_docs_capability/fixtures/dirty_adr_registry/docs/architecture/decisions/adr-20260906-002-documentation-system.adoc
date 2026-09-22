@@ -1,0 +1,8 @@
+= ADR-20260906-002: Documentation System
+:doc-id: architecture.decisions.adr-002
+:status: current
+:adr-id: ADR-20260906-002
+:date: 2026-09-06
+:decides: architecture.state-store
+
+Accepted, and absent from the hand-maintained registry.

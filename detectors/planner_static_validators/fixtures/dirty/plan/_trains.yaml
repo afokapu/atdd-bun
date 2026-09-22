@@ -1,0 +1,5 @@
+trains:
+  probe:
+    nominal:
+      - train_id: train:probe:missing
+        path: plan/_trains/probe/missing.yaml

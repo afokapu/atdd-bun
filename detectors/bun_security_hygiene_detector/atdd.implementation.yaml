@@ -1,0 +1,33 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_security_hygiene_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# Security, logging and error-response obligations for the Bun + htmx stack.
+#
+# Only TWO of these seven are ports: `hardcoded-secret` (the secret regexes are
+# language-neutral) and `error-response-code-format` (the payload shape is JSON).
+# The other five are RE-REALIZATIONS — the python-pytest siblings walk a Python AST
+# for FastAPI decorators, `Depends()`, `print()`, `logger.info(extra=)` and
+# `HTTPException(detail=)`, none of which exist in this stack. Same obligations,
+# different detectors, which is why a stack extension is a package rather than a
+# translation of another package.
+emits_rule_ids:
+- coder.bun.error-response-bare-string
+- coder.bun.error-response-code-format
+- coder.bun.logging-console
+- coder.bun.logging-structured
+- coder.bun.security-hardcoded-secret
+- coder.bun.security-missing-auth
+- coder.bun.security-sql-injection
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+- coder.bun.error-response-bare-string
+- coder.bun.error-response-code-format
+- coder.bun.logging-console
+- coder.bun.logging-structured
+- coder.bun.security-hardcoded-secret
+- coder.bun.security-missing-auth
+- coder.bun.security-sql-injection

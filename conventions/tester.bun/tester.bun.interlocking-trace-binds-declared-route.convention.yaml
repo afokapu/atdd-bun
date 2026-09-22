@@ -1,0 +1,74 @@
+schema_version: 1.1.0
+rule_id: tester.bun.interlocking-trace-binds-declared-route
+kind: rule
+status: active
+name: Interlocking execution trace binds back to the declared route (Bun)
+statement: >-
+  A test that asserts on the runtime trace emitted by interlocking execution MUST bind that trace back to
+  the source interlocking declaration — it must assert every required trace field so the executed route is
+  traceable to the interlocking YAML it came from (core afokapu/atdd#1248 route space, #1251 runtime
+  trace). This is the Bun-stack realization of the agnostic core obligation
+  `tester.interlocking.trace-binds-declared-route`; its JS detector (a member of the
+  `bun_interlocking_coverage` FAMILY) scans the consumer's `e2e/**/*.ts` interlocking trace tests and
+  flags any that reference the runtime `trace` but omit one or more required binding fields. A trace
+  assertion that does not bind the declared route lets execution drift from declaration silently.
+implementation:
+  type: validator
+  ref: tester.bun.interlocking-trace-binds-declared-route
+content:
+  summary: >-
+    A "interlocking trace assertions bind the declared route" obligation, rendered for the Bun
+    backend. The JS realization scans each interlocking-related `e2e/**/*.ts` test that references the
+    runtime `trace` and requires it to assert every required trace field (comments masked); any missing
+    field is a RAW violation listing the gap.
+  normative_text: |
+    The TrainResult trace (core afokapu/atdd#1251) is what proves which declared route (core
+    afokapu/atdd#1248) actually executed. A trace test that inspects the trace but only checks, say, the
+    selectedTrainId does not bind the route back to its declaration — the run could have taken a different
+    route/category/guard and still match.
+
+    REQUIRED trace fields a trace-binding test must assert (TS camelCase):
+      - interlockingId
+      - routeId
+      - selectedTrainId
+      - routeCategory
+      - guardId
+      - resolutionStrategy
+      - resolutionReason
+
+    A file is a trace-binding test when it references a bare `trace` identifier in an interlocking
+    context; for such a file every required field above must appear. WHICH per-stack discovery applies
+    (here: Bun `e2e/**/*.ts` scanned for the trace object and the required field tokens) is delegated
+    to this realization.
+  fix_hint: |
+    Extend the flagged trace assertion to bind the full declared route. Assert the captured trace records
+    all of: interlockingId, routeId, selectedTrainId, routeCategory, guardId,
+    resolutionStrategy, resolutionReason — the fields that tie the executed route back to its interlocking
+    YAML declaration (afokapu/atdd#1248) and resolution outcome (afokapu/atdd#1251). This rule is `strict`:
+    a trace test that does not bind the declared route lets execution drift from declaration undetected.
+  exceptions:
+    - e2e tests that do not reference the runtime `trace` object are not trace-binding tests and are out
+      of scope.
+    - Non-interlocking e2e tests (no reference to any interlocking route/train/interlocking token or
+      runner symbol) are out of scope.
+    - Per-stack renderings other than Bun are owned by their own workspace packages.
+metadata:
+  aliases:
+    - BUN-TESTER-INTERLOCKING-TRACE-BINDS-ROUTE-001
+  severity: 1
+  disposition: strict
+  introduced_in: 0.1.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1248
+    - afokapu/atdd#1251
+terms:
+  - term_id: runtime_trace
+    text: >-
+      the trace recorded on the TrainResult of an interlocking execution (core afokapu/atdd#1251); the
+      evidence that ties an executed run to the declared route it came from.
+  - term_id: required_trace_field
+    text: >-
+      one of interlockingId, routeId, selectedTrainId, routeCategory, guardId,
+      resolutionStrategy, resolutionReason — the fields a trace-binding test must assert so the executed
+      route is bound back to its interlocking YAML declaration and resolution outcome.

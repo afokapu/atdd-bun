@@ -1,0 +1,45 @@
+schema_version: 1.1.0
+rule_id: tester.bun.security-input
+kind: rule
+status: active
+name: Input-validation tests assert on rejection
+statement: >-
+  A test identified as an input-validation test by its URN kind segment (`-INPUT-`, `-VALIDATION-`,
+  `-VALIDATE-`) MUST contain a rejection assertion — `.rejects`, `toThrow`, 400, 422, invalid, reject, or
+  an error expectation. Bun realization of core `tester.security.input`, mirroring
+  `tester.convex.security-input`.
+terms:
+- term_id: input_validation_test
+  text: >-
+    a test whose URN carries an INPUT, VALIDATION or VALIDATE kind segment.
+- term_id: rejection_assertion
+  text: >-
+    an expectation on refusal — .rejects, toThrow, 400, 422, invalid. A well-formed payload
+    proves nothing about adversarial input.
+content:
+  summary: >-
+    Identifies input-validation tests from the URN and flags those with no rejection assertion.
+  normative_text: |
+    A test that submits a well-formed payload and checks it succeeds proves the parser works on good input. The obligation an input-validation acceptance carries is about BAD input — malformed, missing, adversarial — and that is precisely what a happy-path test does not touch.
+    Same silent-green-gap shape as `security-auth`, and it is grouped with the security family for the same reason: unvalidated input is the entry point for most of what the security rules defend against.
+  fix_hint: |
+    Assert the rejection:
+
+      expect(() => parseOrder({ sku: null })).toThrow("INVALID_SKU");
+      // or over HTTP
+      expect(res.status).toBe(422);
+  exceptions:
+  - Only tests whose URN carries an INPUT / VALIDATION / VALIDATE kind segment are scanned.
+  - Any of the listed rejection signals satisfies the rule.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from convex.extension.tester.base :: tester.convex.security-input
+  # Core obligation: tester.security.input
+  - TESTER-SECURITY-INPUT-001
+  - BUN-SECURITY-INPUT-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

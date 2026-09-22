@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: coder.bun.quality-mi
+kind: rule
+status: active
+name: TypeScript files keep a maintainability index of at least 20
+statement: >-
+  Every TypeScript/TSX file MUST score at least 20 on the approximate SEI maintainability index. Stack-
+  neutral obligation, NATIVE BUN detector transcribed from the python-pytest sibling
+  `coder.refactor.quality-mi-typescript` — the Halstead volume, the log terms and the comment term are the
+  same formula, verified identical to ten decimal places. Realized by `bun_ts_metrics_detector` (core
+  alias REFACTOR-QUALITY-MI-TS-001).
+terms:
+- term_id: maintainability_index
+  text: >-
+    the approximate SEI composite: 171 - 5.2*ln(V) - 0.23*avgCC - 16.2*ln(LOC) +
+    50*sin(sqrt(2.4*CM)), clamped to 0..100.
+- term_id: halstead_volume
+  text: >-
+    V — a regex-approximated operator/operand count standing in for the file's information
+    content. No AST, no external library.
+content:
+  summary: >-
+    MI = 171 - 5.2*ln(V) - 0.23*avgCC - 16.2*ln(LOC) + 50*sin(sqrt(2.4*CM)), clamped to 0..100, where V is
+    a regex-approximated Halstead volume, avgCC the average decision density per function, and CM the
+    comment ratio. No AST, no external library.
+  normative_text: |
+    MI is a composite, and that is the point: a file can pass every per-function threshold and still be unmaintainable through sheer accumulated size and operator density. MI is the only rule here that judges the FILE rather than its parts.
+    It is an approximation and is treated as one — the threshold of 20 is set low enough that a score below it indicates a file nobody should be asked to modify, not a file that is merely imperfect.
+  fix_hint: |
+    Split the file. MI falls fastest with the log of line count, so extracting a cohesive half into its own module raises both halves at once. Adding comments also raises the score, but comment density is a weaker term than size and should not be used as the remedy.
+  exceptions:
+  - Files that produce zero code lines after comment stripping score 100 and never fail.
+  - The score is clamped to the 0..100 range.
+  - Test files and vendored/build directories are outside the scan.
+metadata:
+  aliases:
+  # REFACTOR-QUALITY-MI-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - REFACTOR-QUALITY-MI-TS-001
+  severity: 2
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

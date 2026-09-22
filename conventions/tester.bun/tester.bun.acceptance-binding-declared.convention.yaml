@@ -1,0 +1,49 @@
+schema_version: 1.1.0
+rule_id: tester.bun.acceptance-binding-declared
+kind: rule
+status: active
+name: Every test declares what it proves
+statement: >-
+  A test file carrying a URN MUST also declare `// Acceptance: acc:…` or, for a journey/E2E test, `//
+  Train: …`. Stack-neutral obligation, Bun-specific detector. Realized by
+  `bun_tester_discipline_detector`.
+terms:
+- term_id: acceptance_binding
+  text: >-
+    `// Acceptance: acc:…`, naming the obligation this test discharges.
+- term_id: train_binding
+  text: >-
+    `// Train: …` — the alternative for a journey test, which proves a train rather than a
+    single acceptance.
+content:
+  summary: >-
+    Requires an `Acceptance:` or `Train:` field beside the URN. Files with no URN are skipped — that
+    finding belongs to `test-carries-urn-identity`.
+  normative_text: |
+    A URN says which test this is; the acceptance binding says which OBLIGATION it discharges. Only the second one closes the loop the gate reads.
+    Two binding kinds are accepted because a journey test legitimately proves a train rather than a single acceptance. Forcing every test to name an acceptance would push authors to invent one, which pollutes the plan graph with acceptances that exist only to satisfy a linter.
+  fix_hint: |
+    Name the acceptance the test discharges, or the train it walks:
+
+      // Acceptance: acc:orders:E001-SMOKE-001-renders-row
+      // Train: train:orders:0001-checkout-journey
+  exceptions:
+  - A `Train:` binding satisfies the rule for journey and E2E tests.
+  - Files with no URN are owned by `test-carries-urn-identity`.
+  - Whether the named acceptance EXISTS is a plan-graph question this per-file detector cannot answer.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.coverage.every-acceptance-criterion-must`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-ACCEPTANCE-BINDING-DECLARED-001
+  severity: 2
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

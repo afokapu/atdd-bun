@@ -1,0 +1,64 @@
+schema_version: 1.1.0
+rule_id: coder.bun.wagon-honours-its-contract
+kind: rule
+status: active
+name: A wagon's implementation moves the artifacts its plan document declares (Bun)
+statement: >-
+  A wagon document declares a DATA CONTRACT: `produce[]` are the artifacts the wagon owns and
+  `consume[]` the ones it takes from other wagons (core `wagon.schema.json` requires both). The Bun
+  implementation MUST name each declared artifact where it moves Cargo, so the declaration and the
+  data actually carried cannot drift apart. Core validates that the contract is well formed; only a
+  per-stack detector can see whether this stack's code honours it.
+implementation:
+  type: validator
+  ref: coder.bun.wagon-honours-its-contract
+content:
+  summary: >-
+    Binds a wagon's declared artifact contract to the Bun code that moves Cargo. The JS realization
+    reads every wagon document under `plan/**`, collects the `produce[].name` and `consume[].name`
+    artifact names, and flags any that no Cargo-moving module names. Member of the
+    `bun_interlocking_infrastructure` FAMILY detector (checks/wagon_contract_honoured.mjs).
+  normative_text: |
+    Core `wagon.schema.json` requires `produce` and `consume`, each entry carrying an artifact `name`
+    (and, for produce, a `contract` and `telemetry` URN). Core validates that shape wherever the plan
+    lives; it cannot know whether a Bun module puts those artifacts into Cargo, because that means
+    reading Bun source and this stack's Cargo idiom.
+
+    The wagon implementation is recognised STRUCTURALLY — a module that moves artifacts through Cargo
+    — not by filename. A `wagon.ts` naming heuristic is the kind of fitted check this hub has had to
+    unpick more than once, and a consumer is free to name its modules as it likes.
+
+    NOT_APPLICABLE, deliberately, in two cases. A consumer that declares no wagon contract has nothing
+    to honour. A contract declared with no wagon implementation at all is an unimplemented feature,
+    not a broken contract, and belongs to whatever rule governs unimplemented plan; reporting it here
+    would fire on every freshly planned repository.
+  fix_hint: |
+    Name each declared artifact where the wagon moves it, so the two cannot drift:
+
+      export const CONSUMES = "orders:priced-basket";   // plan: consume[].name
+      export const PRODUCES = "orders:confirmed-order"; // plan: produce[].name
+
+      export function runWagon(step: string, cargo: Cargo): void {
+        const basket = cargo.get(CONSUMES);
+        cargo.put(PRODUCES, { confirmed: true, basket });
+      }
+
+    Or correct the plan if the wagon no longer owns that artifact. This rule is `strict`: a wagon
+    whose declared contract nothing implements is not suppressible and fails CI.
+  exceptions:
+    - A wagon declared in the plan with no implementation anywhere is NOT reported here; the rule
+      judges code that exists against the contract it claims, not the absence of code.
+metadata:
+  aliases:
+    - BUN-WAGON-CONTRACT-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.2.0
+  core_design_refs:
+    - afokapu/atdd#1246
+    - afokapu/atdd#1251
+terms:
+  - term_id: wagon_data_contract
+    text: >-
+      the artifacts a wagon document declares under `produce[]` and `consume[]`, each identified by an
+      artifact `name`, which the wagon's Cargo-moving code must name.

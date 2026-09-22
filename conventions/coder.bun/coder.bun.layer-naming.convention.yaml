@@ -1,0 +1,41 @@
+schema_version: 1.1.0
+rule_id: coder.bun.layer-naming
+kind: rule
+status: active
+name: Feature modules name their architectural layer
+statement: >-
+  A module inside a `features/` or `wagons/` tree MUST name its architectural layer — either by filename
+  (`domain.ts`, `application.ts`, `api.ts`, …) or by living in a directory named for the layer. Bun
+  realization mirroring `coder.convex.layer-naming`; core obligation `coder.backend.code-is-organized`.
+terms:
+- term_id: layer_declaration
+  text: >-
+    how a module names its layer: either the filename (domain.ts, api.ts) or a directory named
+    for the layer. Both accepted, because a nested Bun repo is idiomatic.
+- term_id: feature_tree
+  text: >-
+    a path under `features/` or `wagons/` — the only place this rule applies.
+content:
+  summary: >-
+    Flags a feature-tree module whose path carries no layer directory and whose basename is not a layer
+    filename.
+  normative_text: |
+    ADDED TO THE MIRROR, and worth flagging: the Convex sibling accepts only the FILENAME form, because its function tree is flat. A full-stack Bun repo commonly nests (`features/orders/domain/total.ts`), so accepting only filenames would refuse the idiomatic layout. This realization accepts BOTH.
+    The obligation is unchanged: a reader should know a file's role before opening it, and the layering rules need something to read.
+  fix_hint: |
+    Either rename the file to its layer, or move it into the layer directory it belongs to.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.layer-naming
+  # Core obligation: coder.backend.code-is-organized
+  - BUN-LAYER-NAMING-001
+  severity: 2
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

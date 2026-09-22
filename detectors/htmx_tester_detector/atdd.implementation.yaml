@@ -1,0 +1,21 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: htmx_tester_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# The htmx half of the tester surface. Bun is the RUNTIME; htmx is a library layered
+# on it, and a Bun repo serving JSON wants the Bun tester rules and none of these.
+#
+# Three rules, which is what makes the package viable at all: core refuses an orphan
+# convention node, and a one-rule extension has no intra-package pair to relate.
+emits_rule_ids:
+- tester.htmx.verb-endpoint-coverage
+- tester.htmx.fragment-asserts-returned-markup
+- tester.htmx.swap-oob-asserts-destination-id
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+- tester.htmx.verb-endpoint-coverage
+- tester.htmx.fragment-asserts-returned-markup
+- tester.htmx.swap-oob-asserts-destination-id

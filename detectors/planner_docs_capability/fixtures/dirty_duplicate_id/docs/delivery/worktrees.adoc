@@ -1,0 +1,5 @@
+= Worktrees (delivery view)
+:doc-id: purpose.worktrees
+:status: current
+
+A second document claiming an id already held.

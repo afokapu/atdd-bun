@@ -1,0 +1,61 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-header-order
+kind: rule
+status: active
+name: Header fields appear in the canonical order
+statement: >-
+  Where present, header fields MUST appear as URN -> Tested-By -> Runtime -> Purpose. Stack-neutral
+  obligation, Bun-specific detector; realized by `bun_green_traceability_detector` (core alias GREEN-
+  HEADER-004).
+terms:
+- term_id: canonical_order
+  text: >-
+    URN -> Tested-By -> Runtime -> Purpose. Identity, then proof, then execution context, then
+    intent.
+- term_id: present_field
+  text: >-
+    a header field the file actually carries. Absent fields are skipped so this rule never
+    double-reports what another rule owns.
+content:
+  summary: >-
+    An "ordered header" obligation. The detector collects the line numbers of the fields that are present
+    and reports the first that appears before its predecessor. Absent fields are skipped — their absence
+    belongs to the field's own rule.
+  normative_text: |
+    The order is the same in Python, Vite and here, and its value is that a reader — human or tool — knows where to look without parsing. Identity first, then proof, then execution context, then intent: each field answers the question the previous one raises.
+    The rule judges only fields that are present, so it never double-reports a missing field that another rule already owns.
+  fix_hint: |
+    Order the fields URN -> Tested-By -> Runtime -> Purpose:
+
+      // URN: component:orders:checkout:OrderRow:backend:presentation
+      // Tested-By:
+      // - test:orders:checkout:E001-SMOKE-001-renders-row
+      // Runtime: bun
+      // Purpose: render one order row fragment for htmx to swap
+  exceptions:
+  - Files with no URN are skipped — there is nothing to order against.
+  - Fields that are absent are not considered; presence is each field's own rule.
+  - Other comment lines may be interleaved.
+metadata:
+  aliases:
+  # GREEN-HEADER-004 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-header-order. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-HEADER-004
+  - BUN-GREEN-HEADER-ORDER-001
+  severity: 2
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

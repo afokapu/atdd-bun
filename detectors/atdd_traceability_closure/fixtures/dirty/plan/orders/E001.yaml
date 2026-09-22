@@ -1,0 +1,6 @@
+urn: wmbt:orders:E001
+acceptances:
+  - identity:
+      urn: acc:orders:E001-UNIT-001-covered
+  - identity:
+      urn: acc:orders:E001-UNIT-002-uncovered

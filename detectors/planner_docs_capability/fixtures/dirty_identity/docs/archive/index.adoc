@@ -1,0 +1,5 @@
+= Archive
+:doc-id: archive.index
+:status: current
+
+WHAT WAS. Historical, non-current knowledge.

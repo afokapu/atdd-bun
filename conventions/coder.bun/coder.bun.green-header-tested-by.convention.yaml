@@ -1,0 +1,63 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-header-tested-by
+kind: rule
+status: active
+name: The header binds the file to at least one acceptance
+statement: >-
+  Every implementation file MUST carry a `Tested-By:` block containing at least one `- test:…` acceptance
+  URN. Stack-neutral obligation, Bun-specific detector; realized by `bun_green_traceability_detector`
+  (core alias GREEN-HEADER-003).
+terms:
+- term_id: tested_by_block
+  text: >-
+    the `Tested-By:` line followed by one or more `- test:` acceptance URNs.
+- term_id: empty_block
+  text: >-
+    a `Tested-By:` line with no entries. Treated as absent, because it is the shape a half-
+    finished backfill leaves and would otherwise report full coverage with zero bindings.
+content:
+  summary: >-
+    A "the file names the acceptances that cover it" obligation: the `Tested-By:` line must be present AND
+    followed by one or more `- test:` entries. A bare block with no entries fails.
+  normative_text: |
+    This is the rule that makes the whole header load-bearing rather than decorative. The URN says what the file IS; `Tested-By:` says what PROVES it. Together they close the loop from acceptance to implementation that ATDD exists to keep closed — which is exactly the loop that a stack migration breaks silently, because the new files are written without headers and nothing notices.
+    An empty block is treated as absent deliberately: it is the shape a half-finished backfill leaves behind, and accepting it would let a repo report full header coverage with zero acceptance bindings.
+  fix_hint: |
+    Name at least one acceptance:
+
+      // Tested-By:
+      // - test:orders:checkout:E001-SMOKE-001-renders-row
+
+    and in a template:
+
+      <!-- Tested-By: -->
+      <!-- - test:orders:checkout:E001-SMOKE-002-panel-loads -->
+
+    Whether the named acceptances EXIST is a plan-graph question this rule cannot answer; it enforces that the binding is declared.
+  exceptions:
+  - Test files are excluded — they are the other end of this binding.
+  - One entry satisfies the rule; more are encouraged.
+  - Entry resolution against `plan/` is out of scope for a per-file detector.
+metadata:
+  aliases:
+  # GREEN-HEADER-003 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-header-tested-by. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-HEADER-003
+  - BUN-GREEN-HEADER-TESTED-BY-001
+  severity: 2
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

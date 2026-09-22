@@ -1,0 +1,65 @@
+schema_version: 1.1.0
+rule_id: planner.docs.doc-id-unique
+kind: rule
+status: active
+name: doc-id is unique across the corpus
+statement: >-
+  No two authored documents beneath `docs/` may declare the same `:doc-id:`. Uniqueness is what makes
+  `doc-id` an identity rather than a label, and it is the precondition for resolving any relationship
+  edge to exactly one target (spec 2 §5.1).
+terms:
+- term_id: corpus
+  text: >-
+    every authored `.adoc` beneath `docs/`, across all areas, excluding `docs/dist/`. Uniqueness is
+    global — `archive/` is part of the corpus, not a separate id space.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '0 .adoc files, therefore 0 declared ids and 0 collisions. Not evidence of health: the corpus does not exist yet. Re-measure after migration, which is exactly when collisions appear.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
+    escalate_when: 'The corpus has been migrated and a full scan reports zero duplicate ids — the scale test spec 2 §1 names, since 89 documents is the first corpus large enough to collide.'
+content:
+  summary: >-
+    A duplicated id makes edge resolution ambiguous: `:supersedes: architecture.foo` cannot say which
+    `architecture.foo` it means. The detector reports EVERY file carrying a duplicated id, not just
+    the second one, because there is no principled basis for calling one of them the original.
+  normative_text: |
+    Archived documents share the id space with current ones ON PURPOSE. The tempting alternative —
+    letting `archive/` re-use an id held by a current document — would make `:supersedes:` unusable
+    in precisely the case it exists for, since the superseding and superseded documents would then
+    be indistinguishable to the resolver.
+
+    When a document is archived and a new one takes its place, the two need DIFFERENT ids and a
+    `:supersedes:` edge between them. That is the shape spec 2 §5.2 calls load-bearing for #1782.
+  fix_hint: |
+    Give the archived document a distinct id and link the succession explicitly:
+
+      docs/architecture/shared-control-root.adoc
+        :doc-id: architecture.shared-control-root
+        :status: current
+        :supersedes: archive.2025-control-root
+
+      docs/archive/2025-control-root.adoc
+        :doc-id: archive.2025-control-root
+        :status: superseded
+
+    Do not resolve a duplicate by deleting one of the documents. Preserving history is the point
+    (spec 2 §2, *Out of scope*).
+  exceptions:
+  - Generated output beneath `docs/dist/` is never scanned.
+  - A document with no `doc-id` is reported by `planner.docs.identity-required`, not here; this rule
+    only compares ids that were actually declared.
+metadata:
+  aliases:
+  - DOCS-IDENTITY-002
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

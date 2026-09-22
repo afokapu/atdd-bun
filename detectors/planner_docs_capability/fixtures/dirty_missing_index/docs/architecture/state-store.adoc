@@ -1,0 +1,5 @@
+= State Store
+:doc-id: architecture.state-store
+:status: current
+
+Where lifecycle state lives.

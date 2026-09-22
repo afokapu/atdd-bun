@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: coder.bun.error-response-bare-string
+kind: rule
+status: active
+name: Error responses return a structured payload, not a bare string
+statement: >-
+  A `Response` with a 4xx or 5xx status MUST NOT have a bare string literal as its body; it MUST carry a
+  structured payload with an error code. Stack-neutral obligation, RE-REALIZED for Bun: the python-pytest
+  sibling matches FastAPI's `HTTPException(detail="...")`, which does not exist here — a Bun error IS a
+  `Response` with a status. Realized by `bun_security_hygiene_detector` (core alias ERROR-BARE-
+  STRING-001).
+terms:
+- term_id: error_response
+  text: >-
+    a `Response` carrying a 4xx or 5xx status.
+- term_id: rendered_verbatim
+  text: >-
+    what htmx does with a bare error string: swaps it into the live DOM, internal detail
+    included. The structured payload is also the boundary that stops leakage.
+content:
+  summary: >-
+    Flags `new Response("<literal>", { status: 4xx|5xx })`.
+  normative_text: |
+    This obligation is sharper in an htmx application than in a JSON API, and the difference is the reason it is worth enforcing rather than advising.
+    htmx swaps the response body into the live DOM. A bare error string is therefore not merely unstructured data that a client must parse — it is markup RENDERED TO THE USER verbatim, including whatever internal detail it happens to carry (a stack frame, a table name, an upstream message). The structured payload is both the machine-readable contract and the boundary that stops internals leaking into the page.
+  fix_hint: |
+    Return a coded payload, and render a fragment for the user separately:
+
+      return new Response("order not found", { status: 404 });            // wrong
+      return Response.json({ error_code: "ORDER_NOT_FOUND" }, { status: 404 });  // right
+  exceptions:
+  - 2xx and 3xx responses are out of scope.
+  - A response whose body is a variable or a rendered fragment is not a bare literal.
+  - Test files are excluded.
+metadata:
+  aliases:
+  # ERROR-BARE-STRING-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - ERROR-BARE-STRING-001
+  severity: 4
+  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
+  # AST for constructs this stack does not have. Same obligation, new detector.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector

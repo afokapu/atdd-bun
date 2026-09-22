@@ -1,0 +1,59 @@
+schema_version: 1.1.0
+rule_id: coder.htmx.verb-mutation-signals-progress
+kind: rule
+status: active
+name: Mutating htmx requests signal that they are in flight
+statement: >-
+  Every element issuing a mutating htmx request (`hx-post`, `hx-put`, `hx-patch`, `hx-delete`) MUST
+  declare either `hx-indicator` or `hx-disabled-elt`. htmx swaps in place with no navigation, so
+  without one of these the page is visually identical while the request is in flight: the user
+  receives no feedback, clicks again, and a non-idempotent request runs twice. This is the
+  Bun/htmx-stack realization of the agnostic "an in-flight mutation is observable" obligation, enforced
+  by the `htmx_hypermedia_detector` family implementation on `atdd.workspace.bun`.
+terms:
+- term_id: mutating_request
+  text: >-
+    `hx-post` / `hx-put` / `hx-patch` / `hx-delete` — a request that changes server state, so a
+    duplicate is not harmless.
+- term_id: progress_signal
+  text: >-
+    `hx-indicator="…"` (show a spinner region for the duration) or `hx-disabled-elt="…"` (disable the
+    control for the duration). The first tells the user something is happening; the second makes the
+    double-submit physically impossible. Either satisfies the obligation.
+content:
+  summary: >-
+    An "in-flight mutations are visible" obligation. The realization is a zero-dependency Bun detector
+    that finds each mutating verb attribute, extracts the enclosing opening tag, and flags the element
+    when it declares neither `hx-indicator` nor `hx-disabled-elt`. Findings are deduplicated per
+    element, so an element carrying two mutating verbs reports once.
+  normative_text: |
+    A full page navigation gave the user a free progress signal: the browser's own spinner and the page
+    going blank. Swapping a fragment in place gives none. This is the single most common complaint
+    about htmx applications from users, and it is not a taste issue — it produces duplicate orders,
+    duplicate charges and duplicate rows, because the user's model ("nothing happened, click again") is
+    a correct reading of what the page showed them.
+    GET is deliberately out of scope: a read is idempotent, so a duplicate is harmless and an indicator
+    there is a UX preference rather than an obligation.
+  fix_hint: |
+    Declare a progress signal on the element issuing the mutation:
+
+      <form hx-post="/orders">…</form>                                <!-- ✗ invisible in flight -->
+      <form hx-post="/orders" hx-indicator="#spinner">…</form>        <!-- ✓ shows progress -->
+      <form hx-post="/orders" hx-disabled-elt="find button">…</form>  <!-- ✓ prevents re-submit -->
+
+    Prefer `hx-disabled-elt` where a duplicate would be expensive; the indicator alone tells the user
+    to wait but does not stop them. `suppress-and-clean`: a ratchet holds existing cases flat.
+  exceptions:
+  - "`hx-get` is not scoped by this rule (idempotent)."
+  - An element declaring both signals is fine; only declaring neither is a violation.
+  - Server-driven idempotency (an idempotency key on the endpoint) is a real mitigation but not one
+    this rule can see; it does not exempt the element from signalling progress to the user.
+metadata:
+  aliases:
+  - HTMX-MUTATION-PROGRESS-001
+  severity: 3
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_hypermedia_detector

@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-header-runtime
+kind: rule
+status: active
+name: The header declares the runtime the file executes in
+statement: >-
+  Every implementation file MUST carry a `Runtime:` declaration naming `bun`, `browser` or `isomorphic`.
+  Stack-neutral obligation, Bun-specific vocabulary; realized by `bun_green_traceability_detector` (core
+  alias GREEN-HEADER-001).
+terms:
+- term_id: runtime_field
+  text: >-
+    the `Runtime:` header line naming where the file executes.
+- term_id: isomorphic
+  text: >-
+    a module that genuinely runs both server-side and in the browser. Bun decides at run time
+    what a bundler decides at build time, so the value must exist.
+content:
+  summary: >-
+    A "the file says where it runs" obligation. The vocabulary is this stack's: Vite reads
+    `vite|browser|node` and Python reads `python`.
+  normative_text: |
+    `isomorphic` has no Vite counterpart and is the substantive addition. A bundler stack decides at BUILD time which code reaches the browser, so a file is server or client by where the bundler puts it. Bun decides at RUN time, and a full-stack Bun app routinely runs one module in both places — a fragment renderer used server-side and again after a client-side swap. Without a value for that, authors would be forced to pick a wrong one, and every downstream reader would inherit the error.
+  fix_hint: |
+    Declare the runtime the file actually executes in:
+
+      // Runtime: deno         // ✗ not this stack
+      // Runtime: bun          // ✓ server-side
+      // Runtime: browser      // ✓ ships to the client
+      // Runtime: isomorphic   // ✓ genuinely runs in both
+  exceptions:
+  - A missing declaration is reported at the URN line (or the first meaningful line when there is no URN).
+  - Test files are excluded.
+metadata:
+  aliases:
+  # GREEN-HEADER-001 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-header-runtime. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-HEADER-001
+  - BUN-GREEN-HEADER-RUNTIME-001
+  severity: 2
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

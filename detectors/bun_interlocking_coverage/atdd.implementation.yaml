@@ -1,0 +1,27 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_interlocking_coverage
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# Bun/TS realization of the core python `interlocking_coverage.py` detector, mirroring
+# convex.workspace.runtime's convex_interlocking_coverage 1:1 — four strict
+# tester.bun.interlocking-* rule_ids from ONE implementation (Core FAMILY pattern).
+#
+# TESTER PERSONA. This family reads the declared route space (plan/**) and the consumer's
+# TEST files, and never reports on source. It is registered in
+# conformance/test_persona_scoping.py's tester set for exactly that reason — the coder
+# side of interlocking is bun_interlocking_infrastructure.
+realizes_convention:
+- tester.bun.interlocking-route-coverage
+- tester.bun.interlocking-production-runner-used
+- tester.bun.interlocking-smoke-coverage-for-station-master
+- tester.bun.interlocking-trace-binds-declared-route
+emits_rule_ids:
+- tester.bun.interlocking-route-coverage
+- tester.bun.interlocking-production-runner-used
+- tester.bun.interlocking-smoke-coverage-for-station-master
+- tester.bun.interlocking-trace-binds-declared-route
+- tester.bun.interlocking-train-sequence-is-exercised
+entrypoint: detect.mjs
+report: detect.mjs

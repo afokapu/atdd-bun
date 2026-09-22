@@ -1,0 +1,52 @@
+schema_version: 1.1.0
+rule_id: tester.bun.red-fails-first
+kind: rule
+status: active
+name: RED tests carry a guaranteed-fail marker
+statement: >-
+  A test whose Phase is RED MUST contain at least one guaranteed-fail marker. Accepted markers,
+  transcribed from CORE `red.convention.yaml` -> `red_patterns.typescript`: `throw new Error('Not
+  implemented …')`, `throw new UnimplementedError(…)`, `expect(false).toBe(true)`,
+  `expect(true).toBe(false)`, `expect.fail(…)`, `return Promise.reject(…)`, and `it.fails(` /
+  `test.failing(`. Bun realization of core `tester.red.test-must-fail-first`, mirroring
+  `tester.convex.red-fails-first` rule for rule.
+terms:
+- term_id: red_marker
+  text: >-
+    a guaranteed-fail construct: throw new Error('Not implemented…'), expect.fail(…),
+    expect(false).toBe(true), return Promise.reject(…), it.fails( / test.failing(.
+- term_id: structural_proxy
+  text: >-
+    what this rule checks. Whether a test ACTUALLY fails first is a runtime property; core
+    supplies the decidable stand-in.
+content:
+  summary: >-
+    Flags any `Phase: RED` file containing none of the core TypeScript RED markers. `test.failing(` is
+    bun:test's spelling of vitest's `it.fails(` and is accepted identically.
+  normative_text: |
+    Whether a test ACTUALLY fails first is a RUNTIME property no static detector can observe. Core supplies the decidable STRUCTURAL proxy — a guaranteed-fail marker must be present — and that proxy is exactly what a per-stack detector can check. The obligation is agnostic; only the marker syntax is stack-specific.
+    This rule and `red-behavioral-assertion` are complementary, not redundant. That one asks whether the assertions are about behaviour; this one asks whether anything guarantees the test is red at all.
+  fix_hint: |
+    Add a marker that cannot pass until the implementation exists:
+
+      expect.fail("checkout rejection not implemented yet");
+      // or
+      throw new Error("Not implemented: checkout rejection");
+
+    Remove it in GREEN, when the behavioural assertion carries the test on its own.
+  exceptions:
+  - Only RED-phase files are scanned.
+  - "`it.fails` / `test.failing` are markers, NOT self-skips — `no-self-skip` deliberately does not flag them."
+  - Files with no declared phase are skipped; that is `phase-declared`'s finding.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from convex.extension.tester.base :: tester.convex.red-fails-first
+  # Core obligation: tester.red.test-must-fail-first
+  - TESTER-RED-FAILS-FIRST-001
+  - BUN-RED-FAILS-FIRST-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

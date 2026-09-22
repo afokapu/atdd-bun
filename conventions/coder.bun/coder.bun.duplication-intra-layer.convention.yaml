@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: coder.bun.duplication-intra-layer
+kind: rule
+status: active
+name: No duplicated code fragments within one architectural layer
+statement: >-
+  No run of 7 or more non-trivial normalized lines may appear in two different TypeScript files of the
+  SAME architectural layer. Stack-neutral obligation, NATIVE BUN detector transcribed from the python-
+  pytest sibling `coder.duplication.no-intra-layer-code-typescript`, including the normalization table and
+  the sha256-prefix fingerprint. Realized by `bun_ts_metrics_detector` (core alias DUPLICATION-TS-001).
+terms:
+- term_id: normalized_fragment
+  text: >-
+    a window of 7 non-trivial lines with comments stripped, string literals folded to "S",
+    numbers to 0 and non-keyword identifiers to ID, so renaming a variable cannot hide a
+    duplicate.
+- term_id: intra_layer
+  text: >-
+    within one architectural layer. The same shape in two different layers is usually two
+    obligations that happen to look alike.
+content:
+  summary: >-
+    Each line is normalized — comments stripped, string literals folded to "S", numbers to 0, non-keyword
+    identifiers to ID — trivial lines dropped, then every sliding window of 7 lines is fingerprinted and
+    compared within a layer.
+  normative_text: |
+    Normalization is what makes the rule useful: because identifiers are folded, renaming a variable does not hide a duplicate, so the fingerprint tracks STRUCTURE rather than text.
+    The intra-layer restriction is equally deliberate. The same shape appearing in `domain/` and in `presentation/` is usually two different obligations that happen to look alike, and merging them couples layers that should move independently. Twice inside one layer is the shape that genuinely wanted extracting.
+  fix_hint: |
+    Extract the duplicated fragment into a shared function within that layer and call it from both sites. If the two copies are drifting apart on purpose, they are not duplicates — make the difference explicit so the normalized fingerprints stop matching.
+  exceptions:
+  - Test, spec, and `.d.ts` files are excluded, as are `index.ts` barrels and `__tests__` directories.
+  - Trivial lines (bare braces, closing punctuation) are not counted toward the 7.
+  - Files whose layer cannot be determined are compared only against each other.
+metadata:
+  aliases:
+  # DUPLICATION-TS-001 is the SHARED core alias, also carried by the agnostic node and by
+  # its python-pytest realization. One obligation, two detectors, two runtimes.
+  - DUPLICATION-TS-001
+  severity: 2
+  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
+  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_ts_metrics_detector

@@ -1,0 +1,38 @@
+schema_version: 1.1.0
+rule_id: coder.bun.dto-mapper
+kind: rule
+status: active
+name: DTO mappers live in integration/
+statement: >-
+  A function mapping between a DTO and a domain entity (`to*DTO`, `from*DTO`, `map*DTO*`) MUST live in the
+  `integration/` layer. Bun realization mirroring `coder.convex.dto-mapper`; core obligation
+  `coder.dto.mapper`.
+terms:
+- term_id: dto_mapper
+  text: >-
+    a function translating between a DTO and a domain entity: `to*DTO`, `from*DTO`, `map*DTO*`.
+- term_id: translation_layer
+  text: >-
+    integration — where a boundary crossing legitimately sees both sides.
+content:
+  summary: >-
+    Flags a DTO-mapper function declared in any layer other than integration.
+  normative_text: |
+    Mapping is translation across a boundary, which is precisely what the integration layer is for. A mapper in the domain drags the wire format inward; a mapper in presentation duplicates itself once a second caller appears.
+  fix_hint: |
+    Move the mapper to `integration/`, where both the DTO and the entity are legitimately visible.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.convex.dto-mapper
+  # Core obligation: coder.dto.mapper
+  - BUN-DTO-MAPPER-001
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

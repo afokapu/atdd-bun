@@ -1,0 +1,56 @@
+schema_version: 1.1.0
+rule_id: coder.bun.runtime-single-lockfile
+kind: rule
+status: active
+name: Bun's lockfile is the only lockfile
+statement: >-
+  A repository whose package manager is Bun MUST NOT carry `package-lock.json`, `yarn.lock` or
+  `pnpm-lock.yaml` alongside `bun.lock`/`bun.lockb`. Two lockfiles mean two resolvers disagree about
+  the dependency graph, and which one wins is decided by whichever command a developer or CI step
+  happens to run. This is the Bun-stack realization of the agnostic "dependency resolution has one
+  source of truth" obligation, enforced by the `bun_fullstack_detector` family implementation on
+  `atdd.workspace.bun`.
+terms:
+- term_id: foreign_lockfile
+  text: >-
+    `package-lock.json` (npm), `yarn.lock` (Yarn), `pnpm-lock.yaml`/`.yml` (pnpm) — a resolution record
+    written by a package manager that is not this stack's.
+- term_id: resolution_drift
+  text: >-
+    the state where two lockfiles pin different versions of the same transitive dependency, so the
+    installed tree depends on which tool ran last. It is invisible in review because nobody reads a
+    lockfile diff.
+content:
+  summary: >-
+    A "one lockfile" repo-hygiene obligation. The realization is a zero-dependency Bun detector that
+    walks the declared scan roots for foreign lockfile BASENAMES and reports each at line 1 — the file
+    itself is the fact, so there is no line to point at.
+  normative_text: |
+    This is the cheapest rule in the extension to satisfy and one of the most expensive to violate,
+    because its failure mode is the "works on my machine, breaks in CI" class that costs hours per
+    occurrence and is never attributed to its actual cause.
+    It also matters more during a migration than after one. A repo moving to Bun will pass through a
+    window where the old lockfile is still committed, and that window is exactly when the two graphs
+    diverge — someone runs `npm install` out of habit, the trees fork, and the divergence is discovered
+    much later in a failing deploy.
+  fix_hint: |
+    Delete the foreign lockfile and let Bun own resolution:
+
+      rm package-lock.json     # or yarn.lock / pnpm-lock.yaml
+      bun install              # regenerates bun.lock from package.json
+
+    Add the foreign names to `.gitignore` so a stray `npm install` cannot reintroduce one. `strict`.
+  exceptions:
+  - A vendored or fixture lockfile inside an excluded tree (`node_modules`, `dist`, `build`,
+    `_generated`) is never scanned.
+  - A monorepo package that is deliberately NOT on Bun should be scoped out via the consumer scope map,
+    not suppressed here.
+metadata:
+  aliases:
+  - BUN-SINGLE-LOCKFILE-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_fullstack_detector

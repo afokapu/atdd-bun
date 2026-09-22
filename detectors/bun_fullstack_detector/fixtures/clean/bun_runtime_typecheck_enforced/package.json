@@ -1,0 +1,5 @@
+{
+  "name": "clean-typecheck",
+  "scripts": { "check": "bun run typecheck && bun test", "typecheck": "tsc --noEmit" },
+  "devDependencies": { "typescript": "^5.6.0" }
+}

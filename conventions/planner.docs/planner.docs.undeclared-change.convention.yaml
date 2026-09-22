@@ -1,0 +1,80 @@
+schema_version: 1.1.0
+rule_id: planner.docs.undeclared-change
+kind: rule
+status: active
+name: A change touching docs/ is covered by a declared artifact
+statement: >-
+  Any path in the change set beneath `docs/`, outside `docs/dist/`, MUST be covered by an artifact in
+  the documentation declaration. An undeclared documentation change is a violation. This rule lives in
+  the extension and NOT in core, because it requires knowing `docs/` (spec 2 §4; companion §4,
+  *Deliberately excluded*).
+terms:
+- term_id: change_set
+  text: >-
+    the paths added, modified or deleted under evaluation, handed to the capability by core
+    (companion §5). The capability reads it; it does not compute it.
+- term_id: covered
+  text: >-
+    a changed path equals the `path` of some declared artifact, or the `from` of an `archive`
+    artifact. Coverage is exact-path, not prefix or glob.
+- term_id: disposition_rationale
+  text: >-
+    advisory while the consuming corpus is brought into compatibility. The measurement below was
+    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
+    already stale, so the date lives in the key and the command is recorded beside the result.
+    Re-take it at the escalation checkpoint; never escalate on the number here.
+  values:
+    measured_2026_09_06: '0 declarations exist, so every `docs/**` change in the repository today is undeclared and this rule would fire on all of them. That is the reason it ships advisory rather than strict: escalating before the declaration exists would block every commit touching documentation.'
+    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
+    measurement_command: '(requires the core declaration, companion §3, which is not yet implemented)'
+    escalate_when: 'Declarations are being recorded at RATIFY and a full pass over recent merges reports zero undeclared `docs/**` changes.'
+content:
+  summary: >-
+    The enforceable inverse. Detecting that a change SHOULD HAVE BEEN declared is semantic and not
+    deterministically decidable; detecting that a declared-documentation repository touched `docs/`
+    without declaring it is deterministic, and it catches the same class of drift from the other side.
+  normative_text: |
+    #1782 reasoned this correctly and spec 2 §4 keeps the reasoning: the deterministic inverse is
+    enforceable, and it requires knowing the tree. Core's half — every declared path appears in the
+    change set — asks *you said you would touch these paths, did you?*. This half asks *you touched
+    these paths, did you say you would?*. Together they close the loop; neither alone does.
+
+    `docs/dist/**` is excluded because it is build output. A rendered site changing is a consequence
+    of an authored change, not an authored change, and requiring it to be declared would make every
+    declaration carry generated paths.
+
+    A DELETED path under `docs/` is in scope. Removing a document is a documentation change, and the
+    declaration form for it is an `archive` artifact — which is how spec 2 §2's *migration preserves
+    history* survives contact with a repository where deleting a file is one keystroke.
+  fix_hint: |
+    Declare the artifact at RATIFY, before the work:
+
+      documentation:
+        impact: change
+        artifacts:
+          - action: modify
+            path: docs/delivery/release.adoc
+
+    If the change is genuinely not a documentation change — a typo fix in a rendered artefact, a
+    path you did not mean to touch — the fix is to not touch `docs/`, not to widen the declaration.
+    If it IS one and you did not plan it, the declaration was wrong at RATIFY and re-ratifying is
+    the honest correction.
+  exceptions:
+  - '`docs/dist/**` is generated output and is never required to be declared.'
+  - A repository with no documentation declaration recorded at all is core's concern (companion §4,
+    check 1), not this rule's. This rule fires when a declaration exists and does not cover the diff.
+  - >-
+    An ABSENT change set is not an empty one. If core supplies no change set at all, this rule
+    cannot be evaluated and the capability returns COULD_NOT_CHECK, which BLOCKS — it does not
+    report "nothing undeclared", because that is a claim it is in no position to make. An empty
+    change set is core saying nothing changed, which IS actionable and permits. The two must stay
+    distinct for the same reason NOT_APPLICABLE and COULD_NOT_CHECK must (spec 2 §3).
+metadata:
+  aliases:
+  - DOCS-DECLARATION-002
+  severity: 2
+  disposition: advisory
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: docs_capability

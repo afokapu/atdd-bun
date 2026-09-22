@@ -1,0 +1,5 @@
+{
+  "t_fragment_asserts_returned_markup": "tester.htmx.fragment-asserts-returned-markup",
+  "t_verb_endpoint_coverage": "tester.htmx.verb-endpoint-coverage",
+  "t_swap_oob_asserts_destination_id": "tester.htmx.swap-oob-asserts-destination-id"
+}

@@ -1,0 +1,34 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_ts_metrics_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# The native Bun realization of the seven TypeScript metric obligations that were
+# previously reachable only through atdd.workspace.python-pytest. Same thresholds,
+# same algorithms, verified to produce identical numbers — so a full-stack Bun repo
+# no longer needs a Python interpreter to enforce its own code quality.
+emits_rule_ids:
+- coder.bun.complexity-cyclomatic
+- coder.bun.complexity-length
+- coder.bun.complexity-nesting
+- coder.bun.dead-code-reachability
+- coder.bun.duplication-intra-layer
+- coder.bun.quality-comments
+- coder.bun.quality-mi
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+# Deliberately NEW rule ids rather than the existing `*-typescript` ones. Those are
+# owned by atdd.extension.coder and realized by the python-pytest detectors; a
+# second implementation claiming the same convention raises DuplicateConventionError
+# the moment a polyglot repo installs both providers. New ids carrying the SHARED
+# core aliases (COMPLEXITY-CYCLOMATIC-TS-001 and siblings) give the same lineage
+# without the collision — the pattern coder.vite.* already uses.
+- coder.bun.complexity-cyclomatic
+- coder.bun.complexity-length
+- coder.bun.complexity-nesting
+- coder.bun.dead-code-reachability
+- coder.bun.duplication-intra-layer
+- coder.bun.quality-comments
+- coder.bun.quality-mi

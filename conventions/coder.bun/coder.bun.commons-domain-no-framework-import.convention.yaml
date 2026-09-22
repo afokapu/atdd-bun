@@ -1,0 +1,40 @@
+schema_version: 1.1.0
+rule_id: coder.bun.commons-domain-no-framework-import
+kind: rule
+status: active
+name: Domain modules import no runtime machinery
+statement: >-
+  A module in the `domain/` layer MUST NOT import runtime machinery (`bun:*`, `node:*`, `htmx`, `express`,
+  `fastify`, `koa`) nor reach the `Bun.` global. Bun realization mirroring `coder.vite.commons-domain-no-
+  framework-import`; core obligation `coder.commons.domain-layer-purity`.
+terms:
+- term_id: runtime_machinery
+  text: >-
+    `bun:*`, `node:*`, an HTTP framework, or the `Bun.` global — this stack's equivalent of the
+    UI frameworks the Vite sibling forbids.
+- term_id: server_free_domain
+  text: >-
+    the practical test: the domain must be runnable with no server started.
+content:
+  summary: >-
+    Flags framework/runtime import specifiers in a domain module, and any use of the `Bun.` global.
+  normative_text: |
+    The Vite sibling forbids react/preact/@tanstack/gsap because those are ITS frameworks. The obligation is identical — the domain expresses rules, not machinery — and only the list of machinery changes with the stack. For a full-stack Bun app the machinery is the server and transport primitives.
+    The practical test: the domain must be runnable with no server started. `Bun.` in a domain module means it is not.
+  fix_hint: |
+    Move the machinery to `integration/` and pass the result in. A domain function should take data and return data.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.vite.commons-domain-no-framework-import
+  # Core obligation: coder.commons.domain-layer-purity
+  - BUN-COMMONS-DOMAIN-NO-FRAMEWORK-IMPORT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

@@ -1,0 +1,10 @@
+urn: wmbt:orders:E001
+step: execute
+direction: maximize
+dimension: likelihood
+object_of_control: order
+lens: functional.effectiveness
+acceptances:
+  - identity:
+      urn: acc:orders:E001-SMOKE-001
+      phase: SMOKE

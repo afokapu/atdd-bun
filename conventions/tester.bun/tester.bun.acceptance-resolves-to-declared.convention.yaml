@@ -1,0 +1,61 @@
+schema_version: 1.1.0
+rule_id: tester.bun.acceptance-resolves-to-declared
+kind: rule
+status: active
+name: A test's Acceptance / WMBT binding names an artifact the plan declares (Bun)
+statement: >-
+  A test's `// Acceptance:` and `// WMBT:` headers MUST name artifacts the plan actually declares.
+  Declaring a binding is not the same as having one: a suite bound to an acceptance that exists
+  nowhere is attributed to nothing, and every coverage figure computed from it is fiction. Core owns
+  the shape of these artifacts; only a per-stack detector can see whether a Bun test resolves into
+  them.
+implementation:
+  type: validator
+  ref: tester.bun.acceptance-resolves-to-declared
+content:
+  summary: >-
+    Resolves each Bun test's declared binding against the plan. The JS realization collects every
+    `acc:` / `wmbt:` URN stated anywhere under `plan/**`, then flags a test whose `// Acceptance:` or
+    `// WMBT:` header names one the plan never mentions. Member of the `bun_tester_discipline_detector`
+    FAMILY detector (checks/t_acceptance_resolves.mjs).
+  normative_text: |
+    Its sibling `tester.bun.acceptance-binding-declared` asks only whether a header is PRESENT, which
+    a test satisfies by naming anything at all. Measured on a consumer, a test bound to
+    `acc:does-not-exist:E999-NEVER-DECLARED` passed every gated rule in this workspace. That is the
+    recurring defect this hub keeps finding: a NAME accepted where a CLAIM is required. The two rules
+    are complementary — one requires the binding to exist, this one requires it to be true.
+
+    Declared URNs are read as TOKENS rather than parsed structurally, on purpose: acceptances are
+    stated under several keys across wagon, feature and WMBT documents, and a reference resolves if
+    the plan states that URN anywhere. Over-accepting is the safe direction — the failure this rule
+    exists to catch is a reference to something the plan never mentions.
+
+    NOT_APPLICABLE when the consumer declares no acceptances at all: a repository with no plan has
+    nothing to resolve against, and reporting there would fire on every unplanned project rather than
+    on a broken reference.
+  fix_hint: |
+    Point the header at an acceptance the plan declares, or declare the acceptance:
+
+      // URN: test:orders:checkout:E001-SMOKE-001-renders-row
+      // Acceptance: acc:orders:E001-SMOKE-001-renders-row   # stated in plan/orders/E001.yaml
+      // WMBT: wmbt:orders:E001
+
+    A renamed acceptance is the common cause — the plan moved and the header did not. This rule is
+    `strict`: a test bound to an artifact that does not exist is not suppressible and fails CI.
+  exceptions:
+    - A test carrying no binding header at all is NOT reported here; that is
+      `tester.bun.acceptance-binding-declared`'s obligation, and reporting both would double-count
+      one defect.
+metadata:
+  aliases:
+    - BUN-ACCEPTANCE-RESOLVES-001
+  severity: 4
+  disposition: strict
+  introduced_in: 0.2.0
+  core_design_refs:
+    - afokapu/atdd#1246
+terms:
+  - term_id: resolvable_binding
+    text: >-
+      an `// Acceptance:` or `// WMBT:` header whose URN is stated somewhere in the consumer's plan,
+      so the test is attributable to a declared obligation rather than to a name.

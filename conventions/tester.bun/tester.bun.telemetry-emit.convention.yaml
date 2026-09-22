@@ -1,0 +1,46 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-emit
+kind: rule
+status: active
+name: Telemetry tests assert on emission
+statement: >-
+  A test identified as a telemetry test by its URN kind segment (`-TELEMETRY-`, `-EVENT-`, `-METRIC-`) or
+  by `*.telemetry.test.*` colocation MUST contain an emission assertion — `toHaveBeenCalled[With|Times]`,
+  or an expectation on `.emit` / `.emitted` / `.capture` / `.track` / `.record`. Bun realization of core
+  `tester.telemetry.emit`, mirroring `tester.convex.telemetry-emit`.
+terms:
+- term_id: telemetry_test
+  text: >-
+    a test identified by a TELEMETRY, EVENT or METRIC URN segment, or by `*.telemetry.test.*`
+    colocation.
+- term_id: emission_assertion
+  text: >-
+    toHaveBeenCalled[With|Times], or an expectation on .emit / .emitted / .capture / .track. A
+    return-value check proves the function ran, not that the event fired.
+content:
+  summary: >-
+    Identifies telemetry tests from the URN or the filename and flags those with no emission assertion.
+  normative_text: |
+    A telemetry test that checks a return value has proven the function ran. It has not proven the event fired — and the event is the entire point, because dashboards, alerts and downstream analytics are built on the emission, not on the return.
+    This is the one rule in the family where filename colocation is accepted alongside the URN, mirroring the Convex sibling: `*.telemetry.test.ts` is a strong enough signal on its own.
+  fix_hint: |
+    Assert the emission, with a spy or a captured emitter:
+
+      const emit = mock(() => {});
+      placeOrder({ sku: "x" }, { emit });
+      expect(emit).toHaveBeenCalledWith("order_placed", { sku: "x" });
+  exceptions:
+  - Only telemetry-identified tests are scanned.
+  - Filename colocation (`*.telemetry.test.*`) identifies a telemetry test even without a URN kind segment.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from convex.extension.tester.base :: tester.convex.telemetry-emit
+  # Core obligation: tester.telemetry.emit
+  - TESTER-TELEMETRY-EMIT-001
+  - BUN-TELEMETRY-EMIT-001
+  severity: 3
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

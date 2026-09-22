@@ -1,0 +1,55 @@
+schema_version: 1.1.0
+rule_id: tester.bun.test-imports-bun-test
+kind: rule
+status: active
+name: Tests import their harness from bun:test
+statement: >-
+  A test file in a Bun stack MUST import its harness from `bun:test` and MUST NOT import `vitest`,
+  `jest`, `@jest/globals`, `mocha` or `chai`. The workspace provider's declared runner is `bun`, so a
+  test bound to a foreign harness is not executed by the runner the gate believes it ran. This is the
+  Bun-stack realization of the agnostic "the declared runner is the runner that runs" obligation,
+  enforced by the `bun_fullstack_detector` family implementation on `atdd.workspace.bun`.
+terms:
+- term_id: declared_runner
+  text: >-
+    the `runtime.runner` of the capability `atdd.workspace.bun` provides — `bun`. It is what the
+    binding plan resolves and what the phase gate reports as having executed.
+- term_id: foreign_harness
+  text: >-
+    `vitest`, `jest`, `@jest/globals`, `mocha`, `chai` — a test framework that drags its own runner and
+    transform pipeline back into a toolchain whose premise is that Bun runs TypeScript directly.
+content:
+  summary: >-
+    A "tests run on the declared runner" obligation. The realization is a zero-dependency Bun detector
+    that scans TEST FILES ONLY (`*.test.*`, `*.spec.*` — the only place a harness import belongs), masks
+    line comments so a migration note naming the old runner does not trip it, and flags any import or
+    require of a foreign harness.
+  normative_text: |
+    The ordinary cost of a stray Vitest import is toolchain sprawl. The ATDD-specific cost is larger and
+    is the reason this rule is `strict`: acceptance tests are the evidence a phase gate consumes, and a
+    gate reports coverage in terms of the runner it declared. A test bound to a harness that runner does
+    not execute is coverage the gate believes exists and that never ran — the failure mode where a
+    green gate and an unexercised acceptance coexist, which is precisely what ATDD is built to prevent.
+    Note that the masker blanks COMMENTS but not string literals here, because the harness name lives
+    inside the import's own string literal — masking literals would blank the very thing being matched.
+  fix_hint: |
+    Import the harness from Bun and run with `bun test`:
+
+      import { describe, expect, it } from "vitest";     // ✗ not run by the declared runner
+      import { describe, expect, it } from "bun:test";   // ✓
+
+    `bun:test` is Jest-compatible at the assertion level, so most files need only the import line
+    changed. `strict` — a test the gate cannot actually run is worse than no test.
+  exceptions:
+  - Non-test files are never scanned; a harness import outside a test file is a different smell.
+  - A test deliberately retained on a foreign runner during a migration should be scoped out via the
+    consumer scope map, so the exemption is explicit and reviewable rather than invisible.
+metadata:
+  aliases:
+  - BUN-TEST-HARNESS-001
+  severity: 2
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

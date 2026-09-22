@@ -1,0 +1,9 @@
+{
+  "ts_complexity_cyclomatic": "coder.bun.complexity-cyclomatic",
+  "ts_complexity_nesting": "coder.bun.complexity-nesting",
+  "ts_complexity_length": "coder.bun.complexity-length",
+  "ts_quality_mi": "coder.bun.quality-mi",
+  "ts_quality_comments": "coder.bun.quality-comments",
+  "ts_dead_code": "coder.bun.dead-code-reachability",
+  "ts_duplication": "coder.bun.duplication-intra-layer"
+}

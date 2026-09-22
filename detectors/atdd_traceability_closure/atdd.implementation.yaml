@@ -1,0 +1,8 @@
+kind: implementation
+implementation_id: atdd_traceability_closure
+emits_rule_ids:
+- trace.plan.executable-acceptance-has-test
+- trace.test.binding-resolves
+- trace.source.tested-by-present
+- trace.source.tested-by-resolves
+entrypoint: detect.mjs

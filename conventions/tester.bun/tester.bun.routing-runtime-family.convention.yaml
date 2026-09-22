@@ -1,0 +1,41 @@
+schema_version: 1.1.0
+rule_id: tester.bun.routing-runtime-family
+kind: rule
+status: active
+name: A test's declared runtime is in the JS/TS family
+statement: >-
+  A test file that declares a `// Runtime:` MUST name a runtime in the JS/TS family (`bun`, `browser`,
+  `isomorphic`, `typescript`, `ts`, `node`, `js`, `javascript`, `deno`, `vite`, `astro`, `preact`). Bun
+  realization mirroring `tester.convex.routing-path`, which makes the same argument for Vitest.
+terms:
+- term_id: declared_runtime
+  text: >-
+    the optional `// Runtime:` field on a test.
+- term_id: js_family
+  text: >-
+    bun, browser, isomorphic, typescript, ts, node, js, javascript, deno, vite, astro, preact —
+    the runtimes `bun test` actually executes under.
+content:
+  summary: >-
+    Flags a declared `Runtime:` outside the JS/TS family. Declaring a runtime is optional.
+  normative_text: |
+    A test file in this stack is collected and executed by `bun test` — a JS/TS runtime — whatever its header claims. A test declaring `python` is either mislabelled or filed in the wrong suite, and either way the gate attributes it to a runner that never executed it.
+    The rule judges only files that DECLARE a runtime, because for a test the field is optional: the suite's runner is already known from the provider.
+  fix_hint: |
+    Declare the runtime the suite actually executes under, or drop the field:
+
+      // Runtime: bun
+  exceptions:
+  - A test with no `Runtime:` field is not flagged — the field is optional for tests.
+  - The vocabulary is the JS/TS family, deliberately wider than the source-side `bun|browser|isomorphic`.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from convex.extension.tester.base :: tester.convex.routing-path
+  # Core obligation: tester.routing.layer-keyword-taxonomy
+  - BUN-ROUTING-RUNTIME-FAMILY-001
+  severity: 2
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

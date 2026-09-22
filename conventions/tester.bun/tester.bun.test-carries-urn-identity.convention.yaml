@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: tester.bun.test-carries-urn-identity
+kind: rule
+status: active
+name: Every test file declares its test URN
+statement: >-
+  Every `*.test.*` / `*.spec.*` file MUST carry a `// URN: test:{wagon}:{feature}:{ACCEPTANCE-ID}` header.
+  Stack-neutral obligation, Bun-specific line-comment detector. Core's counterpart is explicit that a
+  test's authoritative identity is its HEADER and not its filename, and this realization follows that
+  exactly — it never parses a filename for identity. Realized by `bun_tester_discipline_detector`.
+terms:
+- term_id: test_urn
+  text: >-
+    `test:{wagon}:{feature}:{ACCEPTANCE-ID}` in the file's leading comment block.
+- term_id: header_authority
+  text: >-
+    core's rule that a test's identity is its HEADER, not its filename — so a wagon-level file
+    covering several acceptances needs no rename to be bound.
+content:
+  summary: >-
+    Parses the leading comment block for a `URN:` field and requires the `test:` scheme. The header region
+    ends at the first line of real code, so a URN below the imports reads as missing.
+  normative_text: |
+    This is the foundation the whole coverage gate stands on. Without a test URN there is no edge from a test to anything, so the gate cannot attribute the test, cannot report coverage, and — worst — reports the acceptance as uncovered while the test sits right there passing.
+    Header rather than filename is a deliberate and load-bearing choice, and it is the same conclusion issue #1783 reached independently for backend TypeScript: a real suite's files are wagon-level and cover several acceptances, so a one-acceptance-per-filename rule would force a rename of the entire suite to satisfy a tool. The header binds without touching the team's file layout.
+  fix_hint: |
+    Add the header above the imports:
+
+      // URN: test:orders:checkout:E001-SMOKE-001-renders-row
+      // Acceptance: acc:orders:E001-SMOKE-001-renders-row
+      // Phase: SMOKE
+      // Layer: integration
+  exceptions:
+  - Only test files are scanned; source files are the coder extension's business.
+  - Vendored and build directories are never scanned.
+metadata:
+  aliases:
+  # Bun realization of the core obligation `tester.filename.test-carries-urn-identity`. Core carries no
+  # shared alias for it, so the lineage is stated here and in the statement.
+  - BUN-TEST-CARRIES-URN-IDENTITY-001
+  severity: 2
+  # Core's tester nodes are largely `documentation-only`, which core's
+  # coverage_report treats as never-fails-the-build. That is right for retrofitting
+  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
+  # that will not be adopted. Gating dispositions here; a repo adopting on an
+  # existing suite records a ratchet baseline instead.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_tester_discipline_detector

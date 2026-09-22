@@ -1,0 +1,67 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-marker
+kind: rule
+status: active
+name: Every implementation file opens with its URN component marker
+statement: >-
+  A Bun/htmx implementation file — `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.mts` AND `.html`/`.htm`
+  template — MUST carry a `URN: component:…` marker as its first meaningful line. Stack-neutral obligation
+  (required in every implementation file), Bun-specific dual-syntax detector: `// URN:` in source, `<!--
+  URN: … -->` in a template. The Python realization writes `# URN:` and the Vite one `// URN:`; this is
+  the same obligation with a third comment syntax. Realized by the family validator
+  `bun_green_traceability_detector` (core alias GREEN-URN-001).
+terms:
+- term_id: traceability_header
+  text: >-
+    the leading comment block binding a file to the plan graph: URN, Tested-By, Runtime,
+    Purpose. `//` in source, `<!-- … -->` in an .html template.
+- term_id: first_meaningful_line
+  text: >-
+    the first line that is neither blank nor a preamble. A shebang or `<!doctype>` may precede
+    the marker without displacing it, because neither is content.
+content:
+  summary: >-
+    A "every file declares its component URN" obligation. The detector treats the leading run of blank
+    lines, an optional shebang or doctype, and single-line comments as the header region; the first real
+    content line ends it. A marker below the imports therefore reads as MISSING, which is the point.
+  normative_text: |
+    The URN is the only edge between a source file and the plan graph. Without it a file is invisible to traceability: no acceptance can claim it, no wagon owns it, and coverage reporting cannot see it exists.
+    "First meaningful line" excludes a shebang (`#!/usr/bin/env bun`) and an HTML doctype, because neither is content and neither should be able to displace the marker. The Vite sibling counts a shebang as the first non-empty line and so reports a header it actually has as missing; this realization does not.
+  fix_hint: |
+    Put the marker on the first meaningful line:
+
+      // URN: component:orders:checkout:OrderRow:backend:presentation
+
+    and in a template:
+
+      <!doctype html>
+      <!-- URN: component:orders:checkout:OrderPanel:frontend:presentation -->
+
+    Disposition is `documentation-only`, matching the Python and Vite realizations: a ratchet holds an existing repo flat while headers are backfilled.
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) are excluded — they are bound by their acceptance URNs instead.
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - A shebang or `<!doctype>` may precede the marker.
+metadata:
+  aliases:
+  # GREEN-URN-001 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-marker. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-001
+  - BUN-GREEN-URN-MARKER-001
+  severity: 3
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

@@ -1,0 +1,43 @@
+schema_version: 1.1.0
+rule_id: coder.bun.boundaries-http-client
+kind: rule
+status: active
+name: Outbound HTTP goes through the centralized client
+statement: >-
+  A module in the `domain/`, `application/` or `presentation/` layer MUST NOT call the platform `fetch()`
+  primitive or a bare `axios` call; outbound HTTP goes through the project's centralized, contract-driven
+  client. Bun realization mirroring `coder.vite.boundaries-http-client`; core obligation
+  `coder.boundaries.http-client`.
+terms:
+- term_id: centralized_client
+  text: >-
+    the project's contract-driven HTTP client, where retries, timeouts, auth headers, tracing
+    and error translation live.
+- term_id: bare_primitive
+  text: >-
+    a direct `fetch(` or `axios(` in a consumer layer — a call site with none of those, which
+    will not acquire them because nobody remembers it exists.
+content:
+  summary: >-
+    Flags a bare `fetch(`/`axios(` in a consumer layer, over masked source. Integration is excluded — that
+    is the client's own home.
+  normative_text: |
+    A centralized client is where retries, timeouts, auth headers, tracing and error translation live. Every bare `fetch` is a call site that has none of them and will not acquire them, because nobody remembers it exists.
+    In an htmx app this matters on the SERVER side particularly: the fragments a handler renders often depend on an upstream call, and a bare fetch there fails in a way the user sees as a blank swap.
+  fix_hint: |
+    Call the client in `integration/` and let it own the cross-cutting concerns.
+  exceptions:
+  - Test files and vendored/build directories are never scanned.
+  - Bare npm specifiers resolve outside the project graph and are not layer-checked.
+  - A file carrying no layer segment is outside these rules rather than in violation of them.
+metadata:
+  aliases:
+  # Mirrored rule-for-rule from coder.vite.boundaries-http-client
+  # Core obligation: coder.boundaries.http-client
+  - BUN-BOUNDARIES-HTTP-CLIENT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_clean_architecture_detector

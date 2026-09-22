@@ -1,0 +1,48 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.swap-oob-asserts-destination-id
+kind: rule
+status: active
+name: Out-of-band swap tests assert the destination id
+statement: >-
+  A test case that asserts an out-of-band swap is present in a response MUST also assert the destination
+  `id`. Bun/htmx realization: the tester half of `coder.htmx.swap-oob-carries-id`, and the same shape as
+  `tester.convex.interlocking-trace-binds-declared-route` — an assertion on a runtime artefact must bind
+  back to the declaration it came from.
+terms:
+- term_id: destination_id
+  text: >-
+    the `id` htmx matches an out-of-band element against. It must be present in the response AND
+    in the document, or the swap does not happen.
+- term_id: half_assertion
+  text: >-
+    a test confirming `hx-swap-oob` appears in the response and stopping there. It proves the
+    server's half and nothing about the destination — the half a template refactor breaks.
+content:
+  summary: >-
+    Flags a test case whose body mentions `hx-swap-oob` but contains no assertion reaching an id — an
+    `id=` in an expected string, a `getElementById`, a `querySelector('#…')`, or a
+    `toHaveAttribute('id'…)`.
+  normative_text: |
+    The failure this guards is silent from both sides. htmx drops an out-of-band element whose id matches nothing in the document: no error, no console warning, no swap.
+    `coder.htmx.swap-oob-carries-id` makes the server EMIT an id. Nothing else makes a test prove it is the id the page will actually match. The two rules are one defect seen from source and from suite, and neither alone closes it — which is exactly why the htmx tester surface is a package rather than a stray rule in the Bun one.
+  fix_hint: |
+    Assert the destination, not just the mechanism:
+
+      expect(html).toContain("hx-swap-oob");          // the server's half only
+      expect(html).toContain('id="cart-count"');      // the half that must match the page
+  exceptions:
+  - Cases that never mention `hx-swap-oob` are out of scope.
+  - Any id-reaching assertion satisfies the rule; no specific matcher is required.
+  - Whether the id EXISTS in the served document is a runtime fact no static check can see.
+metadata:
+  aliases:
+  # Pairs with coder.htmx.swap-oob-carries-id — the same defect, the other persona
+  # Shape mirrored from tester.convex.interlocking-trace-binds-declared-route
+  # ADDED for this stack: core has no node for out-of-band swap testing.
+  - BUN-OOB-TARGET-ASSERTED-001
+  severity: 3
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: htmx_tester_detector

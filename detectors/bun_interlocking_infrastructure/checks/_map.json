@@ -1,0 +1,8 @@
+{
+  "interlocking_runner_exists": "coder.bun.interlocking-runner-exists",
+  "interlocking_resolution_model": "coder.bun.interlocking-resolution-model-exists",
+  "interlocking_station_routing": "coder.bun.station-master-interlocking-routing",
+  "interlocking_delegates": "coder.bun.interlocking-delegates-to-trainrunner",
+  "interlocking_no_cargo": "coder.bun.interlocking-does-not-carry-cargo",
+  "wagon_contract_honoured": "coder.bun.wagon-honours-its-contract"
+}

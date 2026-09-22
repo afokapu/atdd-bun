@@ -1,0 +1,5 @@
+{
+  "bun_runtime_server_is_bun_serve": "coder.bun.runtime-server-is-bun-serve",
+  "bun_runtime_single_lockfile": "coder.bun.runtime-single-lockfile",
+  "bun_runtime_typecheck_enforced": "coder.bun.runtime-typecheck-enforced"
+}

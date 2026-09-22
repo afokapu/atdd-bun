@@ -1,0 +1,57 @@
+schema_version: 1.1.0
+rule_id: coder.bun.green-urn-name-matches
+kind: rule
+status: active
+name: The URN name segment matches the filename
+statement: >-
+  The `{Name}` segment of a URN MUST match the file's basename, compared case- and separator-
+  insensitively, unless the name is a structural role. Stack-neutral obligation, Bun-specific detector;
+  realized by `bun_green_traceability_detector` (core alias GREEN-URN-004).
+terms:
+- term_id: name_segment
+  text: >-
+    segment 3 of the URN, which identifies the component the file implements.
+- term_id: structural_role_name
+  text: >-
+    a filename naming a ROLE rather than a component — index, server, routes, layout, partial,
+    composition, wagon. Exempt, because the file assembles rather than implements.
+content:
+  summary: >-
+    A "the URN names this file" obligation. The detector normalises both sides to lowercase alphanumerics
+    before comparing, and exempts a set of structural filenames that name a ROLE rather than a component.
+  normative_text: |
+    A URN naming a different component than the file it sits in is worse than a missing one: it binds the file's evidence to somebody else's component, so both are wrong and neither is obviously wrong. This is the failure a copy-pasted header produces, which is how it usually arises.
+    The exempt set is the Vite set plus this stack's idioms — `server`, `routes`, `layout`, `partial`, `fragment`, `middleware` — because a full-stack Bun app's entrypoint is `server.ts` and its htmx fragments are named for their role, not for a component.
+  fix_hint: |
+    Make the name segment agree with the filename, or use a structural role name:
+
+      // in OrderRow.ts
+      // URN: component:orders:checkout:SomethingElse:backend:presentation  // ✗
+      // URN: component:orders:checkout:OrderRow:backend:presentation       // ✓
+  exceptions:
+  - Structural names are exempt: composition, wagon, entrypoint, http, index, schema, router, routes, server, layout, partial, fragment, middleware.
+  - Comparison ignores case and non-alphanumerics, so `order-row.ts` matches `OrderRow`.
+  - URNs that are not six segments are skipped.
+metadata:
+  aliases:
+  # GREEN-URN-004 is the SHARED core alias — the same one carried by the Python
+  # realization and by coder.vite.green-urn-name-matches. One obligation, three
+  # per-stack detectors, found through this alias.
+  - GREEN-URN-004
+  - BUN-GREEN-URN-NAME-MATCHES-001
+  severity: 2
+  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
+  # Those two carry `documentation-only`, which core's coverage_report treats as
+  # never-fails-the-build — the right call when RETROFITTING a large existing
+  # codebase, where day-one enforcement would red every file at once.
+  # A new Bun + htmx repo has no such debt: headers can be present from the first
+  # file, and a traceability rule that cannot fail is a rule that will quietly not
+  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
+  # existing repo adopting this can still `--record-ratchet` a baseline and be held
+  # flat rather than blocked. Change this one field back to `documentation-only`
+  # for exact Vite parity.
+  disposition: suppress-and-clean
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_green_traceability_detector

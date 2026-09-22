@@ -1,0 +1,18 @@
+wagon: orders
+urn: wagon:orders
+description: A clean static planner fixture
+subject: agent:planner
+context: test
+action: order
+goal: validate
+outcome: validated
+produce:
+  - name: orders:placed
+    contract: contract:orders:placed
+    telemetry: telemetry:orders:placed
+    to: external
+consume: []
+wmbt:
+  total: 1
+features:
+  - urn: feature:orders:place-order

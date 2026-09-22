@@ -1,0 +1,23 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_fullstack_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+# Bun RUNTIME discipline: the server primitive and the package manager.
+#
+# `test-imports-bun-test` used to live here and was moved to
+# bun_tester_discipline_detector: it reads TEST files, and conformance
+# (test_persona_scoping.py) proved that broke the persona boundary this provider
+# claims — coder families never open a test file. Its own normative text makes a
+# coverage-gate argument, which is tester territory.
+emits_rule_ids:
+- coder.bun.runtime-server-is-bun-serve
+- coder.bun.runtime-single-lockfile
+- coder.bun.runtime-typecheck-enforced
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+- coder.bun.runtime-server-is-bun-serve
+- coder.bun.runtime-single-lockfile
+- coder.bun.runtime-typecheck-enforced

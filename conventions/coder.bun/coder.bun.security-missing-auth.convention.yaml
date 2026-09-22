@@ -1,0 +1,53 @@
+schema_version: 1.1.0
+rule_id: coder.bun.security-missing-auth
+kind: rule
+status: active
+name: State-changing routes perform an authorisation check
+statement: >-
+  A route handler for POST, PUT, PATCH or DELETE MUST perform an authorisation check in its body. Stack-
+  neutral obligation, RE-REALIZED for Bun: the python-pytest sibling matches a FastAPI decorator whose
+  signature carries `Depends(get_current_user)`. Bun has neither decorators nor a DI container — routes
+  are entries in the `routes` object of `Bun.serve` or branches of a `fetch` handler, and authorisation is
+  an ordinary call. Realized by `bun_security_hygiene_detector` (core alias SECURITY-MISSING-AUTH-001).
+terms:
+- term_id: mutating_route
+  text: >-
+    a POST, PUT, PATCH or DELETE handler. GET is out of scope: a public read is normal in a
+    hypermedia app.
+- term_id: authorisation_step
+  text: >-
+    a recognisable guard call inside the handler body. The rule asks whether the author
+    considered auth here at all, not which helper they used.
+content:
+  summary: >-
+    Finds each mutating route entry or `req.method === "POST"` guard, brace-matches ITS handler body, and
+    reports the handler when no recognisable authorisation call appears inside it.
+  normative_text: |
+    Mutating methods only, deliberately. A public GET is normal in an htmx application — it is how fragments load — so requiring auth on reads would produce noise on the most common route in the codebase. A mutating handler with no auth call is the shape that leaks writes.
+    The set of recognised auth calls is broad on purpose. The rule asks whether the author thought about authorisation at this handler at all; it is not trying to enforce one blessed helper, and a project with its own guard should add that name rather than suppress the rule.
+  fix_hint: |
+    Call the guard first, and let it throw or return early:
+
+      POST: async (req) => {
+        const user = await requireUser(req);   // authorise before any write
+        ...
+      }
+
+    The check must be inside THIS handler — auth performed in a sibling route protects nothing.
+  exceptions:
+  - GET and HEAD handlers are out of scope (reads).
+  - A handler delegating to a wrapper that authorises internally should call it by a recognised name, or the wrapper name should be added to the rule.
+  - Test files are excluded.
+metadata:
+  aliases:
+  # SECURITY-MISSING-AUTH-001 is the SHARED core alias, also carried by the agnostic node and its
+  # python-pytest realization.
+  - SECURITY-MISSING-AUTH-001
+  severity: 4
+  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
+  # AST for constructs this stack does not have. Same obligation, new detector.
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: bun_security_hygiene_detector
