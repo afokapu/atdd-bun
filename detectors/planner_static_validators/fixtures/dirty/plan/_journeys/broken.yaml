@@ -4,6 +4,10 @@ title: Broken journey fixture
 status: checked
 entrypoint:
   interlocking_id: interlocking:journey-a
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
 continuations:
   - from:
       interlocking_id: interlocking:journey-a
