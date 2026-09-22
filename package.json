@@ -1,6 +1,10 @@
 {
   "name": "@afokapu/atdd-bun",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/afokapu/atdd-bun.git"
+  },
   "type": "module",
   "bin": {
     "atdd-bun": "./src/cli.ts"

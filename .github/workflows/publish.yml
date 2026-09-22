@@ -1,0 +1,61 @@
+# Publishes @afokapu/atdd-bun to npm on every push to main that touches packaged files.
+# Version is automatic: next patch after the latest published version, unless
+# package.json already declares a higher version (bump it by hand for minor/major).
+# Auth uses npm trusted publishing (OIDC) — no NPM_TOKEN secret.
+name: Publish
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - detectors/**
+      - lib/**
+      - conventions/**
+      - planner-nodes/**
+      - planner-schemas/**
+      - templates/**
+      - bunfig.toml
+      - package.json
+      - bun.lock
+      - README.md
+      - PLANNER_PORT.md
+      - HOOK_AUDIT.md
+  workflow_dispatch:
+concurrency:
+  group: publish
+  cancel-in-progress: false
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - name: Compute next version
+        id: version
+        run: |
+          name=$(node -p "require('./package.json').name")
+          local=$(node -p "require('./package.json').version")
+          published=$(npm view "$name" version 2>/dev/null || echo "0.0.0")
+          next=$(LOCAL="$local" PUBLISHED="$published" node -e '
+            const [l, p] = [process.env.LOCAL, process.env.PUBLISHED].map(v => v.split("-")[0].split(".").map(Number));
+            const gt = l[0] - p[0] || l[1] - p[1] || l[2] - p[2];
+            console.log(gt > 0 ? l.join(".") : [p[0], p[1], p[2] + 1].join("."));
+          ')
+          echo "published=$published next=$next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+      - run: npm version "${{ steps.version.outputs.next }}" --no-git-tag-version --allow-same-version
+      - run: npm publish --provenance --access public
+      - name: Tag release
+        run: |
+          git tag "v${{ steps.version.outputs.next }}"
+          git push origin "v${{ steps.version.outputs.next }}"
