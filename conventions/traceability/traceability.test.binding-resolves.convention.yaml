@@ -1,2 +1,2 @@
-rule_id: trace.test.binding-resolves
+rule_id: traceability.test.binding-resolves
 statement: Each identified Bun test names a plan acceptance, WMBT, or train that resolves.

@@ -94,7 +94,7 @@ export async function validatePlan(root = process.cwd()): Promise<PlanGraph> {
   return graph;
 }
 
-export function tracePlan(graph: PlanGraph): Array<{ from: string; to: string; relation: string }> {
+export function traceabilityPlan(graph: PlanGraph): Array<{ from: string; to: string; relation: string }> {
   const links: Array<{ from: string; to: string; relation: string }> = [];
   for (const artifact of graph.artifacts) {
     if (artifact.kind === "wmbt") for (const acceptance of graph.artifacts.filter(other => other.kind === "acceptance" && other.file === artifact.file)) links.push({ from: artifact.id, to: acceptance.id, relation: "defines" });

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readdir } from "node:fs/promises";
-import { tracePlan, validatePlan } from "../src/planner-kernel";
+import { traceabilityPlan, validatePlan } from "../src/planner-kernel";
 
 async function fixture(files: Record<string, string>) {
   const root = await mkdtemp(join(tmpdir(), "atdd-planner-kernel-"));
@@ -33,7 +33,7 @@ test("the static kernel joins wagon, feature, WMBT, acceptance, train, and inter
     "plan/_trains/fulfilment/run.yaml": "train_id: train:fulfilment:run\nparticipants: [wagon:fulfil-order]\nsource_interlocking:\n  interlocking_id: interlocking:fulfilment\n",
     "plan/_trains/_interlockings/fulfilment.yaml": "interlocking_id: interlocking:fulfilment\nlifelines:\n  - ref: wagon:fulfil-order\nroutes:\n  - train_id: train:fulfilment:run\nmessages:\n  - from: wagon:fulfil-order\n    to: wagon:fulfil-order\n    wmbt_refs: [wmbt:fulfil-order:E001]\n",
   });
-  try { const graph = await validatePlan(root); expect(graph.findings).toEqual([]); expect(graph.artifacts.map(a => a.kind).sort()).toEqual(["acceptance", "feature", "interlocking", "train", "wagon", "wmbt"]); expect(tracePlan(graph)).toContainEqual({ from: "wmbt:fulfil-order:E001", to: "acc:fulfil-order:E001-UNIT-001", relation: "defines" }); }
+  try { const graph = await validatePlan(root); expect(graph.findings).toEqual([]); expect(graph.artifacts.map(a => a.kind).sort()).toEqual(["acceptance", "feature", "interlocking", "train", "wagon", "wmbt"]); expect(traceabilityPlan(graph)).toContainEqual({ from: "wmbt:fulfil-order:E001", to: "acc:fulfil-order:E001-UNIT-001", relation: "defines" }); }
   finally { await rm(root, { recursive: true, force: true }); }
 });
 

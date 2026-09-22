@@ -1,2 +1,2 @@
-rule_id: trace.plan.executable-acceptance-has-test
+rule_id: traceability.plan.executable-acceptance-has-test
 statement: Every declared acceptance is bound by at least one Bun test.

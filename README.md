@@ -12,22 +12,22 @@ import { registerEnforcementTest } from "@afokapu/atdd-bun/register";
 
 registerEnforcementTest({
   root: import.meta.dir + "/..",
-  profiles: ["trace", "architecture", "security"],
+  profiles: ["traceability", "architecture", "security"],
 });
 ```
 
 Or run it in CI:
 
 ```sh
-bun run atdd-bun --profile trace,architecture --root .
+bun run atdd-bun --profile traceability,architecture --root .
 ```
 
 ## Profiles
 
-`trace`, `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime`,
+`traceability`, `docs`, `planner`, `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime`,
 `interlocking`, `htmx`, and `all` select the shipped detector families.
 
-`trace` is a standalone closure gate:
+`traceability` is a standalone closure gate:
 
 ```text
 plan acceptance -> Bun test -> implementation component

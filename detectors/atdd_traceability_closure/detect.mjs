@@ -51,7 +51,7 @@ for (const root of roots) {
       const binding = head.match(/^\s*\/\/\s*(Acceptance|WMBT|Train):\s*((?:acc|wmbt|train):[^\s]+)/m);
       if (!urn) return;
       tests.set(urn[1], { path, binding: binding?.[2], bindingKind: binding?.[1] });
-      if (!binding) add("trace.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
+      if (!binding) add("traceability.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
       return;
     }
     const component = head.match(/^\s*\/\/\s*URN:\s*(component:[^\s]+)/m);
@@ -65,20 +65,20 @@ for (const test of tests.values()) {
   if (!test.binding) continue;
   const kind = test.binding.startsWith("acc:") ? "acc" : test.binding.startsWith("wmbt:") ? "wmbt" : "train";
   if (!plans[kind].has(test.binding)) {
-    add("trace.test.binding-resolves", test.path, lineOf(text(test.path), test.binding), `${test.binding} is not declared in plan/`, `// ${test.bindingKind}: ${test.binding}`);
+    add("traceability.test.binding-resolves", test.path, lineOf(text(test.path), test.binding), `${test.binding} is not declared in plan/`, `// ${test.bindingKind}: ${test.binding}`);
   }
 }
 const boundAcceptances = new Set([...tests.values()].map((test) => test.binding).filter((id) => id?.startsWith("acc:")));
 for (const acceptance of plans.acc) {
-  if (!boundAcceptances.has(acceptance)) add("trace.plan.executable-acceptance-has-test", "plan/", 1, `${acceptance} has no Bun test binding`, acceptance);
+  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", "plan/", 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
   if (!source.testedBy.length) {
-    add("trace.source.tested-by-present", source.path, lineOf(source.head, source.component), `${source.component} has no Tested-By: test:... declaration`, source.component);
+    add("traceability.source.tested-by-present", source.path, lineOf(source.head, source.component), `${source.component} has no Tested-By: test:... declaration`, source.component);
     continue;
   }
   for (const testUrn of source.testedBy) {
-    if (!tests.has(testUrn)) add("trace.source.tested-by-resolves", source.path, lineOf(source.head, testUrn), `${testUrn} does not resolve to a Bun test`, testUrn);
+    if (!tests.has(testUrn)) add("traceability.source.tested-by-resolves", source.path, lineOf(source.head, testUrn), `${testUrn} does not resolve to a Bun test`, testUrn);
   }
 }
 writeFileSync(report, JSON.stringify({ violations }, null, 2));

@@ -7,13 +7,13 @@ const fixture = (kind: "clean" | "dirty") => resolve(
   `../detectors/atdd_traceability_closure/fixtures/${kind}`,
 );
 
-test("the trace profile is a standalone plan -> test -> source gate", async () => {
-  expect(await enforce({ root: fixture("clean"), profiles: ["trace"] })).toEqual([]);
-  const ruleIds = new Set((await enforce({ root: fixture("dirty"), profiles: ["trace"] })).map((violation) => violation.rule_id));
+test("the traceability profile is a standalone plan -> test -> source gate", async () => {
+  expect(await enforce({ root: fixture("clean"), profiles: ["traceability"] })).toEqual([]);
+  const ruleIds = new Set((await enforce({ root: fixture("dirty"), profiles: ["traceability"] })).map((violation) => violation.rule_id));
   expect(ruleIds).toEqual(new Set([
-    "trace.plan.executable-acceptance-has-test",
-    "trace.test.binding-resolves",
-    "trace.source.tested-by-present",
-    "trace.source.tested-by-resolves",
+    "traceability.plan.executable-acceptance-has-test",
+    "traceability.test.binding-resolves",
+    "traceability.source.tested-by-present",
+    "traceability.source.tested-by-resolves",
   ]));
 });

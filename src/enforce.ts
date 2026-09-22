@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-export type Profile = "trace" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "all";
+export type Profile = "traceability" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "all";
 
 export type Violation = {
   rule_id: string;
@@ -21,7 +21,7 @@ export type EnforcementConfig = {
 };
 
 const profiles: Record<Exclude<Profile, "all">, string[]> = {
-  trace: ["atdd_traceability_closure"],
+  traceability: ["atdd_traceability_closure"],
   docs: ["planner_docs_capability"],
   planner: ["planner_static_validators"],
   coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector"],
