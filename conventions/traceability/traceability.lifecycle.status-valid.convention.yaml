@@ -1,0 +1,7 @@
+rule_id: traceability.lifecycle.status-valid
+statement: A feature or train status is planned, tested, or implemented.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

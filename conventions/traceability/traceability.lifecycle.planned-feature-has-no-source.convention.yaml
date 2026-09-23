@@ -1,0 +1,7 @@
+rule_id: traceability.lifecycle.planned-feature-has-no-source
+statement: A planned feature has no component source; once source claims a feature it is tested or implemented, so implementation cannot hide behind planned and a downgrade cannot conceal it.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

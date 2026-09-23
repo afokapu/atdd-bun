@@ -1,0 +1,7 @@
+rule_id: traceability.train.executable-train-has-test
+statement: A tested or implemented train is bound by at least one Bun test through a Train header.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

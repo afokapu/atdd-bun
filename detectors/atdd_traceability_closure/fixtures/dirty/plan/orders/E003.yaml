@@ -1,0 +1,4 @@
+urn: wmbt:orders:E003
+acceptances:
+  - identity:
+      urn: acc:orders:E003-UNIT-001-shared

@@ -1,0 +1,5 @@
+# No feature owns E002, so its acceptance stays executable and needs a test.
+urn: wmbt:orders:E002
+acceptances:
+  - identity:
+      urn: acc:orders:E002-UNIT-001-unowned

@@ -1,0 +1,7 @@
+rule_id: traceability.lifecycle.acceptance-single-owner
+statement: Once a plan declares any lifecycle status, each acceptance is owned by exactly one feature, so it has one lifecycle.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

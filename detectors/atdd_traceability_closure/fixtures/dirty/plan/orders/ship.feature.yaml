@@ -1,0 +1,5 @@
+# Implemented, but no source declares component:orders:ship:...; also shares E003 with pack.
+urn: feature:orders:ship
+wagon: wagon:orders
+status: implemented
+wmbts: [wmbt:orders:E003]

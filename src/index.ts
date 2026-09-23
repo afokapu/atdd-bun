@@ -14,6 +14,8 @@ export { buildModel, journeyDocs, journeyDocsApply, journeyMapSvg, journeyPaths,
 export type { Gap, Journey, JourneyModel, JourneyPath } from "./journey-docs";
 export { checkIntegrity, checkInstalledPackage, formatIntegrity, integrityInit, loosenedPolicy, writeManifest } from "./integrity";
 export type { IntegrityFinding, IntegrityOptions } from "./integrity";
+export { formatPlannedDebt, isPlannedAcceptance, isPlannedTrain, lifecycleOf, loadLifecycle, plannedDebt, STATUSES } from "./lifecycle";
+export type { AcceptanceOwnership, FeatureLifecycle, Lifecycle, PlannedDebt, Status, TrainLifecycle } from "./lifecycle";
 export { releaseCheck } from "./release";
 export { defaultTopology, topologyFor } from "./topology";
 export type { Topology } from "./topology";

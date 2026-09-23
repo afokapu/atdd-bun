@@ -74,7 +74,8 @@ export async function planOf(root) {
   const trainFiles = new Map(trainArtifacts.map((a) => [a.id, join(root, a.file)]));
   // A train is human-facing when a person takes part in it; only those have a screen a browser spec can drive.
   const refs = (a) => [...(Array.isArray(a.data.participants) ? a.data.participants : []), ...(Array.isArray(a.data.sequence) ? a.data.sequence.flatMap((s) => [s?.from, s?.to]) : [])].map(String);
-  const humanTrains = new Set(trainArtifacts.filter((a) => refs(a).some((r) => r.startsWith("user:"))).map((a) => a.id));
+  // Staged activation (src/lifecycle.ts): a planned train owes no browser spec yet.
+  const humanTrains = new Set(trainArtifacts.filter((a) => a.data.status !== "planned" && refs(a).some((r) => r.startsWith("user:"))).map((a) => a.id));
   const interlockings = graph.artifacts.filter((a) => a.kind === "interlocking");
   const routed = new Set(interlockings.flatMap((il) => (Array.isArray(il.data.routes) ? il.data.routes : []).map((r) => String(r?.train_id ?? ""))).filter(Boolean));
   // A journey has a browser surface unless its entrypoint declares surfaces that exclude `frontend`.

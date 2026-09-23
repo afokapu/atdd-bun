@@ -1,0 +1,5 @@
+# Planned: its acceptance has no test yet, and no source claims it. That is planned debt, not a violation.
+urn: feature:orders:refund
+wagon: wagon:orders
+status: planned
+wmbts: [wmbt:orders:E002]

@@ -1,0 +1,3 @@
+# Planned: no end-to-end binding is required yet.
+train_id: train:orders:returns
+status: planned

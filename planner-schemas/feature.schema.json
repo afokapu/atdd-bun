@@ -21,6 +21,11 @@
       "maxLength": 200,
       "description": "One-liner describing feature purpose"
     },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "tested", "implemented"],
+      "description": "Staged activation. planned: declared, not yet executable; its acceptances are planned debt and no component source may claim it. tested: every acceptance it owns is bound by a Bun test. implemented: tested, and component source claims it. Absent keeps the feature executable, as before lifecycles existed."
+    },
     "sizing": {
       "type": "object",
       "required": ["wmbts", "footprint_score", "footprint_size"],

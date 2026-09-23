@@ -1,0 +1,4 @@
+urn: feature:orders:create
+wagon: wagon:orders
+status: implemented
+wmbts: [wmbt:orders:E001]

@@ -52,6 +52,8 @@ for (const root of roots) {
   for (const feature of features) for (const wmbtUrn of list(feature.data, "wmbts").map(String)) for (const wmbt of wmbts.filter(w => w.urn === wmbtUrn))
     for (const acceptance of list(wmbt.data, "acceptances").map(a => text(a?.identity, "urn")).filter(Boolean)) acceptanceOwners.set(acceptance, [...(acceptanceOwners.get(acceptance) || []), `${feature.wagon}:${feature.slug}`]);
   const trains = new Set(docs.map(doc => text(doc.data, "train_id")).filter(Boolean));
+  // Staged activation (src/lifecycle.ts): a planned train owes no E2E route proof yet.
+  const plannedTrains = new Set(docs.filter(doc => text(doc.data, "train_id") && doc.data.status === "planned").map(doc => text(doc.data, "train_id")));
 
   for (const wagon of wagons) {
     const expected = `${cfg.plan_root}/${wagon.slug}/_${wagon.slug}.yaml`;
@@ -102,9 +104,11 @@ for (const root of roots) {
     else if (acceptanceOwners.has(binding) && !acceptanceOwners.get(binding).includes(`${wagon}:${feature}`)) add("atdd-bun.topology.test-location", root, path, `${binding} belongs to feature:${acceptanceOwners.get(binding).join(", feature:")}, not feature:${wagon}:${feature}; a test lives beneath the feature whose acceptance it proves`, h.acceptance.line, h.acceptance.raw);
     else testByFeature.set(`${wagon}:${feature}`, [...(testByFeature.get(`${wagon}:${feature}`) || []), path]);
   }
-  for (const feature of features) if (list(feature.data, "wmbts").length) {
+  // Staged activation (src/lifecycle.ts): a planned feature owes neither source nor tests yet, and a tested
+  // one owes tests but not yet source. A feature with no status owes both, as before lifecycles existed.
+  for (const feature of features) if (list(feature.data, "wmbts").length && feature.data.status !== "planned") {
     const key = `${feature.wagon}:${feature.slug}`;
-    if (!sourceByFeature.get(key)?.length) add("atdd-bun.topology.feature-source-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no source component beneath ${cfg.source_root}/${feature.wagon}/features/${feature.slug}/`);
+    if (feature.data.status !== "tested" && !sourceByFeature.get(key)?.length) add("atdd-bun.topology.feature-source-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no source component beneath ${cfg.source_root}/${feature.wagon}/features/${feature.slug}/`);
     if (!testByFeature.get(key)?.length) add("atdd-bun.topology.feature-test-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no test bound to one of its acceptances`);
   }
   const e2eRoot = join(root, cfg.e2e_root);
@@ -144,7 +148,7 @@ for (const root of roots) {
   for (const interlocking of interlockings.values()) {
     const id = text(interlocking.data, "interlocking_id").slice(13);
     for (const route of list(interlocking.data, "routes")) {
-      const routeId = text(route, "route_id"); if (!routeId) continue;
+      const routeId = text(route, "route_id"); if (!routeId || plannedTrains.has(text(route, "train_id"))) continue;
       const expected = join(e2eRoot, "interlockings", id, `${routeId}.routes.test.ts`);
       interlockingRoutes.add(rel(root, expected));
       const browserEligible = frontendInterlockings.has(text(interlocking.data, "interlocking_id"));

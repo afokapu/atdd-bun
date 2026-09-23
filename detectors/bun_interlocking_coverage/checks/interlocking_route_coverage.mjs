@@ -19,6 +19,7 @@ import {
   mk,
   writeReport,
 } from "../_shared/interlocking.mjs";
+import { loadLifecycle, isPlannedTrain } from "../../../src/lifecycle.ts";
 
 const RULE = "tester.bun.interlocking-route-coverage";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -30,10 +31,12 @@ for (const scanRoot of roots) {
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
     const e2eTexts = e2eFiles(croot).map((f) => maskComments(readText(f)));
+    // Staged activation (src/lifecycle.ts): a route selecting a planned train owes no e2e test yet.
+    const lifecycle = await loadLifecycle(croot);
 
     for (const { file, rec } of records) {
       for (const route of rec.routes) {
-        if (isRouteCovered(route, e2eTexts)) continue;
+        if (isRouteCovered(route, e2eTexts) || isPlannedTrain(lifecycle, route.trainId)) continue;
         const cat =
           route.category !== null
             ? `category "${route.category}"`

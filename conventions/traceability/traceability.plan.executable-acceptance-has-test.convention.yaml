@@ -1,5 +1,5 @@
 rule_id: traceability.plan.executable-acceptance-has-test
-statement: Every declared acceptance is bound by at least one Bun test.
+statement: Every executable acceptance is bound by at least one Bun test; an acceptance is executable unless the one feature or train that owns it is planned.
 metadata:
   disposition: strict
 implementation:

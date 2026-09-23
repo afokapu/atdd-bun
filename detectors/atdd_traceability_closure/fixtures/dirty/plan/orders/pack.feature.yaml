@@ -1,0 +1,4 @@
+urn: feature:orders:pack
+wagon: wagon:orders
+status: tested
+wmbts: [wmbt:orders:E003]

@@ -333,10 +333,15 @@ nodes:
   - tester.htmx.train-e2e-coverage
   - tester.htmx.verb-endpoint-coverage
   - tester.htmx.visual-harness
+  - traceability.lifecycle.acceptance-single-owner
+  - traceability.lifecycle.implemented-feature-has-source
+  - traceability.lifecycle.planned-feature-has-no-source
+  - traceability.lifecycle.status-valid
   - traceability.plan.executable-acceptance-has-test
   - traceability.source.tested-by-present
   - traceability.source.tested-by-resolves
   - traceability.test.binding-resolves
+  - traceability.train.executable-train-has-test
 edges: 
   - confidence: 1
     constraint: mandatory
@@ -5011,4 +5016,64 @@ edges:
     strength: critical
     target_ref: atdd-bun.planner.identity-required
     type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "which acceptances are executable is read from the owning feature's status, so the status must be in the lifecycle vocabulary"
+    source_ref: traceability.plan.executable-acceptance-has-test
+    strength: critical
+    target_ref: traceability.lifecycle.status-valid
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: an acceptance is planned debt only through its one owner; shared ownership would leave its lifecycle ambiguous
+    source_ref: traceability.plan.executable-acceptance-has-test
+    strength: critical
+    target_ref: traceability.lifecycle.acceptance-single-owner
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "both keep implementation strict: source is never exempt, and a feature with source is executable"
+    source_ref: traceability.lifecycle.planned-feature-has-no-source
+    strength: important
+    target_ref: traceability.source.tested-by-present
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "the two ends of the source evidence rule: planned means no source, implemented means some"
+    source_ref: traceability.lifecycle.implemented-feature-has-source
+    strength: important
+    target_ref: traceability.lifecycle.planned-feature-has-no-source
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "a train's end-to-end obligation is activated by its status"
+    source_ref: traceability.train.executable-train-has-test
+    strength: critical
+    target_ref: traceability.lifecycle.status-valid
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: a Train binding must exist for an activated train and must resolve wherever it exists
+    source_ref: traceability.train.executable-train-has-test
+    strength: important
+    target_ref: traceability.test.binding-resolves
+    type: runs_alongside
     origin: "@afokapu/atdd-bun"

@@ -5,6 +5,7 @@ import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
 import { checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from "./integrity";
 import { journeyDocs } from "./journey-docs";
+import { formatPlannedDebt, loadLifecycle, plannedDebt } from "./lifecycle";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
 
@@ -20,6 +21,7 @@ const usage = {
     "atdd-bun agent <init|status> [--replace]",
     "atdd-bun integrity [init|status] [--replace]",
     "atdd-bun docs journeys [--out <dir>] [--check] [--force]",
+    "atdd-bun lifecycle [--json] [--root <path>]",
     "atdd-bun release check",
   ],
   profiles: profileNames,
@@ -87,6 +89,12 @@ if (args[0] === "integrity") {
 if (args[0] === "agent") {
   const result = args[1] === "init" ? await agentInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await agentStatus() : fail("agent requires init or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "lifecycle") {
+  const at = args.indexOf("--root"), where = at === -1 ? process.cwd() : args[at + 1];
+  if (at !== -1 && !where) fail("--root requires a path");
+  const debt = plannedDebt(await loadLifecycle(where));
+  console.log(args.includes("--json") ? JSON.stringify(debt, null, 2) : formatPlannedDebt(debt)); process.exit(0);
 }
 if (args[0] === "release") {
   if (args[1] !== "check") fail("release requires check");

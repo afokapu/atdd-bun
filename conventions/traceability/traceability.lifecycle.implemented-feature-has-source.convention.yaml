@@ -1,0 +1,7 @@
+rule_id: traceability.lifecycle.implemented-feature-has-source
+statement: An implemented feature is claimed by at least one component source.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

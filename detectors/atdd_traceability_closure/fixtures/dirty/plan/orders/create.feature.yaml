@@ -1,0 +1,5 @@
+# Planned, yet dirty/src claims it: implementation cannot hide behind planned.
+urn: feature:orders:create
+wagon: wagon:orders
+status: planned
+wmbts: [wmbt:orders:E001]

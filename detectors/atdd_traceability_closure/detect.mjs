@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { topologyFor } from "../../src/topology.ts";
+import { loadLifecycle, isPlannedAcceptance } from "../../src/lifecycle.ts";
 
 const roots = JSON.parse(process.env.ATDD_SCAN_ROOTS || "[]");
 const excludes = new Set(JSON.parse(process.env.ATDD_SCAN_EXCLUDES || "[]"));
@@ -16,6 +17,8 @@ const plans = { acc: new Set(), wmbt: new Set(), train: new Set() };
 const tests = new Map();
 const sources = [];
 let planDisplay = "plan/";
+// Staged activation (src/lifecycle.ts): the lifecycle of every scanned root, merged.
+const lifecycle = { declared: false, features: [], trains: [], acceptances: [] };
 
 function ignored(path) {
   return [...excludes].some((needle) => path.includes(needle));
@@ -36,6 +39,9 @@ function lineOf(content, token) { return content.slice(0, content.indexOf(token)
 
 for (const root of roots) {
   const topology = await topologyFor(root), planPrefix = topology.planRoot.replace(/\/$/, "") + "/"; planDisplay = planPrefix;
+  const local = await loadLifecycle(root);
+  lifecycle.declared ||= local.declared;
+  for (const key of ["features", "trains", "acceptances"]) lifecycle[key].push(...local[key].map((item) => ({ ...item, file: join(root, item.file) })));
   walk(root, (path) => {
     const name = path.split("/").pop() || "";
     const content = text(path);
@@ -72,8 +78,11 @@ for (const test of tests.values()) {
   }
 }
 const boundAcceptances = new Set([...tests.values()].map((test) => test.binding).filter((id) => id?.startsWith("acc:")));
+// A planned feature's acceptances are planned debt: not executable yet, so not closure violations. They are
+// counted by `atdd-bun lifecycle`. Every other acceptance (a tested/implemented feature's, or one with no
+// declared lifecycle at all) must be bound.
 for (const acceptance of plans.acc) {
-  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
+  if (!boundAcceptances.has(acceptance) && !isPlannedAcceptance(lifecycle, acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
   if (!source.testedBy.length) {
@@ -83,5 +92,33 @@ for (const source of sources) {
   for (const testUrn of source.testedBy) {
     if (!tests.has(testUrn)) add("traceability.source.tested-by-resolves", source.path, lineOf(source.head, testUrn), `${testUrn} does not resolve to a Bun test`, testUrn);
   }
+}
+const statusLine = (path) => { const content = text(path), match = content.match(/^status:.*$/m); return match ? { line: lineOf(content, match[0]), source: match[0] } : { line: 1, source: "" }; };
+for (const item of [...lifecycle.features, ...lifecycle.trains]) if (item.invalidStatus !== undefined) {
+  const at = statusLine(item.file);
+  add("traceability.lifecycle.status-valid", item.file, at.line, `${item.urn ?? item.id} has status "${item.invalidStatus}"; the lifecycle is planned | tested | implemented`, at.source);
+}
+// Ownership decides whether an acceptance is planned or executable, so once a plan declares any status an
+// acceptance whose WMBT is listed by more than one feature has no single lifecycle and is rejected.
+if (lifecycle.declared) for (const acceptance of lifecycle.acceptances) if (acceptance.owners.length > 1) {
+  add("traceability.lifecycle.acceptance-single-owner", acceptance.file, lineOf(text(acceptance.file), acceptance.acceptance), `${acceptance.acceptance} (${acceptance.wmbt}) is owned by ${acceptance.owners.join(", ")}; exactly one feature must own it`, acceptance.acceptance);
+}
+// Implementation cannot hide behind planned: once component source claims a feature, the feature is
+// executable. This is also the downgrade rule: moving a feature back to planned fails while its source exists.
+const featureOf = (component) => { const [, wagon, slug] = component.split(":"); return `feature:${wagon}:${slug}`; };
+const claimed = new Set(sources.map((source) => featureOf(source.component)));
+for (const source of sources) {
+  const feature = lifecycle.features.find((f) => f.urn === featureOf(source.component));
+  if (feature?.status === "planned") add("traceability.lifecycle.planned-feature-has-no-source", source.path, lineOf(source.head, source.component), `${source.component} implements ${feature.urn}, which is planned; a feature with source is tested or implemented`, source.component);
+}
+for (const feature of lifecycle.features) if (feature.status === "implemented" && !claimed.has(feature.urn)) {
+  const at = statusLine(feature.file);
+  add("traceability.lifecycle.implemented-feature-has-source", feature.file, at.line, `${feature.urn} is implemented but no source declares \`// URN: component:${feature.wagon}:${feature.slug}:...\``, at.source);
+}
+// A planned train needs no end-to-end binding yet; a tested or implemented one does.
+const boundTrains = new Set([...tests.values()].map((test) => test.binding).filter((id) => id?.startsWith("train:")));
+for (const train of lifecycle.trains) if ((train.status === "tested" || train.status === "implemented") && !boundTrains.has(train.id)) {
+  const at = statusLine(train.file);
+  add("traceability.train.executable-train-has-test", train.file, at.line, `${train.id} is ${train.status} but no Bun test declares \`// Train: ${train.id}\``, at.source);
 }
 writeFileSync(report, JSON.stringify({ violations }, null, 2));

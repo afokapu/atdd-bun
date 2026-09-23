@@ -5,4 +5,9 @@ emits_rule_ids:
 - traceability.test.binding-resolves
 - traceability.source.tested-by-present
 - traceability.source.tested-by-resolves
+- traceability.lifecycle.status-valid
+- traceability.lifecycle.acceptance-single-owner
+- traceability.lifecycle.planned-feature-has-no-source
+- traceability.lifecycle.implemented-feature-has-source
+- traceability.train.executable-train-has-test
 entrypoint: detect.mjs
