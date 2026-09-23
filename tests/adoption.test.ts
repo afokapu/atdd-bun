@@ -72,6 +72,24 @@ test("deleting a legacy test brings the acceptance it bound into the slice, and 
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
+test("activating a feature by its status line alone brings the acceptances it owns into the slice", async () => {
+  const root = await legacyRepo();
+  try {
+    // Base: the slice's feature is planned and owns a second, unbound acceptance (planned debt, not a finding).
+    await addSlice(root);
+    const feature = join(root, "plan/orders/place.yaml"), wmbt = join(root, "plan/orders/E001.yaml");
+    await writeFile(feature, (await readFile(feature, "utf8")).replace("status: tested", "status: planned"));
+    await writeFile(wmbt, (await readFile(wmbt, "utf8")) + "  - identity:\n      urn: acc:orders:E001-UNIT-002-rounds-the-total\n      id: AC-UNIT-002\n      purpose: The total is rounded to cents.\n      phase: RED\n    harness: { type: unit, category: backend }\n    given: { abstract: [a cart] }\n    when: { abstract: the order is placed }\n    then: { abstract: [the total is rounded] }\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "planned slice"); await git(root, "update-ref", "refs/heads/main", "HEAD");
+    expect((await gate({ root, base: "main" })).ok).toBeTrue();
+    // The change: one line, `status: planned` → `status: tested`. Nothing else moves.
+    await writeFile(feature, (await readFile(feature, "utf8")).replace("status: planned", "status: tested"));
+    const result = await gate({ root, base: "main" });
+    expect(result.ok).toBeFalse();
+    expect(where(root, result.blocking)).toContain("traceability.plan.executable-acceptance-has-test plan/orders/E001.yaml");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
 test("touching a legacy file makes that file's debt blocking", async () => {
   const root = await legacyRepo();
   try {

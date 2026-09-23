@@ -2,6 +2,8 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { enforce, type Profile, type Violation } from "./enforce";
+import { lifecycleOf } from "./lifecycle";
+import { loadPlan } from "./planner-kernel";
 
 /**
  * ADOPTION. `atdd-bun all` is always the full, strict audit of the whole repository. The GATE is what hooks
@@ -73,7 +75,14 @@ export async function sliceOf(root: string, diff: string[], untracked = false): 
     files.add(path);
     try { changed.push(await readFile(join(root, path), "utf8")); } catch { /* unreadable: the path alone is in the slice */ }
   }
-  return { files, identities: new Set(changed.flatMap(touchedIdentities)) };
+  // A changed plan file changes what its artifacts declare even when the changed line names nothing (a
+  // `status:` flip activates every acceptance the feature owns). So the slice also holds the identities a
+  // changed plan file declares, and every feature, WMBT or train the change names brings the acceptances it
+  // owns (and a feature, its WMBTs).
+  const plan = await loadPlan(root), lifecycle = lifecycleOf(plan.artifacts);
+  const named = new Set([...changed.flatMap(tokens), ...plan.artifacts.filter(a => files.has(a.file)).map(a => a.id)]);
+  const owned = (id: string) => [...(lifecycle.features.find(f => f.urn === id)?.wmbts ?? []), ...lifecycle.acceptances.filter(a => a.wmbt === id || a.owners.includes(id)).map(a => a.acceptance)];
+  return { files, identities: new Set([...changed.flatMap(touchedIdentities), ...named, ...[...named].flatMap(owned)]) };
 }
 
 const relativeFile = (root: string, file: string) => (isAbsolute(file) ? relative(root, file) : file).replaceAll("\\", "/");
