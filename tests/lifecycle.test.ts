@@ -32,12 +32,12 @@ test("a planned feature's acceptance may lack a test: it is planned debt, not a 
 
 test("with no status anywhere, closure is exactly as strict as before lifecycles existed", async () => {
   const root = await repo({ "plan/orders/a.yaml": feature("a", null, ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001") });
-  expect(await traceability(root)).toEqual(["traceability.plan.executable-acceptance-has-test plan/"]);
+  expect(await traceability(root)).toEqual(["traceability.plan.executable-acceptance-has-test plan/orders/E001.yaml"]);
 });
 
 test("an acceptance no feature owns stays executable even when other features are planned", async () => {
   const root = await repo({ "plan/orders/a.yaml": feature("a", "planned", ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001"), "plan/orders/E002.yaml": wmbt("E002", "001") });
-  expect(await traceability(root)).toEqual(["traceability.plan.executable-acceptance-has-test plan/"]);
+  expect(await traceability(root)).toEqual(["traceability.plan.executable-acceptance-has-test plan/orders/E002.yaml"]);
 });
 
 test("a malformed planned plan still fails structural validation; status is never a structural exemption", async () => {
@@ -52,7 +52,7 @@ test("a malformed planned plan still fails structural validation; status is neve
 test("activating a feature without every acceptance bound fails closure", async () => {
   const root = await repo({ "plan/orders/a.yaml": feature("a", "tested", ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001", "002"), "test/one.test.ts": bound("acc:orders:E001-UNIT-001") });
   const findings = await traceability(root);
-  expect(findings).toEqual(["traceability.plan.executable-acceptance-has-test plan/"]);
+  expect(findings).toEqual(["traceability.plan.executable-acceptance-has-test plan/orders/E001.yaml"]);
   expect((await runImplementation("atdd_traceability_closure", { scanRoots: [root], excludes: [] }))[0].evidence).toContain("acc:orders:E001-UNIT-002");
   // Complete closure: the same activation passes.
   await writeFile(join(root, "test/two.test.ts"), bound("acc:orders:E001-UNIT-002"));
@@ -80,7 +80,7 @@ test("an implemented feature needs component source; a tested one does not yet",
 
 test("once statuses are declared, an acceptance shared by two features is rejected, never silently planned", async () => {
   const root = await repo({ "plan/orders/a.yaml": feature("a", "planned", ["wmbt:orders:E001"]), "plan/orders/b.yaml": feature("b", "planned", ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001") });
-  expect(await traceability(root)).toEqual(["traceability.lifecycle.acceptance-single-owner plan/orders/E001.yaml", "traceability.plan.executable-acceptance-has-test plan/"]);
+  expect(await traceability(root)).toEqual(["traceability.lifecycle.acceptance-single-owner plan/orders/E001.yaml", "traceability.plan.executable-acceptance-has-test plan/orders/E001.yaml"]);
 });
 
 test("a planned train may lack an end-to-end binding; a tested or implemented one may not", async () => {
@@ -148,7 +148,7 @@ test("a Tested-By entry counts only under a Tested-By header", async () => {
 test("a train-parented acceptance follows its train's lifecycle", async () => {
   const plan = (status: string) => repo({ "plan/_trains/checkout.yaml": `train_id: train:orders:checkout\nstatus: ${status}\n`, "plan/_trains/checkout.acc.yaml": "urn: acc:train:orders:checkout:pays\nid: AC-E2E-001\n" });
   expect(await traceability(await plan("planned"))).toEqual([]);
-  expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
+  expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/_trains/checkout.acc.yaml", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
 });
 
 test("an acceptance embedded in a planned train is planned debt, and counted as such", async () => {
@@ -157,7 +157,7 @@ test("an acceptance embedded in a planned train is planned debt, and counted as 
   const planned = await plan("planned");
   expect(await traceability(planned)).toEqual([]);
   expect(plannedDebt(await loadLifecycle(planned)).plannedAcceptances).toEqual([{ acceptance: "acc:train:orders:checkout:pays", owner: "train:orders:checkout" }]);
-  expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
+  expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/_trains/checkout.yaml", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
 });
 
 test("the planned-debt report is deterministic: identical for identical plans, whatever the write order", async () => {

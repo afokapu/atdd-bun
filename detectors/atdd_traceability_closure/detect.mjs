@@ -84,8 +84,12 @@ const boundAcceptances = bound("acc:");
 // A planned feature's acceptances are planned debt: not executable yet, so not closure violations. They are
 // counted by `atdd-bun lifecycle`. Every other acceptance (a tested/implemented feature's, or one with no
 // declared lifecycle at all) must be bound.
+// Reported where the acceptance is declared, so a finding points at the artifact to fix; an id that is only
+// referenced (never declared) is reported against the plan root.
 for (const acceptance of plans.acc) {
-  if (!boundAcceptances.has(acceptance) && !isPlannedAcceptance(lifecycle, acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
+  if (boundAcceptances.has(acceptance) || isPlannedAcceptance(lifecycle, acceptance)) continue;
+  const declared = lifecycle.acceptances.find((a) => a.acceptance === acceptance)?.file;
+  add("traceability.plan.executable-acceptance-has-test", declared ?? planDisplay, declared ? lineOf(text(declared), acceptance) : 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
   if (!source.testedBy.length) {
