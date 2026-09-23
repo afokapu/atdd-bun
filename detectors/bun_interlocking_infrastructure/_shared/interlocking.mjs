@@ -25,6 +25,7 @@ import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { join, sep, basename } from "node:path";
 
 export const DEFAULT_EXCLUDES = ["_generated", "node_modules", "dist", "build", ".next"];
+export const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 // Structured-resolution model contract, TS camelCase, transcribed from core's own
 // InterlockingResolution (src/atdd/runtime/interlocking/runner.py).
@@ -127,7 +128,7 @@ function* walkDirs(root) {
 export function findConsumerRoots(scanRoot) {
   const roots = new Set();
   for (const d of walkDirs(scanRoot)) {
-    if (hasChildDir(d, "src") || hasChildDir(d, "plan") || hasChildDir(d, "e2e")) roots.add(d);
+    if (hasChildDir(d, "src") || hasChildDir(d, PLAN_ROOT) || hasChildDir(d, "e2e")) roots.add(d);
   }
   return [...roots];
 }

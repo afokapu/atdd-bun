@@ -2,6 +2,7 @@
 // Bun-native closure gate for plan -> test -> implementation traceability.
 import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { topologyFor } from "../../src/topology.ts";
 
 const roots = JSON.parse(process.env.ATDD_SCAN_ROOTS || "[]");
 const excludes = new Set(JSON.parse(process.env.ATDD_SCAN_EXCLUDES || "[]"));
@@ -14,6 +15,7 @@ const violations = [];
 const plans = { acc: new Set(), wmbt: new Set(), train: new Set() };
 const tests = new Map();
 const sources = [];
+let planDisplay = "plan/";
 
 function ignored(path) {
   return [...excludes].some((needle) => path.includes(needle));
@@ -33,10 +35,11 @@ function add(rule_id, file, line, evidence, source_line = "") {
 function lineOf(content, token) { return content.slice(0, content.indexOf(token)).split("\n").length; }
 
 for (const root of roots) {
+  const topology = await topologyFor(root), planPrefix = topology.planRoot.replace(/\/$/, "") + "/"; planDisplay = planPrefix;
   walk(root, (path) => {
     const name = path.split("/").pop() || "";
     const content = text(path);
-    if (/\.ya?ml$/i.test(name) && /(?:^|\/)plan(?:\/|$)/.test(path)) {
+    if (/\.ya?ml$/i.test(name) && relative(root, path).replaceAll("\\", "/").startsWith(planPrefix)) {
       for (const [kind, re] of Object.entries({
         acc: /\bacc:[A-Za-z0-9_.:-]+/g,
         wmbt: /\bwmbt:[A-Za-z0-9_.:-]+/g,
@@ -70,7 +73,7 @@ for (const test of tests.values()) {
 }
 const boundAcceptances = new Set([...tests.values()].map((test) => test.binding).filter((id) => id?.startsWith("acc:")));
 for (const acceptance of plans.acc) {
-  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", "plan/", 1, `${acceptance} has no Bun test binding`, acceptance);
+  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
   if (!source.testedBy.length) {

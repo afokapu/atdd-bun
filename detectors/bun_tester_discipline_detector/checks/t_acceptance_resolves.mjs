@@ -48,9 +48,9 @@ function planFiles(dir, excludes) {
 // and WMBT documents, and a reference is resolvable if the plan states that URN
 // anywhere. Over-accepting here is safe — the failure this rule exists to catch is a
 // reference to something the plan never mentions at all.
-function declaredUrns(croot, excludes) {
+function declaredUrns(croot, excludes, planRoot) {
   const urns = new Set();
-  for (const f of planFiles(join(croot, "plan"), excludes)) {
+  for (const f of planFiles(join(croot, planRoot), excludes)) {
     for (const m of read(f).matchAll(/\b((?:acc|wmbt):[a-z0-9][\w.-]*(?::[\w.-]+)?)/gi)) {
       urns.add(m[1]);
     }
@@ -58,13 +58,13 @@ function declaredUrns(croot, excludes) {
   return urns;
 }
 
-function consumerRoots(root, excludes) {
+function consumerRoots(root, excludes, planRoot) {
   const roots = [];
   (function rec(d) {
     let st;
     try { st = statSync(d); } catch { return; }
     if (!st.isDirectory()) return;
-    try { if (statSync(join(d, "plan")).isDirectory()) { roots.push(d); return; } } catch {}
+    try { if (statSync(join(d, planRoot)).isDirectory()) { roots.push(d); return; } } catch {}
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
     for (const n of entries) if (!excludes.includes(n)) rec(join(d, n));
@@ -79,10 +79,11 @@ if (!reportPath) {
 }
 const excludes = [...DEFAULT_EXCLUDES, ...parseJsonEnv("ATDD_SCAN_EXCLUDES", [])];
 const violations = [];
+const planRoot = process.env.ATDD_PLAN_ROOT || "plan";
 
 for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
-  for (const croot of consumerRoots(root, excludes)) {
-    const declared = declaredUrns(croot, excludes);
+  for (const croot of consumerRoots(root, excludes, planRoot)) {
+    const declared = declaredUrns(croot, excludes, planRoot);
     if (!declared.size) continue;          // nothing declared: nothing to resolve against
     for (const file of walkTests(croot, excludes)) {
       const H = parseHeader(read(file));

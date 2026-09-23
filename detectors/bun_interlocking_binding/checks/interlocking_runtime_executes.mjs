@@ -30,6 +30,7 @@ const LOADS_DECLARATION =
   /\breadFileSync\s*\(|\breadFile\s*\(|\bBun\s*\.\s*file\s*\(|\bcreateReadStream\s*\(|\bfs\s*\.\s*promises\s*\.\s*readFile\b/;
 const RESOLVES = /\bInterlockingResolution\b|\bresolveTrain\s*\(/;
 const EXCLUDES = ["node_modules", "dist", "build", ".next", "_generated"];
+const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 const readText = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 
@@ -53,7 +54,7 @@ export function findConsumerRoots(scanRoot) {
   (function rec(d) {
     let st; try { st = statSync(d); } catch { return; }
     if (!st.isDirectory()) return;
-    for (const marker of ["src", "plan", "e2e"]) {
+    for (const marker of ["src", PLAN_ROOT, "e2e"]) {
       try { if (statSync(join(d, marker)).isDirectory()) { roots.add(d); break; } } catch {}
     }
     let entries; try { entries = readdirSync(d).sort(); } catch { return; }
@@ -111,7 +112,7 @@ export function maskComments(text) {
 export function scanExecution(scanRoot) {
   const violations = [];
   for (const croot of findConsumerRoots(scanRoot)) {
-    const ilFiles = walk(join(croot, "plan"), (f) => /_interlockings[/\\].*\.ya?ml$/.test(f));
+    const ilFiles = walk(join(croot, PLAN_ROOT), (f) => /_interlockings[/\\].*\.ya?ml$/.test(f));
     const declared = [...new Set(ilFiles.flatMap((f) => declaredValues(readText(f))))];
     if (!declared.length) continue;
     const rtFiles = walk(join(croot, "src/trains"), (f) => /\.(ts|tsx|mjs|js)$/.test(f))

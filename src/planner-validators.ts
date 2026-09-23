@@ -2,6 +2,7 @@ import { validatePlan, type PlanArtifact, type PlanFinding } from "./planner-ker
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { topologyFor } from "./topology";
 
 const finding = (rule_id: string, file: string, evidence: string): PlanFinding => ({ rule_id, file, evidence });
 const records = (value: unknown): Record<string, unknown>[] => Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
@@ -16,13 +17,13 @@ async function yamlFiles(root: string): Promise<string[]> {
 }
 
 async function trainRegistryFindings(root: string): Promise<PlanFinding[]> {
-  const absolute = resolve(root), registryPath = join(absolute, "plan/_trains.yaml"); if (!existsSync(registryPath)) return [];
+  const absolute = resolve(root), topology = await topologyFor(absolute), file = `${topology.planRoot}/_trains.yaml`, registryPath = join(absolute, file); if (!existsSync(registryPath)) return [];
   const registry = Bun.YAML.parse(await readFile(registryPath, "utf8")) as { trains?: Record<string, Record<string, unknown[]>> };
   const rows = Object.values(registry?.trains ?? {}).flatMap(buckets => Object.values(buckets ?? {}).flat()).filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === "object");
   const registered = new Set<string>(), findings: PlanFinding[] = [];
-  for (const row of rows) { const path = text(row.path), train = text(row.train_id); if (!path || !train) continue; registered.add(path); if (!existsSync(join(absolute, path))) findings.push(finding("planner.train.registry-coherence", "plan/_trains.yaml", `registry train ${train} points to missing ${path}`)); }
-  const trainRoot = join(absolute, "plan/_trains");
-  for (const path of await yamlFiles(trainRoot)) { const rel = relative(absolute, path).replaceAll("\\", "/"), pieces = relative(trainRoot, path).split(/[\\/]/); if (pieces.some(piece => piece.startsWith("_")) || registered.has(rel)) continue; findings.push(finding("planner.train.registry-coherence", rel, `train document is not registered in plan/_trains.yaml`)); }
+  for (const row of rows) { const path = text(row.path), train = text(row.train_id); if (!path || !train) continue; registered.add(path); if (!existsSync(join(absolute, path))) findings.push(finding("planner.train.registry-coherence", file, `registry train ${train} points to missing ${path}`)); }
+  const trainRoot = join(absolute, topology.planRoot, "_trains");
+  for (const path of await yamlFiles(trainRoot)) { const rel = relative(absolute, path).replaceAll("\\", "/"), pieces = relative(trainRoot, path).split(/[\\/]/); if (pieces.some(piece => piece.startsWith("_")) || registered.has(rel)) continue; findings.push(finding("planner.train.registry-coherence", rel, `train document is not registered in ${file}`)); }
   return findings;
 }
 
@@ -44,7 +45,7 @@ async function contractRegistry(root: string): Promise<ContractRegistry | null> 
 }
 
 async function themeRegistryFindings(root: string, graph: Awaited<ReturnType<typeof validatePlan>>, registry: ContractRegistry | null): Promise<PlanFinding[]> {
-  const absolute = resolve(root), file = "plan/_themes.yaml", path = join(absolute, file);
+  const absolute = resolve(root), topology = await topologyFor(absolute), file = `${topology.planRoot}/_themes.yaml`, path = join(absolute, file);
   const declared: Array<{ theme: string; file: string }> = [];
   for (const artifact of graph.artifacts) {
     if (artifact.kind === "wagon" || artifact.kind === "interlocking") {
@@ -54,7 +55,7 @@ async function themeRegistryFindings(root: string, graph: Awaited<ReturnType<typ
     }
   }
   for (const row of registry?.rows ?? []) { const theme = text(row.theme); if (theme) declared.push({ theme, file: registry?.file ?? file }); }
-  if (!existsSync(path)) return declared.length ? [finding("planner.theme.must-be-canonical", file, "themes are declared but plan/_themes.yaml is absent; add themes: { '0': commons } and repository-defined entries")] : [];
+  if (!existsSync(path)) return declared.length ? [finding("planner.theme.must-be-canonical", file, `themes are declared but ${file} is absent; add themes: { '0': commons } and repository-defined entries`)] : [];
   try {
     const doc = Bun.YAML.parse(await readFile(path, "utf8")) as { themes?: unknown };
     const themes = doc?.themes && typeof doc.themes === "object" && !Array.isArray(doc.themes) ? doc.themes as Record<string, unknown> : {};
@@ -63,7 +64,7 @@ async function themeRegistryFindings(root: string, graph: Awaited<ReturnType<typ
     if (themes["0"] !== "commons") findings.push(finding("planner.theme.theme-zero-mandatory", file, "theme index 0 must be the reserved token commons"));
     for (const name of duplicate(values)) findings.push(finding("planner.theme.must-be-canonical", file, `theme ${name} is declared at more than one index`));
     const known = new Set(values);
-    for (const item of declared) if (!known.has(item.theme)) findings.push(finding("planner.theme.must-be-canonical", item.file, `theme ${item.theme} is not declared in plan/_themes.yaml`));
+    for (const item of declared) if (!known.has(item.theme)) findings.push(finding("planner.theme.must-be-canonical", item.file, `theme ${item.theme} is not declared in ${file}`));
     for (const artifact of graph.artifacts.filter(item => item.kind === "wagon")) {
       const wagonTheme = text(artifact.data.theme);
       for (const produced of records(artifact.data.produce)) {
@@ -82,7 +83,7 @@ async function themeRegistryFindings(root: string, graph: Awaited<ReturnType<typ
     }
     return findings;
   } catch {
-    return [finding("planner.theme.must-be-canonical", file, "could not parse plan/_themes.yaml")];
+    return [finding("planner.theme.must-be-canonical", file, `could not parse ${file}`)];
   }
 }
 
@@ -247,7 +248,7 @@ function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePl
 }
 
 /** Every interlocking is reached by a journey: as an entrypoint or through a continuation reachable from one. */
-function journeyCompositionFindings(graph: Awaited<ReturnType<typeof validatePlan>>): PlanFinding[] {
+function journeyCompositionFindings(graph: Awaited<ReturnType<typeof validatePlan>>, planRoot: string): PlanFinding[] {
   const interlockings = graph.artifacts.filter(item => item.kind === "interlocking"), journeys = graph.artifacts.filter(item => item.kind === "journey");
   const reached = new Set<string>();
   for (const journey of journeys) {
@@ -270,7 +271,7 @@ function journeyCompositionFindings(graph: Awaited<ReturnType<typeof validatePla
     interlocking.file,
     journeys.length
       ? `${interlocking.id} is reached by none of the ${journeys.length} journey(s): no journey enters at it and no reachable continuation leads to it`
-      : `${interlocking.id} is not composed into any journey: the plan declares ${interlockings.length} interlocking(s) and no journey under plan/_journeys/`,
+      : `${interlocking.id} is not composed into any journey: the plan declares ${interlockings.length} interlocking(s) and no journey under ${planRoot}/_journeys/`,
   ));
 }
 
@@ -280,11 +281,11 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
   // Plan-graph integrity is a package guard with its own implementation contract.
   // This validator emits only the canonical convention ids declared by
   // planner.static.validators.bun.
-  const graph = await validatePlan(root), findings: PlanFinding[] = [], wagons = graph.artifacts.filter(artifact => artifact.kind === "wagon");
+  const topology = await topologyFor(root), graph = await validatePlan(root), findings: PlanFinding[] = [], wagons = graph.artifacts.filter(artifact => artifact.kind === "wagon");
   const wagonSlugs = new Set(wagons.map(wagon => text(wagon.data.wagon)));
   const wagonBySlug = new Map(wagons.map(wagon => [text(wagon.data.wagon), wagon]));
   const wagonIds = wagons.map(wagon => text(wagon.data.wagon));
-  for (const slug of duplicate(wagonIds)) findings.push(finding("planner.wagon.urn", wagonBySlug.get(slug)?.file ?? "plan/", `wagon slug ${slug} is declared more than once`));
+  for (const slug of duplicate(wagonIds)) findings.push(finding("planner.wagon.urn", wagonBySlug.get(slug)?.file ?? `${topology.planRoot}/`, `wagon slug ${slug} is declared more than once`));
 
   const contractOwners = new Map<string, string[]>(), telemetryOwners = new Map<string, string[]>();
   for (const wagon of wagons) {
@@ -305,13 +306,13 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
     }
   }
   const registry = await contractRegistry(root);
-  for (const [contract, owners] of contractOwners) if (owners.length > 1) findings.push(finding("planner.contract.registry-coherence", wagonBySlug.get(owners[0])?.file ?? "plan/", `contract ${contract} is produced by ${owners.join(", ")}`));
-  for (const [telemetry, owners] of telemetryOwners) if (owners.length > 1) findings.push(finding("planner.wagon.telemetry-filesystem", wagonBySlug.get(owners[0])?.file ?? "plan/", `telemetry ${telemetry} is produced by ${owners.join(", ")}`));
+  for (const [contract, owners] of contractOwners) if (owners.length > 1) findings.push(finding("planner.contract.registry-coherence", wagonBySlug.get(owners[0])?.file ?? `${topology.planRoot}/`, `contract ${contract} is produced by ${owners.join(", ")}`));
+  for (const [telemetry, owners] of telemetryOwners) if (owners.length > 1) findings.push(finding("planner.wagon.telemetry-filesystem", wagonBySlug.get(owners[0])?.file ?? `${topology.planRoot}/`, `telemetry ${telemetry} is produced by ${owners.join(", ")}`));
   findings.push(...contractRegistryFindings(root, wagons, registry));
   findings.push(...await themeRegistryFindings(root, graph, registry));
   findings.push(...await trainRegistryFindings(root));
   findings.push(...journeyContinuationFindings(graph));
-  findings.push(...journeyCompositionFindings(graph));
+  findings.push(...journeyCompositionFindings(graph, topology.planRoot));
 
   return findings;
 }

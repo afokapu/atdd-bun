@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { topologyFor } from "./topology";
 
 export type Profile = "traceability" | "topology" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
 
@@ -64,7 +65,7 @@ export async function runImplementation(
   const scratch = await mkdtemp(join(tmpdir(), "atdd-bun-"));
   const report = join(scratch, "violations.json");
   try {
-    const bun = Bun.which("bun") ?? process.execPath;
+    const bun = Bun.which("bun") ?? process.execPath, topology = await topologyFor(config.scanRoots[0] ?? process.cwd());
     const child = Bun.spawn({
       cmd: [bun, detector],
       cwd: config.scanRoots[0] ?? process.cwd(),
@@ -74,6 +75,7 @@ export async function runImplementation(
         ...process.env,
         ATDD_SCAN_ROOTS: JSON.stringify(config.scanRoots),
         ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
+        ATDD_PLAN_ROOT: topology.planRoot,
         ATDD_VIOLATIONS_REPORT: report,
       },
     });

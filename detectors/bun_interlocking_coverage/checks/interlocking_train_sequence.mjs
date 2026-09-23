@@ -16,7 +16,7 @@
 // suite green. The runtime obeyed the new plan; no test looked.
 import {
   parseJsonEnv, readText, findConsumerRoots, interlockingFiles, e2eFiles,
-  parseInterlocking, tokenCovered, rel, mk,
+  parseInterlocking, tokenCovered, rel, mk, PLAN_ROOT,
 } from "../_shared/interlocking.mjs";
 import { writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -69,7 +69,7 @@ export function declaresASequence(croot, trainId) {
       if (st.isDirectory()) { if (name !== "_interlockings") rec(full); continue; }
       if (/\.ya?ml$/.test(name)) found.push(full);
     }
-  })(join(croot, "plan"));
+  })(join(croot, PLAN_ROOT));
   for (const f of found) {
     const text = readText(f);
     if (!text.includes(trainId)) continue;

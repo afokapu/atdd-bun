@@ -1,3 +1,4 @@
 journey_id: journey:checkout
 entrypoint:
   exposed: true
+  interlocking_id: interlocking:checkout

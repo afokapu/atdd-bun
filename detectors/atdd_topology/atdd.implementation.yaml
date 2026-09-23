@@ -8,4 +8,6 @@ emits_rule_ids:
 - atdd-bun.topology.source-location
 - atdd-bun.topology.test-location
 - atdd-bun.topology.e2e-location
+- atdd-bun.topology.feature-source-coverage
+- atdd-bun.topology.feature-test-coverage
 entrypoint: detect.mjs

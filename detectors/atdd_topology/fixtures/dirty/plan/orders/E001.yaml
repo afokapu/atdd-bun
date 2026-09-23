@@ -1,2 +1,4 @@
 urn: wmbt:orders:E001
-acceptances: []
+acceptances:
+  - identity:
+      urn: acc:orders:E001-UNIT-001

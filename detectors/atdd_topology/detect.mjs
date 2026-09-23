@@ -2,12 +2,15 @@
 // Configurable plan/source/test/E2E topology and feature-decomposition gate.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { topologyFor } from "../../src/topology.ts";
 
 const roots = JSON.parse(process.env.ATDD_SCAN_ROOTS || "[]"), report = process.env.ATDD_VIOLATIONS_REPORT;
 if (!report) process.exit(2);
-const defaults = { plan_root: "plan", source_root: "src/wagons", test_root: "tests/wagons", e2e_root: "e2e" };
 const sourceExt = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts", ".cts", ".cjs", ".html", ".htm"]);
 const testName = /(?:^test_.*|.*(?:\.test|\.spec|_test))\.(?:[cm]?[jt]sx?)$/;
+const slug = "[a-z][a-z0-9-]*";
+const componentUrn = new RegExp(`^component:(${slug}):(${slug}):[A-Za-z0-9.]+:(frontend|backend):(domain|application|integration|presentation)$`);
+const testUrn = new RegExp(`^test:(${slug}):(${slug}):([A-Za-z0-9][A-Za-z0-9._-]*)$`);
 const violations = [];
 const rel = (root, path) => relative(root, path).split(sep).join("/");
 const read = path => { try { return readFileSync(path, "utf8"); } catch { return ""; } };
@@ -24,16 +27,7 @@ function walk(dir, predicate, found = []) {
   }
   return found;
 }
-function topology(root) {
-  let data = {}; try { data = Bun.YAML.parse(read(join(root, "atdd-bun.yaml"))) || {}; } catch {}
-  const supplied = data && typeof data.topology === "object" && !Array.isArray(data.topology) ? data.topology : {};
-  const result = { ...defaults };
-  for (const key of Object.keys(defaults)) {
-    const value = supplied[key];
-    if (typeof value === "string" && value && !value.startsWith("/") && !value.split(/[\\/]/).includes("..")) result[key] = value.replace(/\\/g, "/").replace(/\/$/, "");
-  }
-  return result;
-}
+async function topology(root) { const value = await topologyFor(root); return { plan_root: value.planRoot, source_root: value.sourceRoot, test_root: value.testRoot, e2e_root: value.e2eRoot }; }
 function header(path) {
   const lines = read(path).split(/\r?\n/).slice(0, 60);
   const field = name => {
@@ -44,14 +38,16 @@ function header(path) {
 }
 
 for (const root of roots) {
-  const cfg = topology(root), planRoot = join(root, cfg.plan_root), docs = [];
+  const cfg = await topology(root), planRoot = join(root, cfg.plan_root), docs = [];
   for (const path of walk(planRoot, path => /\.ya?ml$/.test(path))) {
     try { const data = Bun.YAML.parse(read(path)); if (data && typeof data === "object" && !Array.isArray(data)) docs.push({ path, data }); } catch { /* schema validation owns parse errors */ }
   }
   const wagons = docs.filter(doc => text(doc.data, "urn").startsWith("wagon:")).map(doc => ({ ...doc, slug: text(doc.data, "urn").slice(6) }));
   const features = docs.filter(doc => text(doc.data, "urn").startsWith("feature:")).map(doc => { const [,, wagon, slug] = ["", ...text(doc.data, "urn").split(":")]; return { ...doc, wagon, slug, urn: text(doc.data, "urn") }; });
   const wmbts = docs.filter(doc => text(doc.data, "urn").startsWith("wmbt:")).map(doc => { const [, wagon, code] = text(doc.data, "urn").split(":"); return { ...doc, wagon, code, urn: text(doc.data, "urn") }; });
-  const featureByUrn = new Map(features.map(feature => [feature.urn, feature])), memberships = new Map(), wmbtOwners = new Map();
+  const featureByUrn = new Map(features.map(feature => [feature.urn, feature])), memberships = new Map(), wmbtOwners = new Map(), sourceByFeature = new Map(), testByFeature = new Map();
+  const acceptances = new Set(wmbts.flatMap(wmbt => list(wmbt.data, "acceptances").map(acceptance => text(acceptance?.identity, "urn")).filter(Boolean)));
+  const trains = new Set(docs.map(doc => text(doc.data, "train_id")).filter(Boolean));
 
   for (const wagon of wagons) {
     const expected = `${cfg.plan_root}/${wagon.slug}/_${wagon.slug}.yaml`;
@@ -79,21 +75,33 @@ for (const root of roots) {
 
   const declaredFeatures = new Set(features.map(feature => `${feature.wagon}:${feature.slug}`));
   for (const path of walk(join(root, cfg.source_root), path => sourceExt.has(path.slice(path.lastIndexOf("."))) && !testName.test(path))) {
-    const h = header(path), [, wagon, feature,,, layer] = h.urn.value.split(":"), expected = `${cfg.source_root}/${wagon}/features/${feature}/${layer === "integration" ? "infrastructure" : layer}/`;
-    if (!wagon || !feature || !layer) add("atdd-bun.topology.source-location", root, path, "source requires URN: component:{wagon}:{feature}:{name}:{side}:{layer}", h.urn.line, h.urn.raw);
-    else if (!rel(root, path).startsWith(expected)) add("atdd-bun.topology.source-location", root, path, `${h.urn.value} must live beneath ${expected}`, h.urn.line, h.urn.raw);
+    const h = header(path), match = componentUrn.exec(h.urn.value);
+    if (!match) { add("atdd-bun.topology.source-location", root, path, "source requires URN: component:{wagon}:{feature}:{name}:{frontend|backend}:{domain|application|integration|presentation}", h.urn.line, h.urn.raw); continue; }
+    const wagon = match[1], feature = match[2], layer = match[4], expected = `${cfg.source_root}/${wagon}/features/${feature}/${layer === "integration" ? "infrastructure" : layer}/`;
+    if (!rel(root, path).startsWith(expected)) add("atdd-bun.topology.source-location", root, path, `${h.urn.value} must live beneath ${expected}`, h.urn.line, h.urn.raw);
+    else sourceByFeature.set(`${wagon}:${feature}`, [...(sourceByFeature.get(`${wagon}:${feature}`) || []), path]);
     if (wagon && feature && !declaredFeatures.has(`${wagon}:${feature}`)) add("planner.feature.wagon-link", root, path, `${h.urn.value} names undeclared feature:${wagon}:${feature}`, h.urn.line, h.urn.raw);
   }
   for (const path of walk(join(root, cfg.test_root), path => testName.test(path))) {
-    const h = header(path), [, wagon, feature, acceptance] = h.urn.value.split(":"), expected = `${cfg.test_root}/${wagon}/features/${feature}/`;
-    if (!wagon || !feature || !acceptance) add("atdd-bun.topology.test-location", root, path, "test requires URN: test:{wagon}:{feature}:{acceptance}", h.urn.line, h.urn.raw);
-    else if (!rel(root, path).startsWith(expected) || !/(unit|contract|integration)\//.test(rel(root, path).slice(expected.length))) add("atdd-bun.topology.test-location", root, path, `${h.urn.value} must live beneath ${expected}{unit,contract,integration}/`, h.urn.line, h.urn.raw);
+    const h = header(path), match = testUrn.exec(h.urn.value);
+    if (!match) { add("atdd-bun.topology.test-location", root, path, "test requires URN: test:{wagon}:{feature}:{acceptance}", h.urn.line, h.urn.raw); continue; }
+    const [, wagon, feature, acceptance] = match, expected = `${cfg.test_root}/${wagon}/features/${feature}/`;
+    if (!rel(root, path).startsWith(expected) || !/(unit|contract|integration)\//.test(rel(root, path).slice(expected.length))) add("atdd-bun.topology.test-location", root, path, `${h.urn.value} must live beneath ${expected}{unit,contract,integration}/`, h.urn.line, h.urn.raw);
     if (wagon && feature && !declaredFeatures.has(`${wagon}:${feature}`)) add("planner.feature.wagon-link", root, path, `${h.urn.value} names undeclared feature:${wagon}:${feature}`, h.urn.line, h.urn.raw);
-    if (wagon && acceptance && h.acceptance.value !== `acc:${wagon}:${acceptance}`) add("atdd-bun.topology.test-location", root, path, `${h.urn.value} must bind Acceptance: acc:${wagon}:${acceptance}`, h.acceptance.line, h.acceptance.raw);
+    const binding = `acc:${wagon}:${acceptance}`;
+    if (h.acceptance.value !== binding) add("atdd-bun.topology.test-location", root, path, `${h.urn.value} must bind Acceptance: ${binding}`, h.acceptance.line, h.acceptance.raw);
+    else if (!acceptances.has(binding)) add("atdd-bun.topology.test-location", root, path, `${binding} is not declared by a WMBT in ${cfg.plan_root}/`, h.acceptance.line, h.acceptance.raw);
+    else testByFeature.set(`${wagon}:${feature}`, [...(testByFeature.get(`${wagon}:${feature}`) || []), path]);
+  }
+  for (const feature of features) if (list(feature.data, "wmbts").length) {
+    const key = `${feature.wagon}:${feature.slug}`;
+    if (!sourceByFeature.get(key)?.length) add("atdd-bun.topology.feature-source-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no source component beneath ${cfg.source_root}/${feature.wagon}/features/${feature.slug}/`);
+    if (!testByFeature.get(key)?.length) add("atdd-bun.topology.feature-test-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no test bound to one of its acceptances`);
   }
   const e2eRoot = join(root, cfg.e2e_root);
   const interlockingRoutes = new Set();
-  for (const interlocking of docs.filter(doc => text(doc.data, "interlocking_id").startsWith("interlocking:"))) {
+  const interlockings = new Map(docs.filter(doc => text(doc.data, "interlocking_id").startsWith("interlocking:")).map(doc => [text(doc.data, "interlocking_id"), doc]));
+  for (const interlocking of interlockings.values()) {
     const id = text(interlocking.data, "interlocking_id").slice(13);
     for (const route of list(interlocking.data, "routes")) {
       const routeId = text(route, "route_id"); if (!routeId) continue;
@@ -104,14 +112,30 @@ for (const root of roots) {
   }
   for (const journey of docs.filter(doc => text(doc.data, "journey_id").startsWith("journey:"))) {
     const entry = journey.data.entrypoint, id = text(journey.data, "journey_id").slice(8), path = join(e2eRoot, "journeys", `${id}.journey.test.ts`);
+    const continuations = list(journey.data, "continuations"), reachable = new Set(), queue = [text(entry, "interlocking_id")].filter(Boolean), journeyTrains = new Set();
+    while (queue.length) {
+      const interlockingId = queue.shift(); if (!interlockingId || reachable.has(interlockingId)) continue;
+      reachable.add(interlockingId);
+      for (const route of list(interlockings.get(interlockingId)?.data, "routes")) if (text(route, "train_id")) journeyTrains.add(text(route, "train_id"));
+      for (const continuation of continuations) if (text(continuation?.from, "interlocking_id") === interlockingId && text(continuation?.to, "interlocking_id")) queue.push(text(continuation.to, "interlocking_id"));
+    }
     if (entry && typeof entry === "object" && entry.exposed === true && !existsSync(path)) add("atdd-bun.topology.e2e-location", root, journey.path, `exposed journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts`);
-    else if (entry && typeof entry === "object" && entry.exposed === true && !header(path).train.value.startsWith("train:")) add("atdd-bun.topology.e2e-location", root, path, "journey E2E test requires Train: train:… binding");
+    else if (entry && typeof entry === "object" && entry.exposed === true) {
+      const h = header(path), match = testUrn.exec(h.urn.value);
+      if (!match || !declaredFeatures.has(`${match[1]}:${match[2]}`)) add("atdd-bun.topology.e2e-location", root, path, "journey E2E test requires a test:{wagon}:{feature}:{acceptance} URN naming a declared feature", h.urn.line, h.urn.raw);
+      if (!trains.has(h.train.value) || !journeyTrains.has(h.train.value)) add("atdd-bun.topology.e2e-location", root, path, `journey E2E Train: must resolve to a reachable selected train; found ${h.train.value || "<missing>"}`, h.train.line, h.train.raw);
+    }
   }
   for (const path of walk(e2eRoot, path => testName.test(path))) {
     const location = rel(root, path), h = header(path);
     if (location.startsWith(`${cfg.e2e_root}/journeys/`) && !/\.journey\.test\.[cm]?[jt]sx?$/.test(path)) add("atdd-bun.topology.e2e-location", root, path, "journey E2E tests must end in .journey.test.ts", h.urn.line, h.urn.raw);
     if (location.startsWith(`${cfg.e2e_root}/interlockings/`) && !/\.routes\.test\.[cm]?[jt]sx?$/.test(path)) add("atdd-bun.topology.e2e-location", root, path, "interlocking E2E tests must end in .routes.test.ts", h.urn.line, h.urn.raw);
     if (location.startsWith(`${cfg.e2e_root}/interlockings/`) && /\.routes\.test\.[cm]?[jt]sx?$/.test(path) && interlockingRoutes.size && !interlockingRoutes.has(location)) add("atdd-bun.topology.e2e-location", root, path, "interlocking E2E test does not name a declared route", h.urn.line, h.urn.raw);
+    if (location.startsWith(`${cfg.e2e_root}/interlockings/`) && /\.routes\.test\.[cm]?[jt]sx?$/.test(path)) {
+      const match = testUrn.exec(h.urn.value);
+      if (!match || !declaredFeatures.has(`${match[1]}:${match[2]}`)) add("atdd-bun.topology.e2e-location", root, path, "interlocking E2E test requires a test:{wagon}:{feature}:{acceptance} URN naming a declared feature", h.urn.line, h.urn.raw);
+      else if (h.acceptance.value !== `acc:${match[1]}:${match[3]}` || !acceptances.has(h.acceptance.value)) add("atdd-bun.topology.e2e-location", root, path, "interlocking E2E test requires an Acceptance: binding declared by a WMBT", h.acceptance.line, h.acceptance.raw);
+    }
   }
 }
 writeFileSync(report, JSON.stringify({ violations }, null, 2));

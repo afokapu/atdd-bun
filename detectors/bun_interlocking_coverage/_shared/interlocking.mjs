@@ -10,6 +10,7 @@ import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { join, sep } from "node:path";
 
 export const DEFAULT_EXCLUDES = ["_generated", "node_modules", "dist", "build", ".next"];
+export const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 // Production runner symbols (core #1251 call model).
 export const PROD_INTERLOCKING = "InterlockingRunner";
@@ -220,7 +221,7 @@ function* walkDirs(root) {
 export function findConsumerRoots(scanRoot) {
   const roots = new Set();
   for (const d of walkDirs(scanRoot)) {
-    if (hasChildDir(d, "plan") || hasChildDir(d, "e2e") || hasChildDir(d, "src")) roots.add(d);
+    if (hasChildDir(d, PLAN_ROOT) || hasChildDir(d, "e2e") || hasChildDir(d, "src")) roots.add(d);
   }
   return [...roots];
 }
@@ -254,9 +255,9 @@ const isYaml = (f) => f.endsWith(".yaml") || f.endsWith(".yml");
 const isTs = (f) => f.endsWith(".ts") || f.endsWith(".tsx");
 
 export function interlockingFiles(croot) {
-  const base = join(croot, "plan", "_trains", "_interlockings");
+  const base = join(croot, PLAN_ROOT, "_trains", "_interlockings");
   const out = [...walkFiles(base, isYaml)];
-  const idx = join(croot, "plan", "_trains", "_interlockings.yaml");
+  const idx = join(croot, PLAN_ROOT, "_trains", "_interlockings.yaml");
   try {
     if (statSync(idx).isFile()) out.push(idx);
   } catch {

@@ -18,6 +18,7 @@ import {
   mk,
   writeReport,
   maskComments,
+  PLAN_ROOT,
 } from "../_shared/interlocking.mjs";
 
 const RULE = "coder.bun.journey-runner-boundary";
@@ -25,7 +26,7 @@ const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
 const violations = [];
 
 function hasJourneyTopology(root) {
-  const base = join(root, "plan", "_journeys");
+  const base = join(root, PLAN_ROOT, "_journeys");
   if (!existsSync(base)) return false;
   const stack = [base];
   while (stack.length) {
@@ -88,7 +89,7 @@ for (const scanRoot of roots) {
     if (modules.length === 0) {
       violations.push(mk(
         RULE,
-        "plan/_journeys",
+        `${PLAN_ROOT}/_journeys`,
         1,
         0,
         "missing-journey-runner: journey topology is declared but no JourneyRunner class exists under src/trains/",
