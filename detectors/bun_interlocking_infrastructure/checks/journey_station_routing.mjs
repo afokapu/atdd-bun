@@ -13,6 +13,7 @@ import {
   mk,
   writeReport,
   maskComments,
+  PLAN_ROOT,
 } from "../_shared/interlocking.mjs";
 
 const RULE = "coder.bun.station-master-journey-routing";
@@ -24,7 +25,7 @@ function escapeRegExp(value) {
 }
 
 function journeyDocuments(croot) {
-  const base = join(croot, "plan", "_journeys");
+  const base = join(croot, PLAN_ROOT, "_journeys");
   if (!existsSync(base)) return [];
   const out = [], stack = [base];
   while (stack.length) {

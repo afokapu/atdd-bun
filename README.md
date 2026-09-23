@@ -97,6 +97,7 @@ name.
 | Profile | Use it when you need to check |
 |---|---|
 | `traceability` | plan acceptance, Bun test, and implementation closure |
+| `topology` | feature decomposition and canonical plan, source, test, and E2E locations |
 | `planner` | plan parsing/graph integrity plus the explicitly scoped planner rules |
 | `docs` | the optional documentation capability and its declared artifacts, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions for that concern |
@@ -122,6 +123,35 @@ carry Station Master actions; the Bun interlocking family checks those actions r
 `JOURNEY_MAP` to `JourneyRunner`, while internal journeys carry no public reachability obligation.
 Hooks, direct CLI use, and CI invoke this same profile and therefore share the
 same schema source.
+
+### Repository topology
+
+The topology gate makes a feature a required plan artifact instead of an
+optional label on a WMBT. Its default layout is:
+
+```text
+plan/<wagon>/{_<wagon>,<feature>,<WMBT>}.yaml
+src/wagons/<wagon>/features/<feature>/{domain,application,infrastructure,presentation}/
+tests/wagons/<wagon>/features/<feature>/{unit,contract,integration}/
+e2e/interlockings/<interlocking>/<route>.routes.test.ts
+e2e/journeys/<journey>.journey.test.ts
+```
+
+Each feature must be declared by exactly one wagon and each WMBT by exactly one
+feature. Source and test headers must name the feature in their path; tests bind
+with `Acceptance:`, while exposed journey E2E tests bind with `Train:`. The
+component-URN `integration` layer maps to the `infrastructure/` directory.
+
+Change the four roots for an existing repository in `atdd-bun.yaml`; the same
+validation then follows the configured locations:
+
+```yaml
+topology:
+  plan_root: plan
+  source_root: src/wagons
+  test_root: tests/wagons
+  e2e_root: e2e
+```
 
 ### Design system
 

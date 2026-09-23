@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
+import { topologyFor } from "./topology";
 
 export type PlanKind = "wagon" | "feature" | "wmbt" | "acceptance" | "train" | "interlocking" | "journey" | "contract";
 export type PlanFinding = { rule_id: string; file: string; evidence: string };
@@ -65,7 +66,7 @@ function structuralRefs(artifact: PlanArtifact): string[] {
 /** Load plan artifacts with Bun's native YAML parser. It is read-only and deliberately
  * excludes authoring/session/store behavior from ATDD core. */
 export async function loadPlan(root = process.cwd()): Promise<PlanGraph> {
-  const absolute = resolve(root), plan = join(absolute, "plan"), artifacts: PlanArtifact[] = [], findings: PlanFinding[] = [];
+  const absolute = resolve(root), topology = await topologyFor(absolute), plan = join(absolute, topology.planRoot), artifacts: PlanArtifact[] = [], findings: PlanFinding[] = [];
   for (const path of await walk(plan)) {
     const file = relative(absolute, path).replaceAll("\\", "/");
     try {

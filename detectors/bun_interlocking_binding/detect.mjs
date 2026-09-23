@@ -28,6 +28,7 @@ import { join, sep, resolve } from "node:path";
 const RULE = "coder.bun.interlocking-bilateral-binding";
 const DEFAULT_EXCLUDES = ["_generated", "node_modules", "dist", "build", ".next"];
 const PARALLEL_FIELDS = ["entrypoints", "runtime_exposure", "station_actions", "exposed_actions", "reachability"];
+const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 // ── generic IO / masking ─────────────────────────────────────────────────────
 
@@ -147,7 +148,7 @@ function* walkDirs(root) {
 function findConsumerRoots(scanRoot) {
   const roots = new Set();
   for (const d of walkDirs(scanRoot)) {
-    if (hasChildDir(d, "src") || hasChildDir(d, "plan") || hasChildDir(d, "e2e")) roots.add(d);
+    if (hasChildDir(d, "src") || hasChildDir(d, PLAN_ROOT) || hasChildDir(d, "e2e")) roots.add(d);
   }
   return [...roots];
 }
@@ -181,9 +182,9 @@ const isYaml = (f) => f.endsWith(".yaml") || f.endsWith(".yml");
 const isTs = (f) => f.endsWith(".ts") || f.endsWith(".tsx");
 
 function interlockingFiles(croot) {
-  const base = join(croot, "plan", "_trains", "_interlockings");
+  const base = join(croot, PLAN_ROOT, "_trains", "_interlockings");
   const out = [...walkFiles(base, isYaml)];
-  const idx = join(croot, "plan", "_trains", "_interlockings.yaml");
+  const idx = join(croot, PLAN_ROOT, "_trains", "_interlockings.yaml");
   try {
     if (statSync(idx).isFile()) out.push(idx);
   } catch {
@@ -377,7 +378,7 @@ function trainArtifactExists(croot, route) {
   }
   if (route.trainId) {
     try {
-      return statSync(join(croot, "plan", "_trains", `${route.trainId}.yaml`)).isFile();
+      return statSync(join(croot, PLAN_ROOT, "_trains", `${route.trainId}.yaml`)).isFile();
     } catch {
       return false;
     }
@@ -413,7 +414,7 @@ function scanConsumerRoot(croot) {
   for (const rec of records) {
     for (const route of rec.routes) {
       if (trainArtifactExists(croot, route)) continue;
-      const target = route.trainPath || (route.trainId ? `plan/_trains/${route.trainId}.yaml` : "<no train_id>");
+      const target = route.trainPath || (route.trainId ? `${PLAN_ROOT}/_trains/${route.trainId}.yaml` : "<no train_id>");
       violations.push(
         mk(
           rel(rec.file, croot),

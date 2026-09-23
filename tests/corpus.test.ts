@@ -33,6 +33,7 @@ async function filesBelow(path: string): Promise<string[]> {
 
 test("the package ships every current Bun implementation", () => {
   expect(implementationsFor(["all"])).toEqual([
+    "atdd_topology",
     "atdd_traceability_closure",
     "bun_clean_architecture_detector",
     "bun_design_system_detector",

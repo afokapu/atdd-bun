@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadPlan, type PlanArtifact, type PlanFinding } from "./planner-kernel";
+import { topologyFor } from "./topology";
 
 type SchemaKind = Extract<PlanArtifact["kind"], "wagon" | "feature" | "wmbt" | "train" | "interlocking" | "journey">;
 
@@ -16,10 +17,11 @@ const schemaFiles: Record<SchemaKind, string> = {
   journey: "journey.schema.json",
 };
 const supportingSchemaFiles = ["appendix.schema.json", "acceptance.schema.json"];
-const repositorySchemas = [
-  { file: "plan/_themes.yaml", schema: "theme-registry.schema.json", rule: "planner.theme.must-be-canonical" },
+const repositorySchemas = (planRoot: string) => [
+  { file: `${planRoot}/_themes.yaml`, schema: "theme-registry.schema.json", rule: "planner.theme.must-be-canonical" },
   { file: "contracts/_contracts.yaml", schema: "contract-registry.schema.json", rule: "planner.contract.registry-coherence" },
 ] as const;
+const repositorySchemaFiles = ["theme-registry.schema.json", "contract-registry.schema.json"];
 const schemaDirectory = join(resolve(import.meta.dir, ".."), "planner-schemas");
 const ruleId = "atdd-bun.planner.schema";
 
@@ -39,23 +41,23 @@ function formatError(error: ErrorObject): string {
 async function validators(): Promise<{ artifacts: Map<SchemaKind, ValidateFunction>; repositories: Map<string, ValidateFunction> }> {
   const ajv = new Ajv({ allErrors: true, allowUnionTypes: true, strict: false });
   addFormats(ajv);
-  const files = [...supportingSchemaFiles, ...Object.values(schemaFiles), ...repositorySchemas.map(item => item.schema)];
+  const files = [...supportingSchemaFiles, ...Object.values(schemaFiles), ...repositorySchemaFiles];
   for (const file of files) ajv.addSchema(JSON.parse(await readFile(join(schemaDirectory, file), "utf8")), file);
   const artifacts = new Map(Object.entries(schemaFiles).map(([kind, file]) => {
     const validator = ajv.getSchema(file);
     if (!validator) throw new Error("could not compile planner schema " + file);
     return [kind as SchemaKind, validator];
   }));
-  const repositories = new Map(repositorySchemas.map(item => {
-    const validator = ajv.getSchema(item.schema);
-    if (!validator) throw new Error("could not compile planner schema " + item.schema);
-    return [item.schema, validator];
+  const repositories = new Map(repositorySchemaFiles.map(schema => {
+    const validator = ajv.getSchema(schema);
+    if (!validator) throw new Error("could not compile planner schema " + schema);
+    return [schema, validator];
   }));
   return { artifacts, repositories };
 }
 
 function repositoryRule(file: string, fallback: string, error: ErrorObject): string {
-  if (file === "plan/_themes.yaml" && (error.instancePath === "/themes" || error.instancePath === "/themes/0" || error.params.missingProperty === "0")) {
+  if (file.endsWith("/_themes.yaml") && (error.instancePath === "/themes" || error.instancePath === "/themes/0" || error.params.missingProperty === "0")) {
     return "planner.theme.theme-zero-mandatory";
   }
   return fallback;
@@ -64,7 +66,7 @@ function repositoryRule(file: string, fallback: string, error: ErrorObject): str
 /** Validate every recognized plan artifact against the package-shipped canonical
  * JSON Schema. Cross-artifact relationships remain planner validator concerns. */
 export async function validatePlannerSchemas(root = process.cwd()): Promise<PlanFinding[]> {
-  const absolute = resolve(root), graph = await loadPlan(absolute);
+  const absolute = resolve(root), topology = await topologyFor(absolute), graph = await loadPlan(absolute), repositories = repositorySchemas(topology.planRoot);
   const byKind = await validators();
   const findings: PlanFinding[] = [];
   for (const artifact of graph.artifacts) {
@@ -79,7 +81,7 @@ export async function validatePlannerSchemas(root = process.cwd()): Promise<Plan
       });
     }
   }
-  for (const item of repositorySchemas) {
+  for (const item of repositories) {
     const path = join(absolute, item.file);
     if (!existsSync(path)) continue;
     try {

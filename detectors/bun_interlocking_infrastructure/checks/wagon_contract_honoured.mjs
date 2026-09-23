@@ -30,6 +30,7 @@ const RULE = "coder.bun.wagon-honours-its-contract";
 const EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
 const TS = /\.(ts|tsx|mjs|js)$/;
 const TEST = /\.(test|spec)\.[cm]?[jt]sx?$/;
+const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 const read = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
 
@@ -61,7 +62,7 @@ function consumerRoots(root, excludes) {
     let st;
     try { st = statSync(d); } catch { return; }
     if (!st.isDirectory()) return;
-    try { if (statSync(join(d, "plan")).isDirectory()) { roots.push(d); return; } } catch {}
+    try { if (statSync(join(d, PLAN_ROOT)).isDirectory()) { roots.push(d); return; } } catch {}
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
     for (const n of entries) if (!excludes.includes(n)) rec(join(d, n));
@@ -111,7 +112,7 @@ const violations = [];
 for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
   for (const croot of consumerRoots(root, excludes)) {
     const contracts = [];
-    for (const f of walk(join(croot, "plan"), (p) => /\.ya?ml$/.test(p), excludes)) {
+    for (const f of walk(join(croot, PLAN_ROOT), (p) => /\.ya?ml$/.test(p), excludes)) {
       const c = wagonContract(read(f));
       if (c) contracts.push({ file: f, ...c });
     }
