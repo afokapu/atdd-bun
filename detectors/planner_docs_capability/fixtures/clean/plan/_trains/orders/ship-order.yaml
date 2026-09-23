@@ -1,0 +1,21 @@
+train_id: train:orders:ship-order
+title: Ship the order
+description: Ship the order.
+themes: [orders]
+participants: [system:carrier, user:buyer, wagon:checkout, wagon:fulfilment]
+sequence:
+  - step: 1
+    intent: Hand the paid order to fulfilment
+    from: wagon:checkout
+    to: wagon:fulfilment
+    artifact: orders:paid
+  - step: 2
+    intent: Book the shipment with the carrier
+    from: wagon:fulfilment
+    to: system:carrier
+    artifact: orders:shipment
+  - step: 3
+    intent: Send tracking to the buyer
+    from: wagon:fulfilment
+    to: user:buyer
+    artifact: orders:tracking

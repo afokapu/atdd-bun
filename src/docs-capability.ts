@@ -1,4 +1,5 @@
 import { existsSync } from "node:fs";
+import { journeyDocs, journeyDocsApply } from "./journey-docs";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
@@ -6,7 +7,7 @@ import { basename, isAbsolute, join, relative, resolve } from "node:path";
 export const DOC_RULE_IDS = [
   "planner.docs.asciidoc-only", "planner.docs.identity-required", "planner.docs.doc-id-unique",
   "planner.docs.graph-target-resolves", "planner.docs.area-index-required", "planner.docs.adr-registry-derived",
-  "planner.docs.artifact-path-shape", "planner.docs.undeclared-change", "planner.docs.reference-integrity",
+  "planner.docs.artifact-path-shape", "planner.docs.undeclared-change", "planner.docs.reference-integrity", "planner.docs.journey-view-current",
 ] as const;
 export type DocumentationRuleId = typeof DOC_RULE_IDS[number];
 export type DocumentationViolation = { rule_id: DocumentationRuleId; file: string; line: number; col: number; evidence: string; source_line: string };
@@ -94,7 +95,15 @@ export async function scanDocumentation(root: string): Promise<DocumentationViol
   output.push(...graphViolations(docs));
   for (const area of AREAS) if (existsSync(join(absolute, area)) && !existsSync(join(absolute, area, "index.adoc"))) output.push(violation("planner.docs.area-index-required", `${area}/index.adoc`, 1, `canonical area ${area}/ exists and carries no index.adoc. The rendered site cannot navigate into an area with no entry point.`));
   output.push(...adrViolations(docs));
+  output.push(...await journeyViewViolations(absolute));
   return output;
+}
+
+/** Where the plan has journeys or interlockings, the committed journey view must be exactly what plan/ generates. */
+async function journeyViewViolations(root: string): Promise<DocumentationViolation[]> {
+  if (!await journeyDocsApply(root)) return [];
+  const result = await journeyDocs({ root, check: true });
+  return result.stale.map(file => violation("planner.docs.journey-view-current", file, 1, `${file} does not match what plan/ generates, so the journey documentation no longer shows the plan. Regenerate it with \`atdd-bun docs journeys\` and commit the result; never edit it by hand.`));
 }
 
 export function declarationViolations(declaration: DocumentationDeclaration | null, changeSet?: string[]): DocumentationViolation[] {

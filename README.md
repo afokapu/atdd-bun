@@ -98,7 +98,7 @@ name.
 |---|---|
 | `traceability` | plan acceptance, Bun test, and implementation closure |
 | `planner` | plan parsing/graph integrity plus the explicitly scoped planner rules |
-| `docs` | the optional documentation capability and its declared artifacts |
+| `docs` | the optional documentation capability and its declared artifacts, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions for that concern |
 | `interlocking` | declared train/interlocking binding, infrastructure, and coverage |
 | `htmx` | htmx-specific source and test conventions |
@@ -145,6 +145,45 @@ controls through primitives and import at least one design-system element; and
 every exported component has a consumer. Defining a custom property
 (`--accent: #0ea5e9`) is defining a token and is allowed anywhere. A repository
 without a design directory is not judged by these rules.
+
+### Journey documentation
+
+A plan describes behaviour on three levels. A journey (`plan/_journeys/`) enters
+at one interlocking and continues, through an artifact the selected train
+produces, into the next one. An interlocking chooses one route by its guards.
+A route runs one train, a linear sequence of handovers. Generate the view of all
+three from `plan/`:
+
+```sh
+bun run atdd-bun docs journeys          # writes docs/purpose/journeys/
+bun run atdd-bun docs journeys --check  # fails when the committed view differs from plan/
+```
+
+It writes `docs/purpose/journeys/index.adoc` and one SVG for each of:
+
+- **journey map:** the entry action, each interlocking, the routes it chooses
+  and their guards, the trains they run, continuations (labelled with the
+  artifact that carries control) and terminal outcomes;
+- **nominal path, end to end:** the journey's trains across all its
+  interlockings, joined into one sequence diagram;
+- **train:** each routed train as its own sequence diagram, under its
+  interlocking's route table.
+
+The page also tables every path with how it ends, and every **gap**: unreached
+interlockings, routes with no continuation or outcome, unrouted trains,
+unresolved guards. Participants are coloured by what they are (wagon, person,
+outside system) and arrows by the boundary they cross. Diagrams are inlined
+(`opts=inline`) and coloured with `var(--atdd-*, fallback)`, so a doc site can
+theme them by defining `--atdd-ink`, `--atdd-paper`, `--atdd-wagon`,
+`--atdd-person`, `--atdd-system`, `--atdd-nominal`, `--atdd-alternate`,
+`--atdd-error`, `--atdd-exception`, and the like. The output carries no
+timestamp and no package version, so it changes only when the plan does.
+
+**Required.** In a repository with `docs/` whose plan has journeys or
+interlockings, the `docs` profile's `planner.docs.journey-view-current` rule
+fails when any generated file is missing, stale, hand-edited, or extra. The
+generator refuses to overwrite a hand-written `index.adoc` unless you pass
+`--force`; use `--out <dir>` to preview elsewhere.
 
 ### Theme and contract registry
 

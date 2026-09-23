@@ -1,0 +1,11 @@
+train_id: train:orders:archive-order
+title: Archive a cancelled order
+description: Archive a cancelled order.
+themes: [orders]
+participants: [wagon:checkout]
+sequence:
+  - step: 1
+    intent: Archive the cancelled order
+    from: wagon:checkout
+    to: wagon:checkout
+    artifact: orders:archived

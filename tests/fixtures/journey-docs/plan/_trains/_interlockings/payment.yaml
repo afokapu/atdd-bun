@@ -1,0 +1,43 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:payment
+title: Payment decision
+theme: orders
+status: checked
+source:
+  path: plan/_trains/_interlockings/payment.yaml
+  content_digest: fixture
+entrypoint:
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+route_resolution:
+  strategy: fail_on_multiple_match
+lifelines:
+  - ref: wagon:checkout
+messages: []
+fragments:
+  - id: fragment:payment
+    kind: alt
+    guards:
+      - id: guard:charged
+        expression: quote.accepted and card.valid
+      - id: guard:declined
+        expression: card.declined
+routes:
+  - route_id: charged
+    category: nominal
+    priority: 1
+    guard_ref: guard:charged
+    train_id: train:orders:take-payment
+    train_path: plan/_trains/orders/take-payment.yaml
+    projection:
+      expected_sequence_digest: fixture
+  - route_id: declined
+    category: alternate
+    priority: 2
+    guard_ref: guard:declined
+    train_id: train:orders:retry-payment
+    train_path: plan/_trains/orders/retry-payment.yaml
+    projection:
+      expected_sequence_digest: fixture

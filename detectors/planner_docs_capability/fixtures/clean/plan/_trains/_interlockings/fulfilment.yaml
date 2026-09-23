@@ -1,0 +1,33 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:fulfilment
+title: Fulfilment decision
+theme: orders
+status: checked
+source:
+  path: plan/_trains/_interlockings/fulfilment.yaml
+  content_digest: fixture
+entrypoint:
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+route_resolution:
+  strategy: fail_on_multiple_match
+lifelines:
+  - ref: wagon:checkout
+messages: []
+fragments:
+  - id: fragment:fulfilment
+    kind: alt
+    guards:
+      - id: guard:ship
+        expression: order.paid
+routes:
+  - route_id: ship
+    category: nominal
+    priority: 1
+    guard_ref: guard:ship
+    train_id: train:orders:ship-order
+    train_path: plan/_trains/orders/ship-order.yaml
+    projection:
+      expected_sequence_digest: fixture

@@ -10,6 +10,8 @@ export { defaultHookPolicy, hookEvents, hooksStatus, installHooks, runHook, unin
 export type { HookEvent, HookPolicy } from "./hooks";
 export { ciInit, ciStatus } from "./ci";
 export { initializeRepository } from "./setup";
+export { buildModel, journeyDocs, journeyDocsApply, journeyMapSvg, journeyPaths, nominalPath, renderJourneyDocs, sequenceSvg } from "./journey-docs";
+export type { Gap, Journey, JourneyModel, JourneyPath } from "./journey-docs";
 export { checkIntegrity, checkInstalledPackage, formatIntegrity, integrityInit, loosenedPolicy, writeManifest } from "./integrity";
 export type { IntegrityFinding, IntegrityOptions } from "./integrity";
 export { releaseCheck } from "./release";

@@ -4,6 +4,7 @@ import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWo
 import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
 import { checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from "./integrity";
+import { journeyDocs } from "./journey-docs";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
 
@@ -18,6 +19,7 @@ const usage = {
     "atdd-bun ci <init|status> [--replace]",
     "atdd-bun agent <init|status> [--replace]",
     "atdd-bun integrity [init|status] [--replace]",
+    "atdd-bun docs journeys [--out <dir>] [--check] [--force]",
     "atdd-bun release check",
   ],
   profiles: profileNames,
@@ -66,6 +68,13 @@ if (args[0] === "worktree") {
 }
 if (args[0] === "ci") {
   const result = args[1] === "init" ? await ciInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await ciStatus() : fail("ci requires init or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "docs") {
+  if (args[1] !== "journeys") fail("docs requires journeys");
+  const at = args.indexOf("--out"), out = at === -1 ? undefined : args[at + 1];
+  if (at !== -1 && !out) fail("--out requires a directory");
+  const result = await journeyDocs({ out, check: args.includes("--check"), force: args.includes("--force") });
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "integrity") {

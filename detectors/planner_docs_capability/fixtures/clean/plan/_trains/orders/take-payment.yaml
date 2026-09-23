@@ -1,0 +1,21 @@
+train_id: train:orders:take-payment
+title: Take payment
+description: Take payment.
+themes: [orders]
+participants: [system:payment-gateway, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Request the charge from the payment gateway
+    from: wagon:checkout
+    to: system:payment-gateway
+    artifact: orders:charge
+  - step: 2
+    intent: Report whether the charge succeeded
+    from: system:payment-gateway
+    to: wagon:checkout
+    artifact: orders:charge-result
+  - step: 3
+    intent: Record the order as paid
+    from: wagon:checkout
+    to: wagon:checkout
+    artifact: orders:paid

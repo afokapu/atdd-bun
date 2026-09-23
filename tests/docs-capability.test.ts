@@ -42,12 +42,12 @@ test("declaration, change-set, missing-artifact, seam, and renderer paths preser
 });
 
 test("every documentation convention is represented by the Bun capability", () => {
-  expect(DOC_RULE_IDS).toHaveLength(9);
+  expect(DOC_RULE_IDS).toHaveLength(10);
 });
 
-test("all nine documentation rules have a deliberate failing scenario", async () => {
+test("every documentation rule has a deliberate failing scenario", async () => {
   const observed = new Set<string>();
-  for (const fixture of ["dirty_markdown", "dirty_identity", "dirty_duplicate_id", "dirty_unresolved_edge", "dirty_missing_index", "dirty_adr_registry"]) for (const item of await scanDocumentation(join(fixtures, fixture))) observed.add(item.rule_id);
+  for (const fixture of ["dirty_markdown", "dirty_identity", "dirty_duplicate_id", "dirty_unresolved_edge", "dirty_missing_index", "dirty_adr_registry", "dirty_journey_view"]) for (const item of await scanDocumentation(join(fixtures, fixture))) observed.add(item.rule_id);
   const root = join(fixtures, "clean"), render = async () => ({ findings: [] });
   for (const item of (await checkDocumentation({ root, declaration: { impact: "typo", artifacts: [{ action: "archive", path: "docs/purpose/history.md" }] }, changeSet: ["docs/undeclared.adoc"], render })).findings) if (item.rule_id) observed.add(item.rule_id);
   for (const item of (await checkDocumentation({ root, declaration: { impact: "change", artifacts: [] }, changeSet: [], render: async () => ({ findings: [{ rule_id: "planner.docs.reference-integrity" as const, file: "docs/a.adoc", line: 1, col: 1, evidence: "broken xref", source_line: "" }] }) })).findings) if (item.rule_id) observed.add(item.rule_id);
