@@ -50,12 +50,14 @@ bun add -d @afokapu/atdd-bun
 bun run atdd-bun init
 ```
 
-`init` installs the three local surfaces described below: Git
+`init` installs the local surfaces described below: Git
 [hooks](#hooks-fast-feedback-not-merge-authority), the
-[CI workflow](#ci-the-merge-gate), and the
-[agent skill](#agent-skill-the-lifecycle-in-the-agents-context). Commit what it
+[CI workflow](#ci-the-merge-gate), the
+[agent skill](#agent-skill-the-lifecycle-in-the-agents-context), and the
+[integrity test](#integrity-files-agents-must-not-change). Commit what it
 generates (`.githooks/`, `.github/workflows/atdd-bun.yml`, `.agents/`, `.claude/`,
-`AGENTS.md`) so every clone and every agent session gets them. To keep the
+`AGENTS.md`, `atdd-bun.integrity.test.ts`) so every clone and every agent session
+gets them. To keep the
 package and the skill current automatically, see
 [Staying up to date](#staying-up-to-date).
 
@@ -293,8 +295,10 @@ automatically as the next patch version, with provenance, and tagged `vX.Y.Z`.
 
 The hooks and the CI workflow run the package installed in `node_modules`, so
 conventions, validators, and hook policy change as soon as a repository
-upgrades the dependency; nothing needs reinstalling. The agent skill is the one
-generated copy. To refresh it on every install, add a script to the
+upgrades the dependency; nothing needs reinstalling. The generated files are
+copies: when an upgrade changes them, the integrity check reports them until you
+run `bun run atdd-bun init --replace` and commit the result. The agent skill is
+the one refreshed automatically. To refresh it on every install, add a script to the
 repository's own `package.json` (Bun runs a project's own lifecycle scripts, not
 a dependency's):
 
