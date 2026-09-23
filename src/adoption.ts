@@ -72,10 +72,24 @@ export function touchedIdentities(text: string): string[] {
   });
 }
 
+const canonical = (value: unknown): string => Array.isArray(value) ? `[${value.map(canonical).join(",")}]` : value && typeof value === "object" ? `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}` : JSON.stringify(value) ?? "null";
+/** atdd-bun.yaml with the adoption block removed, canonically serialised; a missing or unparsable file is `{}`. */
+const configScope = (text: string | null) => { let data: unknown = {}; try { data = text ? Bun.YAML.parse(text) ?? {} : {}; } catch { data = { unparsable: text }; } const { adoption: _, ...rest } = (data && typeof data === "object" ? data : {}) as Record<string, unknown>; return canonical(rest); };
+
+/** Whether the change edits atdd-bun.yaml beyond its adoption block. Topology roots, registry paths or limits
+ * re-scope every check, so a slice cannot be trusted and the full audit applies. */
+async function configurationChanged(root: string, diff: string[]): Promise<boolean> {
+  const at = async (rev: string) => { const shown = await git(root, ["show", `${rev}:atdd-bun.yaml`]); return shown.code ? null : shown.out; };
+  const [before, after] = diff[0] === "--cached" ? [await at("HEAD"), await at("")] : diff.length >= 2 ? [await at(diff[0]), await at(diff[1])] : [await at(diff[0]), existsSync(join(root, "atdd-bun.yaml")) ? await readFile(join(root, "atdd-bun.yaml"), "utf8") : null];
+  return configScope(before) !== configScope(after);
+}
+
 /** The slice of a `git diff` (e.g. [base] for base..working tree, ["--cached"] for the staged change,
- * [from, to] for a pushed range), plus untracked files when `untracked`. */
-export async function sliceOf(root: string, diff: string[], untracked = false): Promise<Slice> {
+ * [from, to] for a pushed range), plus untracked files when `untracked`. `null` when the change edits
+ * atdd-bun.yaml beyond its adoption block: the slice is then unknown and the full audit applies. */
+export async function sliceOf(root: string, diff: string[], untracked = false): Promise<Slice | null> {
   const files = new Set((await git(root, ["diff", "--name-only", "--no-renames", ...diff])).out.split("\n").filter(Boolean));
+  if ((files.has("atdd-bun.yaml") || (untracked && !diff.includes("--cached"))) && await configurationChanged(root, diff)) return null;
   const changed = (await git(root, ["diff", "-U0", "--no-renames", "--no-color", ...diff])).out.split("\n").filter(line => /^[+-]/.test(line) && !/^(\+\+\+|---) /.test(line));
   if (untracked) for (const path of (await git(root, ["ls-files", "--others", "--exclude-standard"])).out.split("\n").filter(Boolean)) {
     files.add(path);
@@ -104,7 +118,7 @@ export type GateResult = { ok: boolean; mode: AdoptionMode; blocking: Violation[
  * everything blocks. */
 export function partition(root: string, mode: AdoptionMode, findings: Violation[], slice: Slice | null): GateResult {
   const blocking = mode === "greenfield" || !slice ? findings : findings.filter(v => inSlice(root, v, slice)), outside = findings.length - blocking.length;
-  const scope = mode === "greenfield" ? "greenfield: full audit" : slice ? `brownfield: changed slice of ${slice.files.size} file(s)` : "brownfield: base not found, full audit";
+  const scope = mode === "greenfield" ? "greenfield: full audit" : slice ? `brownfield: changed slice of ${slice.files.size} file(s)` : "brownfield: slice unknown (no usable base, or atdd-bun.yaml changed beyond adoption), full audit";
   const debt = outside ? `; ${outside} legacy finding(s) outside the slice (atdd-bun all lists them)` : "";
   return { ok: blocking.length === 0, mode, blocking, outside, message: `atdd-bun gate (${scope}): ${blocking.length} blocking${debt}` };
 }

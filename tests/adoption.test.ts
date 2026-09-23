@@ -140,7 +140,7 @@ test("a new branch pushed at its base has no distinguishable slice, so pre-push 
   try {
     const pushed = await runHook("pre-push", root, [], `refs/heads/work ${await git(root, "rev-parse", "HEAD")} refs/heads/work ${"0".repeat(40)}\n`);
     expect(pushed.ok).toBeFalse();
-    expect(pushed.message).toContain("base not found, full audit");
+    expect(pushed.message).toContain("slice unknown");
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
@@ -191,11 +191,30 @@ test("greenfield hooks run the full gate: even a README-only commit or push is b
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
-test("switching to brownfield loosens the policy; staying brownfield does not", () => {
+test("switching to brownfield, moving its base or moving a topology root is reported for approval", () => {
   expect(loosenedPolicy({}, { adoption: { mode: "brownfield" } })).toEqual(["adoption.mode greenfield → brownfield"]);
   expect(loosenedPolicy({ adoption: { mode: "brownfield" } }, { adoption: { mode: "brownfield" } })).toEqual([]);
   expect(loosenedPolicy({ adoption: { mode: "brownfield" } }, {})).toEqual([]);
+  expect(loosenedPolicy({ adoption: { mode: "brownfield", base: "main" } }, { adoption: { mode: "brownfield", base: "release" } })).toEqual(["adoption.base main → release"]);
+  expect(loosenedPolicy({}, { topology: { plan_root: "hidden" } })).toEqual(['topology {} → {"plan_root":"hidden"}']);
+  expect(loosenedPolicy({ topology: { plan_root: "plan", test_root: "t" } }, { topology: { test_root: "t", plan_root: "plan" } })).toEqual([]);
 });
+
+test("a change to atdd-bun.yaml beyond adoption makes the gate audit everything; hiding the plan root does not escape", async () => {
+  const root = await legacyRepo();
+  try {
+    // Codex's reproduction: move plan_root to a directory that does not exist.
+    await writeFile(join(root, "atdd-bun.yaml"), BROWNFIELD + "topology:\n  plan_root: hidden\n");
+    const moved = await gate({ root, base: "main" });
+    expect(moved.message).toContain("slice unknown");
+    expect(moved.outside).toBe(0);
+    await git(root, "add", "atdd-bun.yaml");
+    expect((await runHook("pre-commit", root)).message).toContain("full audit");
+    // An adoption-only edit keeps the slice.
+    await writeFile(join(root, "atdd-bun.yaml"), "adoption:\n  base: main\n  mode: brownfield\n"); await git(root, "add", "atdd-bun.yaml");
+    expect((await gate({ root, base: "main" })).message).toContain("changed slice");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
 
 test("the CLI gate exits non-zero on blocking findings and zero on a compliant slice", async () => {
   const root = await legacyRepo();

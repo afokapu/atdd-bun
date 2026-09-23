@@ -107,7 +107,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
 }
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy> & { adoption?: unknown }, current: Partial<HookPolicy> & { adoption?: unknown }): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { adoption?: unknown; topology?: unknown }, current: Partial<HookPolicy> & { adoption?: unknown; topology?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -116,8 +116,13 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { adoption?: unknown 
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
-  // Brownfield narrows what the gate blocks on to the changed slice.
-  if (adoptionOf(base).mode === "greenfield" && adoptionOf(current).mode === "brownfield") out.push("adoption.mode greenfield → brownfield");
+  // Brownfield narrows what the gate blocks on to the changed slice, and its base decides what the slice is.
+  const [ba, ca] = [adoptionOf(base), adoptionOf(current)];
+  if (ba.mode === "greenfield" && ca.mode === "brownfield") out.push("adoption.mode greenfield → brownfield");
+  if (ba.mode === "brownfield" && ca.mode === "brownfield" && ba.base !== ca.base) out.push(`adoption.base ${ba.base} → ${ca.base}`);
+  // Moving a root re-scopes every check: a root that no longer holds the plan silently disables its validation.
+  const roots = (config: { topology?: unknown }) => JSON.stringify(Object.fromEntries(Object.entries(config.topology && typeof config.topology === "object" ? config.topology as Record<string, unknown> : {}).sort()));
+  if (roots(base) !== roots(current)) out.push(`topology ${roots(base)} → ${roots(current)}`);
   return out;
 }
 
