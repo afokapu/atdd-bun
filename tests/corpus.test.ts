@@ -41,6 +41,7 @@ test("the package ships every current Bun implementation", () => {
     "bun_interlocking_binding",
     "bun_interlocking_coverage",
     "bun_interlocking_infrastructure",
+    "bun_responsive_detector",
     "bun_security_hygiene_detector",
     "bun_tester_discipline_detector",
     "bun_ts_metrics_detector",

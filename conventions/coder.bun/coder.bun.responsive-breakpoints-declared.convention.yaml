@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: coder.bun.responsive-breakpoints-declared
+kind: rule
+status: active
+name: Media queries use only the declared breakpoints
+statement: Every `min-width`/`max-width` condition in an `@media` query MUST use one of the breakpoints declared
+  under `frontend.breakpoints` in `atdd-bun.yaml` (default 480, 768, 1024, 1280). A `max-width` within 1px below
+  a breakpoint (`767px`, `767.98px`) counts as that breakpoint, and `em`/`rem` convert at 16px. New in atdd-bun,
+  strict.
+terms:
+- term_id: frontend_settings
+  text: '`atdd-bun.yaml` → `frontend.viewports` (the widths responsive specs render at; the smallest bounds fixed
+    widths) and `frontend.breakpoints` (the widths media queries may use).'
+content:
+  summary: Media queries use only the declared breakpoints.
+  normative_text: CSS custom properties cannot be used in media queries, so breakpoints cannot be tokens. Declaring
+    them once and requiring every query to use them keeps layouts switching at the same widths everywhere instead
+    of at a new one per component.
+  fix_hint: 'Use `@media (min-width: 768px)`, or add the width to `frontend.breakpoints` if the design system really
+    needs it.'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-RESPONSIVE-RESPONSIVE-BREAKPOINTS-DECLARED-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+implementation:
+  type: validator
+  ref: bun_responsive_detector

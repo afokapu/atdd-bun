@@ -11,7 +11,6 @@
 //   // Train: train:orders:place-order          or   // Journey: journey:buy
 //   // Layer: assembly
 //   test:train:orders:place-order:E2E-001-places-an-order   (harness E2E | SMOKE | A11Y | VIS | RESP)
-import { readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { walk, readText } from "../../../lib/scan.mjs";
 import { loadPlan } from "../../../src/planner-kernel.ts";
@@ -24,8 +23,6 @@ const URN_CANDIDATE = /test:(?:train|journey):[A-Za-z0-9:_-]+/g;
 const SPEC_EXT = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"]);
 const TEST_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 export const E2E_RE = /\.e2e\.[cm]?[jt]sx?$/;
-export const DEFAULT_VIEWPORTS = [375, 768, 1280];
-export const DEFAULT_BREAKPOINTS = [480, 768, 1024, 1280];
 
 const header = (text, name) => { const m = text.match(new RegExp(`^[ \\t]*//[ \\t]*${name}:[ \\t]*(\\S+)[ \\t]*$`, "m")); return m ? { value: m[1], line: lineOf(text, m.index) } : null; };
 export const lineOf = (text, index) => text.slice(0, index).split("\n").length;
@@ -76,13 +73,7 @@ export async function planOf(root) {
   return { trains, trainFiles, routed, journeys: journeys.map((j) => ({ ...j, path: join(root, j.file) })), journeyIds: new Set(journeys.map((j) => j.id)), hasPlan: trains.size > 0 || journeys.length > 0 };
 }
 
-/** Viewports and breakpoints declared in atdd-bun.yaml under `frontend:`, else the defaults. */
-export function frontendConfig(root) {
-  let data = {};
-  try { data = Bun.YAML.parse(readFileSync(join(root, "atdd-bun.yaml"), "utf8")) ?? {}; } catch {}
-  const numbers = (value, fallback) => (Array.isArray(value) && value.length && value.every((v) => Number.isInteger(v) && v > 0) ? [...value].sort((a, b) => a - b) : fallback);
-  return { viewports: numbers(data?.frontend?.viewports, DEFAULT_VIEWPORTS), breakpoints: numbers(data?.frontend?.breakpoints, DEFAULT_BREAKPOINTS) };
-}
+export { frontendConfig, DEFAULT_VIEWPORTS, DEFAULT_BREAKPOINTS } from "../../../lib/frontend.mjs";
 
 /** Run one check over every scan root: `judge(root, specs, plan, report)`. */
 export async function runCheck(tag, judge) {

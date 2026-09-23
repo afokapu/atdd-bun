@@ -1,0 +1,4 @@
+.page { width: 960px; }
+.panel { min-width: 480px; }
+@media (min-width: 900px) { .page { width: 100%; } }
+@media (max-width: 600px) { .panel { min-width: 0; } }

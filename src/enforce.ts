@@ -24,7 +24,7 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   traceability: ["atdd_traceability_closure"],
   docs: ["planner_docs_capability"],
   planner: ["planner_plan_integrity", "planner_schema_validation", "planner_static_validators"],
-  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector"],
+  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector", "bun_responsive_detector"],
   tester: ["bun_tester_discipline_detector", "htmx_e2e_detector"],
   security: ["bun_security_hygiene_detector"],
   architecture: ["bun_clean_architecture_detector"],
@@ -32,7 +32,7 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   runtime: ["bun_fullstack_detector"],
   interlocking: ["bun_interlocking_binding", "bun_interlocking_coverage", "bun_interlocking_infrastructure"],
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector", "htmx_e2e_detector"],
-  design: ["bun_design_system_detector"],
+  design: ["bun_design_system_detector", "bun_responsive_detector"],
 };
 
 /** Profile names accepted by the CLI and public integrations. */

@@ -1,0 +1,18 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_responsive_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+emits_rule_ids:
+- coder.bun.responsive-viewport-meta
+- coder.bun.responsive-no-fixed-width
+- coder.bun.responsive-breakpoints-declared
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+# Static responsiveness: the structural causes of screens that break on small devices.
+# The browser proof is tester.htmx.responsive-harness and -journey-coverage.
+- coder.bun.responsive-viewport-meta
+- coder.bun.responsive-no-fixed-width
+- coder.bun.responsive-breakpoints-declared

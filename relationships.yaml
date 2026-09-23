@@ -55,6 +55,9 @@ nodes:
   - coder.bun.logging-structured
   - coder.bun.quality-comments
   - coder.bun.quality-mi
+  - coder.bun.responsive-breakpoints-declared
+  - coder.bun.responsive-no-fixed-width
+  - coder.bun.responsive-viewport-meta
   - coder.bun.runtime-executes-the-declaration
   - coder.bun.runtime-server-is-bun-serve
   - coder.bun.runtime-single-lockfile
@@ -4724,4 +4727,64 @@ edges:
     strength: important
     target_ref: tester.vite.visual-harness
     type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: widths only mean device widths once the document declares a device-width viewport
+    source_ref: coder.bun.responsive-viewport-meta
+    strength: critical
+    target_ref: coder.bun.responsive-no-fixed-width
+    type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "what a layout may be wide, and where it may switch: together, a layout that adapts at the declared widths"
+    source_ref: coder.bun.responsive-no-fixed-width
+    strength: important
+    target_ref: coder.bun.responsive-breakpoints-declared
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "breakpoints are declared once like tokens, because media queries cannot read custom properties"
+    source_ref: coder.bun.responsive-breakpoints-declared
+    strength: important
+    target_ref: coder.bun.design-token-hardcoded
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: a browser can only prove a page fits a phone once the page declares a device-width viewport
+    source_ref: tester.htmx.responsive-harness
+    strength: critical
+    target_ref: coder.bun.responsive-viewport-meta
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: the static cause and the rendered proof of horizontal overflow
+    source_ref: tester.htmx.responsive-harness
+    strength: important
+    target_ref: coder.bun.responsive-no-fixed-width
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: a viewport that blocks zoom is an accessibility failure as well as a responsive one
+    source_ref: coder.bun.responsive-viewport-meta
+    strength: important
+    target_ref: tester.htmx.a11y-harness
+    type: runs_alongside
     origin: "@afokapu/atdd-bun"
