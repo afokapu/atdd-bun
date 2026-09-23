@@ -3,8 +3,9 @@ rule_id: tester.htmx.train-e2e-coverage
 kind: rule
 status: active
 name: Every declared train has a browser spec
-statement: Every train declared under `plan/` MUST have at least one journey spec bound to it by `// Train:`. Bun/htmx
-  realization of `tester.vite.train-e2e-coverage`, strict.
+statement: Every human-facing train declared under `plan/` (one in which a `user:` participant takes part) MUST
+  have at least one journey spec bound to it by `// Train:`. Bun/htmx realization of `tester.vite.train-e2e-coverage`,
+  strict.
 terms:
 - term_id: browser_spec
   text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
@@ -18,6 +19,7 @@ content:
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - The rule reports at the train's plan file, where the gap was declared.
+  - Trains in which no person takes part (only wagons and systems) have no screen to drive and are out of scope.
 metadata:
   aliases:
   - BUN-E2E-TRAIN-E2E-COVERAGE-001

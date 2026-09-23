@@ -1,0 +1,14 @@
+schema_version: 1.0.0
+journey_id: journey:settle
+title: Settle the day
+status: checked
+entrypoint:
+  interlocking_id: interlocking:settlement
+  exposed: true
+  actions: [settle]
+  reason: null
+  surfaces: [backend]
+continuations: []
+terminals:
+  - from: { interlocking_id: interlocking:settlement, route_id: nominal }
+    outcome: settled

@@ -75,3 +75,10 @@ test("responsive detector: each dirty case is reported on its own file", async (
   // both range-syntax forms, and a rem width, are caught
   expect(all.filter(f => f === "responsive-breakpoints-declared src/units.css")).toHaveLength(2);
 });
+
+test("browser-spec detector: a backend-only plan needs no browser spec", async () => {
+  // Found in PR review: trains in which no person takes part, and journeys whose surfaces are [backend],
+  // have no screen to drive. The journey-runaway plan is exactly that.
+  const root = resolve(import.meta.dir, "fixtures/journey-runaway");
+  expect(await runImplementation("htmx_e2e_detector", { scanRoots: [root], excludes: [] })).toEqual([]);
+});

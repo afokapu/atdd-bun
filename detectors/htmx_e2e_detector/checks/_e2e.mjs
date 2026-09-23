@@ -72,10 +72,15 @@ export async function planOf(root) {
   const graph = await loadPlan(root);
   const trainArtifacts = graph.artifacts.filter((a) => a.kind === "train"), trains = new Set(trainArtifacts.map((a) => a.id));
   const trainFiles = new Map(trainArtifacts.map((a) => [a.id, join(root, a.file)]));
+  // A train is human-facing when a person takes part in it; only those have a screen a browser spec can drive.
+  const refs = (a) => [...(Array.isArray(a.data.participants) ? a.data.participants : []), ...(Array.isArray(a.data.sequence) ? a.data.sequence.flatMap((s) => [s?.from, s?.to]) : [])].map(String);
+  const humanTrains = new Set(trainArtifacts.filter((a) => refs(a).some((r) => r.startsWith("user:"))).map((a) => a.id));
   const interlockings = graph.artifacts.filter((a) => a.kind === "interlocking");
   const routed = new Set(interlockings.flatMap((il) => (Array.isArray(il.data.routes) ? il.data.routes : []).map((r) => String(r?.train_id ?? ""))).filter(Boolean));
-  const journeys = graph.artifacts.filter((a) => a.kind === "journey").map((a) => ({ id: a.id, file: a.file, exposed: a.data?.entrypoint?.exposed === true }));
-  return { trains, trainFiles, routed, journeys: journeys.map((j) => ({ ...j, path: join(root, j.file) })), journeyIds: new Set(journeys.map((j) => j.id)), hasPlan: trains.size > 0 || journeys.length > 0 };
+  // A journey has a browser surface unless its entrypoint declares surfaces that exclude `frontend`.
+  const frontend = (surfaces) => !Array.isArray(surfaces) || surfaces.map(String).includes("frontend");
+  const journeys = graph.artifacts.filter((a) => a.kind === "journey").map((a) => ({ id: a.id, file: a.file, exposed: a.data?.entrypoint?.exposed === true, frontend: frontend(a.data?.entrypoint?.surfaces) }));
+  return { trains, trainFiles, humanTrains, routed, journeys: journeys.map((j) => ({ ...j, path: join(root, j.file) })), journeyIds: new Set(journeys.map((j) => j.id)), hasPlan: trains.size > 0 || journeys.length > 0 };
 }
 
 export { frontendConfig, DEFAULT_VIEWPORTS, DEFAULT_BREAKPOINTS } from "../../../lib/frontend.mjs";

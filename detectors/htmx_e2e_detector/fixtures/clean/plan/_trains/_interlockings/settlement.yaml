@@ -1,0 +1,16 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:settlement
+title: settlement
+theme: orders
+status: checked
+entrypoint:
+  exposed: true
+  actions: [settle]
+  reason: null
+  surfaces: [backend]
+routes:
+  - route_id: nominal
+    category: nominal
+    priority: 1
+    guard_ref: guard:nominal
+    train_id: train:orders:settle-ledger

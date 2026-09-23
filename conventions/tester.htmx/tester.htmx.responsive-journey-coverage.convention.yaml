@@ -3,8 +3,8 @@ rule_id: tester.htmx.responsive-journey-coverage
 kind: rule
 status: active
 name: Every exposed journey has a RESP browser spec
-statement: Every journey whose entrypoint is exposed MUST have a journey spec bound to it by `// Journey:` with
-  a RESP test URN. New in the Bun/htmx browser tester, strict.
+statement: Every journey whose entrypoint is exposed and whose `surfaces` include `frontend` (or declare none) MUST
+  have a journey spec bound to it by `// Journey:` with a RESP test URN. New in the Bun/htmx browser tester, strict.
 terms:
 - term_id: browser_spec
   text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
@@ -17,7 +17,8 @@ content:
   fix_hint: 'Add `e2e/<journey>.responsive.e2e.ts` bound with `// Journey: <journey id>`.'
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
-  - Internal journeys (entrypoint not exposed) are out of scope.
+  - Internal journeys, and exposed journeys whose entrypoint `surfaces` exclude `frontend`, have no screen to fit
+    and are out of scope.
 metadata:
   aliases:
   - BUN-E2E-RESPONSIVE-JOURNEY-COVERAGE-001

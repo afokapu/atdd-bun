@@ -3,8 +3,9 @@ rule_id: tester.htmx.exposed-journey-e2e-coverage
 kind: rule
 status: active
 name: Every exposed journey has an E2E or SMOKE browser spec
-statement: Every journey whose entrypoint is exposed MUST have at least one journey spec bound to it by `// Journey:`
-  with an E2E or SMOKE test URN. New in the Bun/htmx browser tester, strict.
+statement: Every journey whose entrypoint is exposed and whose `surfaces` include `frontend` (or declare none) MUST
+  have at least one journey spec bound to it by `// Journey:` with an E2E or SMOKE test URN. New in the Bun/htmx
+  browser tester, strict.
 terms:
 - term_id: browser_spec
   text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
@@ -17,7 +18,8 @@ content:
   fix_hint: 'Add `e2e/<journey>.smoke.e2e.ts` bound with `// Journey: <journey id>`.'
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
-  - Internal journeys (entrypoint not exposed) are out of scope.
+  - Internal journeys, and exposed journeys whose entrypoint `surfaces` exclude `frontend` (for example `[backend]`),
+    have no browser surface and are out of scope.
 metadata:
   aliases:
   - BUN-E2E-EXPOSED-JOURNEY-E2E-COVERAGE-001
