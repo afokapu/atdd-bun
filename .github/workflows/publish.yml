@@ -58,16 +58,26 @@ jobs:
       - run: npm version "${{ steps.version.outputs.next }}" --no-git-tag-version --allow-same-version
       - name: Write integrity manifest
         run: bun -e 'import { writeManifest } from "./src/integrity"; const files = JSON.parse(Bun.spawnSync(["npm", "pack", "--dry-run", "--json"]).stdout.toString())[0].files.map((f) => f.path); console.log(await writeManifest(process.cwd(), files), "files hashed");'
-      - run: npm publish --provenance --access public
-      # The tag must carry the version it names. The bump above is never committed to main, so the tag goes
-      # on a release commit made on top of the published commit (only the tag is pushed, main is untouched).
-      # Without it, v0.6.1 pointed at a commit whose package.json still said 0.6.0.
-      - name: Tag release
+      # The tag must be the exact tree that is published. The version bump and integrity.json are generated
+      # here and never committed to main, so a release commit carrying both is made on top of the merge
+      # commit BEFORE publishing, and npm publishes that tree. Only the annotated tag is pushed; main is
+      # untouched. npm provenance attests the workflow's source commit (github.sha), which the tag names.
+      # Before this, v0.6.1 pointed at a commit whose package.json still said 0.6.0.
+      - name: Release commit
         run: |
           next="${{ steps.version.outputs.next }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- package.json; then git commit -m "release: v$next [skip ci]" -- package.json; fi
+          git add -f package.json integrity.json
+          git commit --allow-empty -m "release: v$next [skip ci]" -m "Provenance source: ${{ github.sha }}"
           test "$(git show HEAD:package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')" = "$next"
-          git tag "v$next"
+          # Every file npm will pack is committed, unchanged, in this release commit.
+          npm pack --dry-run --json | node -e 'for (const f of JSON.parse(require("fs").readFileSync(0, "utf8"))[0].files) console.log(f.path)' > "$RUNNER_TEMP/packed"
+          xargs git ls-files --error-unmatch < "$RUNNER_TEMP/packed" > /dev/null
+          xargs git diff --quiet HEAD -- < "$RUNNER_TEMP/packed"
+      - run: npm publish --provenance --access public
+      - name: Tag release
+        run: |
+          next="${{ steps.version.outputs.next }}"
+          git tag -a "v$next" -m "v$next, published from this tree; provenance source ${{ github.sha }}"
           git push origin "v$next"
