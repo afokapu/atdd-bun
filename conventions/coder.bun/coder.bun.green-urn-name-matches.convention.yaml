@@ -29,7 +29,7 @@ content:
       // URN: component:orders:checkout:SomethingElse:backend:presentation  // ✗
       // URN: component:orders:checkout:OrderRow:backend:presentation       // ✓
   exceptions:
-  - Structural names are exempt: composition, wagon, entrypoint, http, index, schema, router, routes, server, layout, partial, fragment, middleware.
+  - 'Structural names are exempt: composition, wagon, entrypoint, http, index, schema, router, routes, server, layout, partial, fragment, middleware.'
   - Comparison ignores case and non-alphanumerics, so `order-row.ts` matches `OrderRow`.
   - URNs that are not six segments are skipped.
 metadata:

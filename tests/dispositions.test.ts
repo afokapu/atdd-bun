@@ -37,3 +37,13 @@ test("no convention promises a ratchet or advisory treatment the package does no
     .filter(l => /ratchet|suppress-and-clean|documentation-only/i.test(l.text) && l.text !== note).map(l => `${l.file}:${l.line} ${l.text}`);
   expect(promises).toEqual([]);
 });
+
+test("every convention's prose is text: no statement, term or exception was parsed as a YAML map", async () => {
+  // An unquoted `: ` inside a list item turns a sentence into a map and silently truncates it.
+  const malformed = (await conventions(join(root, "conventions"))).flatMap(({ file, data }) => {
+    const d = data as Convention & { statement?: unknown; terms?: Array<{ text?: unknown }>; content?: { exceptions?: unknown[] } };
+    return [["statement", d.statement], ...(d.terms ?? []).map(t => ["term", t.text]), ...(d.content?.exceptions ?? []).map(e => ["exception", e])]
+      .filter(([, value]) => value !== undefined && typeof value !== "string").map(([kind, value]) => `${file}: ${kind} ${JSON.stringify(value).slice(0, 80)}`);
+  });
+  expect(malformed).toEqual([]);
+});

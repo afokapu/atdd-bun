@@ -25,7 +25,7 @@ content:
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - 0 and 1px (hairline borders) are not design decisions and are allowed.
-  - Custom property definitions (`--space-3: 12px`) define tokens wherever they live and are not flagged.
+  - 'Custom property definitions (`--space-3: 12px`) define tokens wherever they live and are not flagged.'
   - The tokens/foundations layer defines these values and is not scanned.
   - Widths, heights, and font sizes are out of scope for this rule.
 metadata:
