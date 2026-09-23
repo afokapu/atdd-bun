@@ -10,6 +10,8 @@ const skillPaths = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.m
 // AGENTS.md is read by Codex, Cursor and most agents; CLAUDE.md by Claude Code. Both carry the same block.
 export const instructionPaths = ["AGENTS.md", "CLAUDE.md"];
 const block = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->\n?/;
+/** `current` with the managed block replaced, or appended after one blank line. */
+const withBlock = (current: string, managed: string) => block.test(current) ? current.replace(block, managed) : `${current.replace(/\n*$/, current ? "\n\n" : "")}${managed}`;
 
 /** Write the ATDD skill for every agent and a managed pointer block in AGENTS.md and CLAUDE.md. Existing files
  * and an existing block are kept unless `replace`; the rest of each instruction file is never touched. */
@@ -22,9 +24,9 @@ export async function agentInit(repo = process.cwd(), replace = false) {
   }
   const managed = await render("AGENTS.block.md");
   for (const path of instructionPaths) {
-    const agents = join(repo, path), current = existsSync(agents) ? await readFile(agents, "utf8") : "";
-    if (block.test(current) && !replace) kept.push(agents);
-    else { await writeFile(agents, block.test(current) ? current.replace(block, managed) : current + (current && !current.endsWith("\n\n") ? (current.endsWith("\n") ? "\n" : "\n\n") : "") + managed); written.push(agents); }
+    const file = join(repo, path), current = existsSync(file) ? await readFile(file, "utf8") : "";
+    if (block.test(current) && !replace) { kept.push(file); continue; }
+    await writeFile(file, withBlock(current, managed)); written.push(file);
   }
   if (!written.length) return { ok: false, message: `${kept.join(", ")} exist; use --replace` };
   return { ok: true, message: written.join("\n") };

@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { instructionPaths } from "./agent";
 import { profileNames } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
@@ -18,7 +19,6 @@ const ownRoot = resolve(import.meta.dir, "..");
 export const MANIFEST = "integrity.json";
 export const TEST_FILE = "atdd-bun.integrity.test.ts";
 const SKILLS = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"];
-const INSTRUCTIONS = ["AGENTS.md", "CLAUDE.md"];
 const WORKFLOW = ".github/workflows/atdd-bun.yml";
 const BLOCK = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->/;
 // Generated files carry the version that wrote them; an upgrade must not read as tampering.
@@ -98,7 +98,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
-  for (const file of INSTRUCTIONS) {
+  for (const file of instructionPaths) {
     const agents = existsSync(join(root, file)) ? await readFile(join(root, file), "utf8") : "", block = agents.match(BLOCK)?.[0];
     if (!block) findings.push({ file, detail: "is missing the atdd-bun block", restore: "bun run atdd-bun agent init --replace" });
     else if (unstamp(block) !== unstamp(canonical)) findings.push({ file, detail: "atdd-bun block was edited", restore: "bun run atdd-bun agent init --replace" });
