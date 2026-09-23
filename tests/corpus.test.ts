@@ -35,6 +35,7 @@ test("the package ships every current Bun implementation", () => {
   expect(implementationsFor(["all"])).toEqual([
     "atdd_traceability_closure",
     "bun_clean_architecture_detector",
+    "bun_design_system_detector",
     "bun_fullstack_detector",
     "bun_green_traceability_detector",
     "bun_interlocking_binding",

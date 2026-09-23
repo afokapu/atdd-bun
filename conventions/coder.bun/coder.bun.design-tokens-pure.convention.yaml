@@ -1,0 +1,35 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-tokens-pure
+kind: rule
+status: active
+name: Token and foundation files hold values, not behaviour
+statement: A code file in the `tokens` or `foundations` layer MUST contain only values — palette, spacing, radii,
+  motion, scales — and MUST NOT import a renderer (`hono/jsx`, `react`, `preact`, `@kitajs/html`), render markup,
+  or branch with `if`/`for`/`while`/`switch`. Bun realization of `coder.design.foundations` (the bottom of the hierarchy
+  is pure), mirroring `coder.vite.design-tokens-pure`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: pure_token
+  text: 'a declaration whose value is data: a string, number, or object of them, including `var(--…)` references.'
+content:
+  summary: Scans token/foundation code files for renderer imports, rendered markup, and control flow.
+  normative_text: Tokens are what every other layer depends on. Once they render or decide, the bottom of the hierarchy
+    has behaviour, and every primitive inherits it.
+  fix_hint: Keep the value in the token file and move the markup to `primitives/` or the logic to the component
+    that needs it.
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - '`.css` token files are values by construction and are not scanned by this rule.'
+metadata:
+  aliases:
+  - BUN-DESIGN-TOKENS-PURE-001
+  core_obligation: coder.design.foundations
+  severity: 2
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

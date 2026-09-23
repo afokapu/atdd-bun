@@ -1,0 +1,8 @@
+:root {
+  --ink: #1f2937;
+  --line: rgba(15, 23, 42, 0.12);
+  --space-2: 8px;
+  --space-4: 16px;
+  --radius: 6px;
+  --fast: 120ms;
+}

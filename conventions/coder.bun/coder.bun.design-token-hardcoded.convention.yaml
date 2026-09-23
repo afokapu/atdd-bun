@@ -1,0 +1,40 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-token-hardcoded
+kind: rule
+status: active
+name: UI files take spacing, radii, and durations from foundations
+statement: Outside the tokens layer, a UI file MUST NOT hardcode a spacing, inset, or border-radius length greater
+  than 1px (`margin`, `padding`, `gap`, `inset`, `top`/`right`/`bottom`/`left`, `border-radius`), nor a non-zero
+  duration in `transition`/`animation`. A bare number in a JSX style object for those properties counts as a length.
+  These values come from foundations tokens. Bun realization of `coder.design.token-hardcoded` and of the raw-pixel
+  part of `coder.design.foundations`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: visual_token
+  text: a spacing, radius, or motion value defined once in foundations and referenced as `var(--…)`.
+content:
+  summary: Flags hardcoded lengths and durations in spacing, radius, and motion declarations across UI files, including
+    the design system's own primitives and components.
+  normative_text: Spacing and motion are the rhythm of an interface. Each hardcoded `13px` is a new step on a scale
+    nobody chose, and the rhythm erodes one component at a time.
+  fix_hint: 'Use the foundations scale: `padding: var(--space-3)`, `border-radius: var(--radius)`, `transition:
+    opacity var(--fast)`. Add a step to the scale in the tokens layer if none fits.'
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - 0 and 1px (hairline borders) are not design decisions and are allowed.
+  - Custom property definitions (`--space-3: 12px`) define tokens wherever they live and are not flagged.
+  - The tokens/foundations layer defines these values and is not scanned.
+  - Widths, heights, and font sizes are out of scope for this rule.
+metadata:
+  aliases:
+  - BUN-DESIGN-TOKEN-HARDCODED-001
+  core_obligation: coder.design.token-hardcoded
+  severity: 2
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

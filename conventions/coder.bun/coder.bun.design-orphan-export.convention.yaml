@@ -1,0 +1,36 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-orphan-export
+kind: rule
+status: active
+name: Design-system components have a consumer
+statement: Every component a `primitives`, `components`, or `templates` file exports MUST be imported by at least
+  one other file — a higher design layer or app code — so the system stays lean. Re-exports through an `index.*`
+  barrel are not consumption. Bun realization of `coder.design.orphan-export`, counting consumers the way `coder.vite.design-orphan-ui`
+  does, so composition inside the system (a template using a component) is legitimate.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: consumer
+  text: a non-barrel file whose import clause names the export, or imports it as a default under that name.
+content:
+  summary: Collects capitalized exports of primitives/components/templates and flags those no other file imports.
+  normative_text: Unused components still have to be maintained, themed, and migrated. A design system grows by
+    adjudication, not by accretion of pieces nobody uses.
+  fix_hint: 'Use the component where it was meant to be used, or delete it. Unused chains surface one layer at a
+    time: remove the unused template and its component is reported next.'
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - Token/foundation values and `index.*` barrels are not judged.
+  - Only capitalized (component) exports are judged.
+metadata:
+  aliases:
+  - BUN-DESIGN-ORPHAN-EXPORT-001
+  core_obligation: coder.design.orphan-export
+  severity: 2
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

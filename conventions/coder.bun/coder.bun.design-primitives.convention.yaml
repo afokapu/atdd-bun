@@ -1,0 +1,35 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-primitives
+kind: rule
+status: active
+name: App components compose design-system primitives for interactive controls
+statement: An app component (`.tsx`/`.jsx` outside the design root) MUST render interactive controls through a design-system
+  primitive rather than a raw `<button>`, `<input>`, `<select>`, or `<textarea>`, so controls stay themed, accessible,
+  and consistent. Bun realization of `coder.design.primitives`, mirroring `coder.vite.design-primitives`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: raw_control
+  text: a lowercase `<button`, `<input`, `<select`, or `<textarea` element written in app code.
+content:
+  summary: Flags raw interactive platform elements in component source outside the design root.
+  normative_text: Controls are where focus, disabled, error, and loading states live. Each raw control re-implements
+    them, and each re-implementation diverges.
+  fix_hint: 'Render the primitive and pass htmx attributes through it: `<Button hx-post="/orders">Place</Button>`.
+    Add the primitive to `design/primitives/` if it does not exist yet.'
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - The design system's own primitives render the raw elements and are not scanned.
+  - Plain `.html` templates cannot import components and are out of scope.
+metadata:
+  aliases:
+  - BUN-DESIGN-PRIMITIVES-001
+  core_obligation: coder.design.primitives
+  severity: 2
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

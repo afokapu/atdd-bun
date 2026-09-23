@@ -1,0 +1,10 @@
+{
+  "design_dependency_flow": "coder.bun.design-dependency-flow",
+  "design_wagons_import": "coder.bun.design-wagons-import",
+  "design_tokens_pure": "coder.bun.design-tokens-pure",
+  "design_token_color": "coder.bun.design-token-color",
+  "design_token_hardcoded": "coder.bun.design-token-hardcoded",
+  "design_primitives": "coder.bun.design-primitives",
+  "design_connected": "coder.bun.design-connected",
+  "design_orphan_export": "coder.bun.design-orphan-export"
+}

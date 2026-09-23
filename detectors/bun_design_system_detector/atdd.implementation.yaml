@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: bun_design_system_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+emits_rule_ids:
+- coder.bun.design-dependency-flow
+- coder.bun.design-wagons-import
+- coder.bun.design-tokens-pure
+- coder.bun.design-token-color
+- coder.bun.design-token-hardcoded
+- coder.bun.design-primitives
+- coder.bun.design-connected
+- coder.bun.design-orphan-export
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+# A family detector owns every rule it emits: the Bun realization of the core
+# coder.design.* obligations (tokens <- primitives <- components <- templates).
+- coder.bun.design-dependency-flow
+- coder.bun.design-wagons-import
+- coder.bun.design-tokens-pure
+- coder.bun.design-token-color
+- coder.bun.design-token-hardcoded
+- coder.bun.design-primitives
+- coder.bun.design-connected
+- coder.bun.design-orphan-export

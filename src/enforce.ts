@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-export type Profile = "traceability" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "all";
+export type Profile = "traceability" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
 
 export type Violation = {
   rule_id: string;
@@ -24,7 +24,7 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   traceability: ["atdd_traceability_closure"],
   docs: ["planner_docs_capability"],
   planner: ["planner_plan_integrity", "planner_schema_validation", "planner_static_validators"],
-  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector"],
+  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector"],
   tester: ["bun_tester_discipline_detector"],
   security: ["bun_security_hygiene_detector"],
   architecture: ["bun_clean_architecture_detector"],
@@ -32,6 +32,7 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   runtime: ["bun_fullstack_detector"],
   interlocking: ["bun_interlocking_binding", "bun_interlocking_coverage", "bun_interlocking_infrastructure"],
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector"],
+  design: ["bun_design_system_detector"],
 };
 
 /** Profile names accepted by the CLI and public integrations. */

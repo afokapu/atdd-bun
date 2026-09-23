@@ -90,6 +90,7 @@ name.
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions for that concern |
 | `interlocking` | declared train/interlocking binding, infrastructure, and coverage |
 | `htmx` | htmx-specific source and test conventions |
+| `design` | the design system: tokens ← primitives ← components ← templates, token-only colors, spacing, radii, and motion (also part of `coder`) |
 | `all` | the complete package policy, normally used by CI |
 
 The package ships the canonical planner-node corpus as planning reference, but
@@ -109,6 +110,29 @@ carry Station Master actions; the Bun interlocking family checks those actions r
 `JOURNEY_MAP` to `JourneyRunner`, while internal journeys carry no public reachability obligation.
 Hooks, direct CLI use, and CI invoke this same profile and therefore share the
 same schema source.
+
+### Design system
+
+The `design` profile (also part of `coder`) is the Bun realization of the core
+`coder.design.*` obligations. It recognizes a design system by its directory:
+a folder named `design`, `design_system`, or `design-system`, whose first
+subfolder names the layer:
+
+```text
+design/
+  tokens/ or foundations/   values only: palette, spacing, radii, motion
+  primitives/               Button, Text, Stack … built from tokens
+  components/               composed from primitives
+  templates/                page structure composed from components
+```
+
+Imports flow downward only, and the design system never imports app code.
+Outside the tokens layer, `.tsx`, `.html`, and `.css` files take colors,
+spacing, radii, and durations from tokens (`var(--…)`); app components render
+controls through primitives and import at least one design-system element; and
+every exported component has a consumer. Defining a custom property
+(`--accent: #0ea5e9`) is defining a token and is allowed anywhere. A repository
+without a design directory is not judged by these rules.
 
 ### Theme and contract registry
 
