@@ -31,7 +31,7 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     const workflow = join(root, ".github/workflows/atdd-bun.yml");
     await writeFile(workflow, (await readFile(workflow, "utf8")).replace("bun run atdd-bun integrity", "true"));
     await writeFile(join(root, ".claude/skills/atdd/SKILL.md"), "---\nname: atdd\ndescription: anything goes\n---\n");
-    await writeFile(join(root, "AGENTS.md"), (await readFile(join(root, "AGENTS.md"), "utf8")).replace("Never edit", "Feel free to edit"));
+    await writeFile(join(root, "AGENTS.md"), (await readFile(join(root, "AGENTS.md"), "utf8")).replace("Never modify", "Feel free to modify"));
     await rm(join(root, "atdd-bun.integrity.test.ts"));
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "github:someone/atdd-bun" } }));
     await writeFile(join(root, "bun.lock"), '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"],\n  }\n}\n');
