@@ -122,3 +122,29 @@ test("#9 a rule id a detector emits without declaring it is rejected at run time
   const source = await readFile(join(root, "src/enforce.ts"), "utf8");
   expect(source).toMatch(/const undeclared = await undeclaredEmissions\(implementation, raw\.violations[^\n]*\n\s*if \(undeclared\.length\) throw/);
 });
+
+// Third Codex review (MERGE AFTER FIXES): two more findings.
+test("#10 the substitution proof is the whole // URN: header, never a URN-shaped string elsewhere in the file", async () => {
+  const fixture = join(root, "detectors/atdd_topology/fixtures/clean"), dir = await mkdtemp(join(tmpdir(), "atdd-guard-review-"));
+  try {
+    await Bun.$`cp -R ${fixture}/. ${dir}/`.quiet();
+    await rm(join(dir, "e2e/journeys/checkout.journey.test.ts"));
+    const spec = join(dir, "e2e/checkout.e2e.ts"), missing = async () => (await run("atdd_topology", dir)).filter(f => f.startsWith("atdd-bun.topology.e2e-location exposed journey:checkout")).length;
+    await writeFile(spec, '// Journey: journey:checkout\nimport { test } from "@playwright/test";\nconst decoy = "test:journey:checkout:SMOKE-001-decoy";\ntest("checkout", async () => {});\n'); // Codex's decoy
+    expect(await missing()).toBe(1);
+    await writeFile(spec, '// Journey: journey:checkout\n// URN: test:journey:checkout:SMOKE-001-renders-and-more junk\nimport { test } from "@playwright/test";\ntest("checkout", async () => {});\n');
+    expect(await missing()).toBe(1);
+    await writeFile(spec, '// Journey: journey:checkout\n// URN: test:journey:checkout:SMOKE-001-renders\nimport { test } from "@playwright/test";\ntest("checkout", async () => {});\n');
+    expect(await missing()).toBe(0);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("#11 the public documentation API rejects a rule id it does not declare, however it was built", async () => {
+  const built = ["planner.docs", "runtime-bypass"].join(".");
+  const call = checkDocumentation({ root: join(root, "detectors/planner_docs_capability/fixtures/clean"), declaration: { impact: "change", artifacts: [] }, changeSet: [], render: async () => ({ findings: [{ rule_id: built as "planner.docs.reference-integrity", file: "docs/a.adoc", line: 1, col: 1, evidence: "x", source_line: "" }] }) });
+  // The API never throws by contract: it fails closed, forwards no undeclared id, and says why.
+  const result = await call;
+  expect(result.verdict).toBe("FAIL");
+  expect(result.findings.some(f => f.rule_id === built)).toBeFalse();
+  expect(result.findings.some(f => f.rule_id === null && "message" in f && f.message.includes("undeclared rule id(s): planner.docs.runtime-bypass"))).toBeTrue();
+});

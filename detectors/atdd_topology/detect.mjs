@@ -119,7 +119,8 @@ for (const root of roots) {
     // A browser spec carries its journey identity as a test URN, not an Acceptance (tester.htmx forbids
     // Acceptance on journey specs). It substitutes only when that URN is a valid E2E or SMOKE proof for the
     // very train or journey it is bound to.
-    const proves = (subject) => new RegExp(`test:${subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:(E2E|SMOKE)-\\d{3}-[a-z0-9][a-z0-9-]*`).test(content);
+    // The proof is the `// URN:` header, whole: a URN-shaped string elsewhere in the file (a decoy constant) proves nothing.
+    const proves = (subject) => h.urn.value.startsWith(`test:${subject}:`) && /^(E2E|SMOKE)-\d{3}-[a-z0-9][a-z0-9-]*$/.test(h.urn.value.slice(`test:${subject}:`.length));
     if (h.train.value && proves(h.train.value)) browserTrains.add(h.train.value);
     if (h.journey.value && proves(h.journey.value)) browserJourneys.add(h.journey.value);
   }
