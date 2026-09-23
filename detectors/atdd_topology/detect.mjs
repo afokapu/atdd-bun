@@ -3,6 +3,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { topologyFor } from "../../src/topology.ts";
+import { isExcludedPath } from "../../lib/scan.mjs";
 
 const roots = JSON.parse(process.env.ATDD_SCAN_ROOTS || "[]"), report = process.env.ATDD_VIOLATIONS_REPORT;
 if (!report) process.exit(2);
@@ -18,11 +19,12 @@ const text = (data, key) => data && typeof data === "object" && !Array.isArray(d
 const list = (data, key) => data && typeof data === "object" && Array.isArray(data[key]) ? data[key] : [];
 const urns = values => values.map(value => typeof value === "string" ? value : text(value, "urn")).filter(Boolean);
 function add(rule_id, root, path, evidence, line = 1, source_line = "") { violations.push({ rule_id, file: rel(root, path), line, col: 1, evidence, source_line }); }
+const excludes = ["node_modules", ".git", ".atdd", "dist", "build", ".next", "_generated", ...JSON.parse(process.env.ATDD_SCAN_EXCLUDES || "[]")];
 function walk(dir, predicate, found = []) {
   let entries; try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return found; }
   for (const entry of entries) {
-    if (["node_modules", ".git", ".atdd", "dist", "build", ".next", "_generated"].includes(entry.name)) continue;
     const path = join(dir, entry.name);
+    if (isExcludedPath(path, excludes)) continue;
     if (entry.isDirectory()) walk(path, predicate, found); else if (predicate(path)) found.push(path);
   }
   return found;

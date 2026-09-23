@@ -21,6 +21,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { DEFAULT_EXCLUDES, parseJsonEnv, walkTests, parseHeader } from "../test_header.mjs";
+import { isExcludedPath } from "../../../lib/scan.mjs";
 
 const RULE = "tester.bun.acceptance-resolves-to-declared";
 
@@ -32,8 +33,8 @@ function planFiles(dir, excludes) {
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
     for (const name of entries) {
-      if (excludes.includes(name)) continue;
       const full = join(d, name);
+      if (isExcludedPath(full, excludes)) continue;
       let st;
       try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) rec(full);
@@ -67,7 +68,7 @@ function consumerRoots(root, excludes, planRoot) {
     try { if (statSync(join(d, planRoot)).isDirectory()) { roots.push(d); return; } } catch {}
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
-    for (const n of entries) if (!excludes.includes(n)) rec(join(d, n));
+    for (const n of entries) if (!isExcludedPath(join(d, n), excludes)) rec(join(d, n));
   })(root);
   return roots;
 }

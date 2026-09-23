@@ -20,6 +20,7 @@
 // than something to smuggle into a staged one.
 import { readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join, sep } from "node:path";
+import { isExcludedPath, parseJsonEnv } from "../../../lib/scan.mjs";
 
 export const RULE_EXECUTES = "coder.bun.runtime-executes-the-declaration";
 
@@ -29,7 +30,8 @@ export const RULE_EXECUTES = "coder.bun.runtime-executes-the-declaration";
 const LOADS_DECLARATION =
   /\breadFileSync\s*\(|\breadFile\s*\(|\bBun\s*\.\s*file\s*\(|\bcreateReadStream\s*\(|\bfs\s*\.\s*promises\s*\.\s*readFile\b/;
 const RESOLVES = /\bInterlockingResolution\b|\bresolveTrain\s*\(/;
-const EXCLUDES = ["node_modules", "dist", "build", ".next", "_generated"];
+// The caller's excludes too (nested worktree copies such as `.claude/worktrees` are not this repository).
+const EXCLUDES = ["node_modules", "dist", "build", ".next", "_generated", ...parseJsonEnv("ATDD_SCAN_EXCLUDES", [])];
 const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
 const readText = (p) => { try { return readFileSync(p, "utf8"); } catch { return ""; } };
@@ -39,8 +41,8 @@ function walk(dir, pred) {
   (function rec(d) {
     let entries; try { entries = readdirSync(d).sort(); } catch { return; }
     for (const n of entries) {
-      if (EXCLUDES.includes(n)) continue;
       const full = join(d, n);
+      if (isExcludedPath(full, EXCLUDES)) continue;
       let st; try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) rec(full);
       else if (pred(full)) out.push(full);
@@ -58,7 +60,7 @@ export function findConsumerRoots(scanRoot) {
       try { if (statSync(join(d, marker)).isDirectory()) { roots.add(d); break; } } catch {}
     }
     let entries; try { entries = readdirSync(d).sort(); } catch { return; }
-    for (const n of entries) { if (!EXCLUDES.includes(n)) { try { if (statSync(join(d, n)).isDirectory()) rec(join(d, n)); } catch {} } }
+    for (const n of entries) { if (!isExcludedPath(join(d, n), EXCLUDES)) { try { if (statSync(join(d, n)).isDirectory()) rec(join(d, n)); } catch {} } }
   })(scanRoot);
   return [...roots];
 }

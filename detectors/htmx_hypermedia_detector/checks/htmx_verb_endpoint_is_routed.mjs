@@ -31,6 +31,7 @@
 // ATDD_VIOLATIONS_REPORT, exits 0 regardless of count.
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { isExcludedPath } from "../../../lib/scan.mjs";
 
 const RULE = "coder.htmx.verb-endpoint-is-routed";
 const EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
@@ -52,8 +53,8 @@ function walk(dir, excludes) {
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
     for (const n of entries) {
-      if (excludes.includes(n)) continue;
       const full = join(d, n);
+      if (isExcludedPath(full, excludes)) continue;
       let st;
       try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) rec(full);

@@ -27,7 +27,7 @@
 //      that `extends` a base is NOT flagged: this detector cannot resolve the base, and
 //      reporting what it cannot see would be a false positive. That is the same
 //      discipline the rest of this hub applies to could-not-determine.
-import { readRoots, readExcludes, emit, readText } from "../../../lib/scan.mjs";
+import { readRoots, readExcludes, emit, readText, isExcludedPath } from "../../../lib/scan.mjs";
 import { readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
 
@@ -46,8 +46,8 @@ function* walkFiles(dir, excludes, depth = 0) {
   // this check non-deterministic: with several packages in one tree, WHICH one got
   // checked varied by machine, so CI and a laptop could disagree about a clean repo.
   for (const name of entries) {
-    if (excludes.some((e) => name === e)) continue;
     const full = join(dir, name);
+    if (isExcludedPath(full, excludes)) continue;
     let st;
     try { st = statSync(full); } catch { continue; }
     if (st.isDirectory()) yield* walkFiles(full, excludes, depth + 1);

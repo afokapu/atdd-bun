@@ -25,6 +25,7 @@
 // ATDD_VIOLATIONS_REPORT, exits 0 regardless of count.
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { join, sep } from "node:path";
+import { isExcludedPath } from "../../../lib/scan.mjs";
 
 const RULE = "coder.bun.wagon-honours-its-contract";
 const EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
@@ -45,8 +46,8 @@ function walk(dir, pred, excludes) {
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
     for (const n of entries) {
-      if (excludes.includes(n)) continue;
       const full = join(d, n);
+      if (isExcludedPath(full, excludes)) continue;
       let st;
       try { st = statSync(full); } catch { continue; }
       if (st.isDirectory()) rec(full);
@@ -65,7 +66,7 @@ function consumerRoots(root, excludes) {
     try { if (statSync(join(d, PLAN_ROOT)).isDirectory()) { roots.push(d); return; } } catch {}
     let entries;
     try { entries = readdirSync(d).sort(); } catch { return; }
-    for (const n of entries) if (!excludes.includes(n)) rec(join(d, n));
+    for (const n of entries) if (!isExcludedPath(join(d, n), excludes)) rec(join(d, n));
   })(root);
   return roots;
 }

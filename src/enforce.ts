@@ -77,10 +77,17 @@ export async function undeclaredEmissions(implementation: string, violations: Pi
   return [...new Set(violations.map(v => v.rule_id).filter(id => !declared.has(id)))].sort();
 }
 
+/** Nested checkouts of the same repository (agent worktrees) are other branches, not this tree. They are
+ * excluded as absolute paths under each scan root, never as bare names: a scan run from INSIDE
+ * `.claude/worktrees/<name>` must still see its own files. */
+export const NESTED_WORKTREES = [".claude/worktrees"];
+export const nestedWorktreeExcludes = (scanRoots: string[]) => scanRoots.flatMap((root) => NESTED_WORKTREES.map((dir) => join(resolve(root), dir)));
+
 export async function runImplementation(
   implementation: string,
-  config: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">>,
+  given: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">>,
 ): Promise<Violation[]> {
+  const config = { ...given, excludes: [...new Set([...given.excludes, ...nestedWorktreeExcludes(given.scanRoots)])] };
   const detector = join(detectorRoot, implementation, "detect.mjs");
   const scratch = await mkdtemp(join(tmpdir(), "atdd-bun-"));
   const report = join(scratch, "violations.json");
