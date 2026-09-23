@@ -38,6 +38,11 @@ test("with plan_root `.`, nested worktree plans are not loaded as the host's pla
   for (const fixture of ["planner_schema_validation", "planner_plan_integrity", "atdd_traceability_closure"]) await nest(root, fixture, "dirty");
   expect(await enforce({ root, profiles: ["planner", "traceability"] })).toEqual([]);
   expect((await loadPlan(root)).artifacts).toEqual([]);
+  // ...while the host's own plan at the root is still judged, with or without a `./` spelling.
+  for (const planRoot of [".", "./"]) {
+    const host = await repo({ "atdd-bun.yaml": `topology:\n  plan_root: ${planRoot}\n`, "E001.yaml": "urn: wmbt:orders:E001\nacceptances:\n  - identity:\n      urn: acc:orders:E001-UNIT-001\n" });
+    expect((await enforce({ root: host, profiles: ["traceability"] })).map(v => v.rule_id), planRoot).toEqual(["traceability.plan.executable-acceptance-has-test"]);
+  }
 });
 
 test("a plan root configured inside a nested worktree is not the host's plan either", async () => {

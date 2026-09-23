@@ -38,7 +38,8 @@ function add(rule_id, file, line, evidence, source_line = "") {
 function lineOf(content, token) { return content.slice(0, content.indexOf(token)).split("\n").length; }
 
 for (const root of roots) {
-  const topology = await topologyFor(root), planPrefix = topology.planRoot.replace(/\/$/, "") + "/"; planDisplay = planPrefix;
+  // `plan_root: .` (or `./plan`) must still match root-relative paths, which never start with `./`.
+  const topology = await topologyFor(root), planDir = topology.planRoot.replace(/^\.(?:\/|$)/, "").replace(/\/$/, ""), planPrefix = planDir ? planDir + "/" : ""; planDisplay = planPrefix || "./";
   const local = await loadLifecycle(root);
   lifecycle.declared ||= local.declared;
   for (const key of ["features", "trains", "acceptances"]) lifecycle[key].push(...local[key].map((item) => ({ ...item, file: join(root, item.file) })));
