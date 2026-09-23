@@ -144,6 +144,47 @@ test("a new branch pushed at its base has no distinguishable slice, so pre-push 
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
+test("moving plan_root away cannot hide the base's plan violations: the gate refuses the looser config", async () => {
+  for (const config of [BROWNFIELD, null]) {
+    const root = await legacyRepo(config);
+    try {
+      // Codex's reproduction: only atdd-bun.yaml changes, pointing plan_root at nothing.
+      await writeFile(join(root, "atdd-bun.yaml"), (config ?? "") + "topology:\n  plan_root: hidden\n");
+      const result = await gate({ root, base: "main" });
+      expect(result.ok, String(config)).toBeFalse();
+      expect(result.loosened, String(config)).toEqual(['topology {} → {"plan_root":"hidden"}']);
+      await git(root, "add", "atdd-bun.yaml");
+      const commit = await runHook("pre-commit", root);
+      expect(commit.ok, String(config)).toBeFalse();
+      expect(commit.message).toContain("looser than its base");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+}, 60_000);
+
+test("pre-push judges the pushed commit, not the checkout", async () => {
+  const root = await legacyRepo();
+  try {
+    // `bad` carries a broken slice file; the checkout is back on the clean `work` branch.
+    await git(root, "checkout", "-qb", "bad"); await addSlice(root); await writeFile(join(root, "src/wagons/orders/features/place/domain/stray.ts"), STRAY);
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "bad"); await git(root, "checkout", "-q", "work");
+    const pushed = await runHook("pre-push", root, [], `refs/heads/bad ${await git(root, "rev-parse", "bad")} refs/heads/bad ${"0".repeat(40)}\n`);
+    expect(pushed.ok).toBeFalse();
+    expect(pushed.message).toContain("stray.ts");
+    expect(await git(root, "worktree", "list")).not.toContain("atdd-bun-push-");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);
+
+test("pre-push refuses pushed commits whose atdd-bun.yaml is looser than their base", async () => {
+  const root = await legacyRepo();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), BROWNFIELD + "topology:\n  plan_root: hidden\n");
+    await git(root, "add", "atdd-bun.yaml"); await git(root, "commit", "-qm", "hide the plan");
+    const pushed = await runHook("pre-push", root, [], `refs/heads/work ${await git(root, "rev-parse", "HEAD")} refs/heads/work ${"0".repeat(40)}\n`);
+    expect(pushed.ok).toBeFalse();
+    expect(pushed.message).toContain('topology {} → {"plan_root":"hidden"}');
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 60_000);
+
 test("deleting a feature's only source brings that feature's own obligations into the slice", async () => {
   const root = await legacyRepo();
   try {

@@ -89,8 +89,9 @@ changed slice: findings in a file the change touches, naming an identity on a li
 removes (so deleting a test brings its acceptance back), or owned by a plan artifact it edits (so a
 `status:` flip activates that feature's acceptances). Legacy findings elsewhere are counted on
 every run and still fail `atdd-bun all`. With no usable base, or when `atdd-bun.yaml` changes beyond
-`adoption`, the gate runs the full audit. Switching to brownfield, moving its base or moving a
-topology root counts as loosening `atdd-bun.yaml`, which the integrity check reports for approval.
+`adoption`, the gate runs the full audit. `atdd-bun all` audits under the configuration it is given,
+so the gate and the integrity check refuse an `atdd-bun.yaml` looser than the base's (brownfield,
+a moved base, a moved topology root) until a human approves it. Pre-push judges the pushed commit.
 
 ## Configuration
 

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { enforce, type Profile, type Violation } from "./enforce";
+import { loosenedPolicy } from "./integrity";
 import { lifecycleOf } from "./lifecycle";
 import { loadPlan } from "./planner-kernel";
 
@@ -79,9 +80,23 @@ const configScope = (text: string | null) => { let data: unknown = {}; try { dat
 /** Whether the change edits atdd-bun.yaml beyond its adoption block. Topology roots, registry paths or limits
  * re-scope every check, so a slice cannot be trusted and the full audit applies. */
 async function configurationChanged(root: string, diff: string[]): Promise<boolean> {
-  const at = async (rev: string) => { const shown = await git(root, ["show", `${rev}:atdd-bun.yaml`]); return shown.code ? null : shown.out; };
-  const [before, after] = diff[0] === "--cached" ? [await at("HEAD"), await at("")] : diff.length >= 2 ? [await at(diff[0]), await at(diff[1])] : [await at(diff[0]), existsSync(join(root, "atdd-bun.yaml")) ? await readFile(join(root, "atdd-bun.yaml"), "utf8") : null];
+  const [before, after] = await configPair(root, diff);
   return configScope(before) !== configScope(after);
+}
+
+/** atdd-bun.yaml before and after a diff (as for `sliceOf`); null where the file does not exist. */
+async function configPair(root: string, diff: string[]): Promise<[string | null, string | null]> {
+  const at = async (rev: string) => { const shown = await git(root, ["show", `${rev}:atdd-bun.yaml`]); return shown.code ? null : shown.out; };
+  return diff[0] === "--cached" ? [await at("HEAD"), await at("")] : diff.length >= 2 ? [await at(diff[0]), await at(diff[1])] : [await at(diff[0]), existsSync(join(root, "atdd-bun.yaml")) ? await readFile(join(root, "atdd-bun.yaml"), "utf8") : null];
+}
+
+/** How the change loosens atdd-bun.yaml against its base (moved topology roots included). `atdd-bun all`
+ * can only audit under the configuration it is given, so the gate refuses a configuration looser than the
+ * base's: otherwise moving plan_root away would make every plan violation vanish from both. */
+export async function policyLoosening(root: string, diff: string[]): Promise<string[]> {
+  const parse = (text: string | null) => { try { const data = text ? Bun.YAML.parse(text) : {}; return (data && typeof data === "object" ? data : {}) as Record<string, unknown>; } catch { return {}; } };
+  const [before, after] = await configPair(root, diff);
+  return loosenedPolicy(parse(before), parse(after));
 }
 
 /** The slice of a `git diff` (e.g. [base] for base..working tree, ["--cached"] for the staged change,
@@ -112,22 +127,25 @@ export function inSlice(root: string, violation: Violation, slice: Slice): boole
   return slice.files.has(relativeFile(root, violation.file)) || tokens(`${violation.evidence} ${violation.source_line}`).some(id => slice.identities.has(id));
 }
 
-export type GateResult = { ok: boolean; mode: AdoptionMode; blocking: Violation[]; outside: number; message: string };
+export type GateResult = { ok: boolean; mode: AdoptionMode; blocking: Violation[]; outside: number; loosened: string[]; message: string };
 
 /** Split an audit into what blocks and what is legacy debt. `slice` null means the scope is unknown, so
- * everything blocks. */
-export function partition(root: string, mode: AdoptionMode, findings: Violation[], slice: Slice | null): GateResult {
+ * everything blocks. `loosened` (atdd-bun.yaml looser than the base's) blocks on its own. */
+export function partition(root: string, mode: AdoptionMode, findings: Violation[], slice: Slice | null, loosened: string[] = []): GateResult {
   const blocking = mode === "greenfield" || !slice ? findings : findings.filter(v => inSlice(root, v, slice)), outside = findings.length - blocking.length;
   const scope = mode === "greenfield" ? "greenfield: full audit" : slice ? `brownfield: changed slice of ${slice.files.size} file(s)` : "brownfield: slice unknown (no usable base, or atdd-bun.yaml changed beyond adoption), full audit";
   const debt = outside ? `; ${outside} legacy finding(s) outside the slice (atdd-bun all lists them)` : "";
-  return { ok: blocking.length === 0, mode, blocking, outside, message: `atdd-bun gate (${scope}): ${blocking.length} blocking${debt}` };
+  const policy = loosened.length ? `; atdd-bun.yaml is looser than its base (${loosened.join("; ")}), which needs a human's approval` : "";
+  return { ok: blocking.length === 0 && loosened.length === 0, mode, blocking, outside, loosened, message: `atdd-bun gate (${scope}): ${blocking.length} blocking${debt}${policy}` };
 }
 
-/** The adoption-aware gate over the working tree: `all` for greenfield, the changed slice for brownfield. */
+/** The adoption-aware gate over the working tree: `all` for greenfield, the changed slice for brownfield, and
+ * in both a refusal of any atdd-bun.yaml looser than the base's. */
 export async function gate(options: { root?: string; base?: string; profiles?: Profile[] } = {}): Promise<GateResult> {
   const root = resolve(options.root ?? process.cwd()), adoption = await adoptionPolicy(root);
   const findings = await enforce({ root, profiles: options.profiles ?? ["all"] });
-  if (adoption.mode === "greenfield") return partition(root, "greenfield", findings, null);
   const against = await baseCommit(root, options.base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? undefined : adoption.base));
-  return partition(root, "brownfield", findings, against ? await sliceOf(root, [against], true) : null);
+  const loosened = against ? await policyLoosening(root, [against]) : [];
+  if (adoption.mode === "greenfield") return partition(root, "greenfield", findings, null, loosened);
+  return partition(root, "brownfield", findings, against ? await sliceOf(root, [against], true) : null, loosened);
 }
