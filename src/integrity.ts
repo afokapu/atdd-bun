@@ -9,7 +9,8 @@ import { defaultHookPolicy, type HookPolicy } from "./hooks";
  * clean install (the verdict the agent cannot fake).
  */
 export type IntegrityFinding = { file: string; detail: string; restore: string };
-export type IntegrityOptions = { root?: string; packageRoot?: string; base?: string };
+/** `push`: judge the newest commit against its parent (a push to the base branch). Defaults to GITHUB_EVENT_NAME === "push". */
+export type IntegrityOptions = { root?: string; packageRoot?: string; base?: string; push?: boolean };
 
 const PACKAGE = "@afokapu/atdd-bun";
 const ownRoot = resolve(import.meta.dir, "..");
@@ -115,12 +116,12 @@ export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookP
 }
 
 /** atdd-bun.yaml is not looser than on the branch being merged into. */
-async function checkPolicy(root: string, base?: string): Promise<IntegrityFinding[]> {
+async function checkPolicy(root: string, base?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<IntegrityFinding[]> {
   const ref = base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
   if ((await git(root, ["rev-parse", "--verify", "--quiet", ref])).code) return [];
   let against = (await git(root, ["merge-base", "HEAD", ref])).out;
   // A CI push to the base branch has nothing to merge into: judge the pushed commit against its parent.
-  if (process.env.GITHUB_EVENT_NAME === "push" && against === (await git(root, ["rev-parse", "HEAD"])).out) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
+  if (push && against === (await git(root, ["rev-parse", "HEAD"])).out) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
   if (!against) return [];
   const read = async (text: string | null) => (text ? Bun.YAML.parse(text) ?? {} : {}) as Partial<HookPolicy>;
   const before = await git(root, ["show", `${against}:atdd-bun.yaml`]), path = join(root, "atdd-bun.yaml");
@@ -130,7 +131,7 @@ async function checkPolicy(root: string, base?: string): Promise<IntegrityFindin
 
 export async function checkIntegrity(options: IntegrityOptions = {}): Promise<IntegrityFinding[]> {
   const root = resolve(options.root ?? process.cwd()), packageRoot = options.packageRoot ?? ownRoot;
-  return [...await checkInstalledPackage(packageRoot), ...await checkDependency(root), ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base)];
+  return [...await checkInstalledPackage(packageRoot), ...await checkDependency(root), ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base, options.push)];
 }
 
 /** The message both the local test and CI print: addressed to the agent, with the way back for every file. */

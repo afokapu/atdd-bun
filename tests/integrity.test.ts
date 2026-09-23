@@ -63,14 +63,13 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 300\n");
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
-    expect(await checkIntegrity({ root, base: "base" })).toEqual([]);
+    expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 5000\nrequire_traceability: false\nprotected_branches: [develop]\n");
-    const [finding] = await checkIntegrity({ root, base: "base" });
+    const [finding] = await checkIntegrity({ root, base: "base", push: false });
     expect(finding.file).toBe("atdd-bun.yaml");
     for (const text of ["max_staged_changed_lines 300 → 5000", "require_traceability true → false", "protected_branches drops main, master"]) expect(finding.detail).toContain(text);
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
-    const pushed = Bun.spawn({ cmd: [process.execPath, "-e", `import { checkIntegrity } from "${join(packageRoot, "src/integrity.ts")}"; console.log(JSON.stringify(await checkIntegrity({ root: ${JSON.stringify(root)}, base: "base" })));`], env: { ...process.env, GITHUB_EVENT_NAME: "push" }, stdout: "pipe" });
-    expect((JSON.parse(await new Response(pushed.stdout).text()) as { file: string }[]).map(f => f.file)).toEqual(["atdd-bun.yaml"]);
+    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual(["atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
