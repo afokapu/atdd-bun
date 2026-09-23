@@ -29,7 +29,8 @@ After that, require the workflow's job in the GitHub branch ruleset so it gates 
 
 | Command | What it does |
 |---|---|
-| `atdd-bun [profile ...] [--root <path>]` | Enforce one or more profiles (default `all`) |
+| `atdd-bun [profile ...] [--root <path>]` | Enforce one or more profiles (default `all`, the full audit) |
+| `atdd-bun gate [--base <ref>]` | What hooks and CI block on: see [adoption](#greenfield-and-brownfield-adoption) |
 | `atdd-bun init [--replace]` | Install hooks, CI, agent files and integrity test |
 | `atdd-bun hooks <install\|uninstall\|status>` | Manage only the Git hooks |
 | `atdd-bun ci <init\|status>` | Manage only the CI workflow |
@@ -60,42 +61,33 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | `interlocking` | train/interlocking binding, infrastructure and route coverage |
 | `htmx` | htmx source/test conventions and Playwright browser specs (`*.e2e.ts`) |
 | `design` | design-system layering, token-only styling and responsiveness |
-| `all` | everything; what CI runs |
+| `all` | everything: the full audit |
 
 `planner-nodes/ENFORCEMENT_SCOPE.yaml` says which canonical planner rules have a Bun realization.
 
-## Staged activation (greenfield and brownfield)
+## Greenfield and brownfield adoption
 
-A greenfield repository activates everything from the start. A brownfield repository whose plan
-describes more than is built can enable capabilities gradually, feature by feature, through
-`status` on features and trains:
+A greenfield repository enables everything from the start. A brownfield one enables capabilities
+gradually, on two independent axes. `atdd-bun all` is always the full, strict audit.
 
-| Status | Meaning |
-|---|---|
-| *(none)* | executable, exactly as before lifecycles existed |
-| `planned` | declared, not yet executable: its acceptances are **planned debt**, not violations |
-| `tested` | every acceptance the feature owns must be bound by a Bun test |
-| `implemented` | as `tested`, and component source must claim the feature |
+**Plan scope: feature and train `status`.** A plan describing more than is built marks it
+`planned` (declared, not executable: its acceptances are *planned debt*), then `tested` (every
+acceptance it owns has a Bun test) and `implemented` (also claimed by component source). No status
+means executable, as before. `atdd-bun lifecycle` lists the planned debt deterministically.
 
-```yaml
-# plan/orders/place-order.yaml
-urn: feature:orders:place-order
-status: planned
-```
+- Schema, planner and topology validation apply to planned artifacts too; a bad status or an
+  acceptance owned by two features fails.
+- Activating a feature fails the commit and CI until every acceptance it owns is bound.
+- Every source `Tested-By:` and every test binding must resolve, whatever the status; planned
+  features may carry partial source, so a downgrade hides nothing that exists.
+- A `tested`/`implemented` train needs a `// Train: <id>` test; a planned one owes no E2E yet.
 
-What never loosens:
-
-- Schema, planner and topology validation apply to planned artifacts too.
-- Moving a feature to `tested` or `implemented` fails the commit (hook) and CI until every acceptance it owns is bound.
-- Every component source needs a resolving `Tested-By:`, whatever its status; planned features may carry partial source.
-- Every test binding (`Acceptance:`, `WMBT:`, `Train:`) must resolve, including those into planned scope.
-- A `tested` or `implemented` train needs a Bun test with `// Train: <id>`; a planned train owes no
-  E2E, browser spec or route test yet.
-- Once any status is declared, an acceptance owned by more than one feature fails, and so does a
-  status outside the vocabulary.
-
-A downgrade to `planned` hides nothing that exists: source and test bindings stay strict, and
-the deferred acceptances are listed by `atdd-bun lifecycle`, a deterministic report fit for CI logs.
+**Gate scope: `adoption.mode`.** Hooks and the generated CI block on `atdd-bun gate`. In greenfield
+(the default) that is the full audit. With `adoption: { mode: brownfield }` it blocks on the
+changed slice: findings in a file the change touches, or naming an identity on a line it adds or
+removes (so deleting a test brings its acceptance back). Legacy findings elsewhere are counted on
+every run and still fail `atdd-bun all`. An unresolvable base means the full audit, and switching
+to brownfield counts as loosening `atdd-bun.yaml`, which the integrity check reports for approval.
 
 ## Configuration
 
@@ -112,12 +104,14 @@ frontend:
   breakpoints: [480, 768, 1024, 1280]
 registry_paths: ["plan/_*.yaml", "contracts/_*.yaml"]   # exempt from micro-commit size caps only
 max_registry_removed_lines: 350                        # larger removals need [mass-delete-approved]
+adoption: { mode: greenfield, base: origin/HEAD }        # brownfield: gate on the changed slice
 worktrees: { enabled: false }
 release: { enabled: false }
 ```
 
-The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and
-validation of the affected area. Git can bypass them, so CI is the authority.
+The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and the
+gate. Git can bypass them, so CI is the authority. Scans skip `node_modules`, build output and
+nested agent worktrees (`.claude/worktrees/`), which are other checkouts of the repository.
 
 ## Agents and integrity
 
@@ -137,7 +131,7 @@ Each finding names its restore command.
 ## Staying up to date
 
 Every merge to this package's `main` is published to npm with provenance as the next patch and
-tagged `vX.Y.Z` on a commit whose `package.json` carries that version. Rules and hooks change as
+tagged `vX.Y.Z` on a release commit holding exactly the published tree. Rules and hooks change as
 soon as a repository upgrades the dependency. To refresh the skills and instruction blocks on every
 install, add this to the repository's own `package.json`:
 

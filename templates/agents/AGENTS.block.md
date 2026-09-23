@@ -3,7 +3,7 @@
 
 Before changing code, tests, or `plan/`, follow `.agents/skills/atdd/SKILL.md`: PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE, passing each stage's `atdd-bun` gate before starting the next.
 
-Capabilities can be enabled gradually: a greenfield repository activates everything from the start; a brownfield one marks features and trains `status: planned` and activates them (`tested`, then `implemented`) one at a time. `atdd-bun lifecycle` lists the planned debt that remains.
+Capabilities can be enabled gradually: a greenfield repository activates everything from the start; a brownfield one marks features and trains `status: planned` and activates them (`tested`, then `implemented`) one at a time. `atdd-bun lifecycle` lists the planned debt that remains. With `adoption: { mode: brownfield }`, hooks and CI (`atdd-bun gate`) block on what your change touches; legacy findings elsewhere are counted, and `atdd-bun all` is still the full audit. Your changed slice must be clean.
 
 Never modify the toolkit itself: not `node_modules/@afokapu/atdd-bun`, not atdd-bun's generated files (skills, this block, the integrity test). Change only the configuration it offers (`atdd-bun.yaml`, plan statuses), and never to loosen enforcement; the integrity test and CI fail if you do.
 <!-- atdd-bun:end -->
