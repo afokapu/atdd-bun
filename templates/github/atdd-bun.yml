@@ -15,7 +15,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run atdd-bun integrity
-      - run: bun run atdd-bun all
+      # The adoption-aware gate: the full audit (`atdd-bun all`) in greenfield; in brownfield, the change's
+      # slice against the pull request's base branch (or, on a push, the previous commit).
+      - run: bun run atdd-bun gate
       - run: bun test
       - run: bun run atdd-bun release check
       - uses: actions/upload-artifact@v4

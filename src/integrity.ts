@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
+import { adoptionOf } from "./adoption";
 
 /**
  * Integrity: the files an agent could change to weaken enforcement must stay canonical.
@@ -106,7 +107,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
 }
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookPolicy>): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { adoption?: unknown }, current: Partial<HookPolicy> & { adoption?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -115,6 +116,8 @@ export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookP
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
+  // Brownfield narrows what the gate blocks on to the changed slice.
+  if (adoptionOf(base).mode === "greenfield" && adoptionOf(current).mode === "brownfield") out.push("adoption.mode greenfield → brownfield");
   return out;
 }
 

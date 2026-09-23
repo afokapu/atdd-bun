@@ -107,6 +107,6 @@ test("the CLI exits non-zero with the loud message, and the generated workflow r
     expect(await child.exited).toBe(1);
     expect(await new Response(child.stderr).text()).toContain("ATDD INTEGRITY VIOLATION");
     const workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
-    expect(workflow.indexOf("bun run atdd-bun integrity")).toBeLessThan(workflow.indexOf("bun run atdd-bun all"));
+    expect(workflow.indexOf("bun run atdd-bun integrity")).toBeLessThan(workflow.indexOf("bun run atdd-bun gate"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
