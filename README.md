@@ -9,7 +9,8 @@ plan / WMBT → acceptance → Bun test → implementation
 
 It runs on Bun from the repository's own `node_modules`, with no global install and no network
 access. The same checks run as local tests, as Git hooks for fast feedback, and in GitHub Actions,
-which is the merge gate. Every finding fails: there is no advisory mode and no ratchet baseline.
+which is the merge gate. `atdd-bun all` fails on every finding: there is no advisory mode and no
+ratchet baseline. A brownfield repository can gate on its changed slice ([adoption](#greenfield-and-brownfield-adoption)).
 
 ## Install
 
@@ -84,10 +85,12 @@ means executable, as before. `atdd-bun lifecycle` lists the planned debt determi
 
 **Gate scope: `adoption.mode`.** Hooks and the generated CI block on `atdd-bun gate`. In greenfield
 (the default) that is the full audit. With `adoption: { mode: brownfield }` it blocks on the
-changed slice: findings in a file the change touches, or naming an identity on a line it adds or
-removes (so deleting a test brings its acceptance back). Legacy findings elsewhere are counted on
-every run and still fail `atdd-bun all`. An unresolvable base means the full audit, and switching
-to brownfield counts as loosening `atdd-bun.yaml`, which the integrity check reports for approval.
+changed slice: findings in a file the change touches, naming an identity on a line it adds or
+removes (so deleting a test brings its acceptance back), or owned by a plan artifact it edits (so a
+`status:` flip activates that feature's acceptances). Legacy findings elsewhere are counted on
+every run and still fail `atdd-bun all`. With no usable base, or when `atdd-bun.yaml` changes beyond
+`adoption`, the gate runs the full audit. Switching to brownfield, moving its base or moving a
+topology root counts as loosening `atdd-bun.yaml`, which the integrity check reports for approval.
 
 ## Configuration
 
