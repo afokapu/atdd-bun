@@ -38,8 +38,11 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   design: ["bun_design_system_detector", "bun_responsive_detector"],
 };
 
+type ConcreteProfile = Exclude<Profile, "all">;
+/** Every profile but `all`. */
+export const concreteProfiles = Object.keys(profiles) as ConcreteProfile[];
 /** Profile names accepted by the CLI and public integrations. */
-export const profileNames = [...Object.keys(profiles), "all"] as Profile[];
+export const profileNames = [...concreteProfiles, "all"] as Profile[];
 
 /**
  * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every profile when absent. A legacy
@@ -47,15 +50,14 @@ export const profileNames = [...Object.keys(profiles), "all"] as Profile[];
  * generated CI run exactly these; naming a profile explicitly still runs it. An unknown name or an empty list is
  * a configuration error, never a silent "run nothing".
  */
-export async function enabledProfiles(root = process.cwd()): Promise<Exclude<Profile, "all">[]> {
-  const every = Object.keys(profiles) as Exclude<Profile, "all">[], file = join(resolve(root), "atdd-bun.yaml");
-  const config = existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null : null;
-  if (config?.profiles === undefined) return every;
-  const listed = config.profiles;
+export async function enabledProfiles(root = process.cwd()): Promise<ConcreteProfile[]> {
+  const file = join(resolve(root), "atdd-bun.yaml");
+  const listed = existsSync(file) ? (Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null)?.profiles : undefined;
+  if (listed === undefined) return concreteProfiles;
   if (!Array.isArray(listed) || !listed.length) throw new Error("atdd-bun.yaml profiles must be a non-empty list of profile names");
-  const unknown = listed.filter(name => !every.includes(name as Exclude<Profile, "all">));
-  if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${every.join(", ")}`);
-  return [...new Set(listed as Exclude<Profile, "all">[])];
+  const unknown = listed.filter(name => !concreteProfiles.includes(name));
+  if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${concreteProfiles.join(", ")}`);
+  return [...new Set(listed as ConcreteProfile[])];
 }
 
 const packageRoot = resolve(import.meta.dir, "..");

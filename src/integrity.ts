@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { instructionPaths } from "./agent";
-import { profileNames } from "./enforce";
+import { concreteProfiles } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -117,7 +117,7 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
   // Deactivating a profile stops enforcing it; the operator may do it, as a change a human approves.
-  const active = (config: { profiles?: unknown }) => Array.isArray(config.profiles) ? config.profiles.map(String) : profileNames.filter(name => name !== "all");
+  const active = (config: { profiles?: unknown }): string[] => Array.isArray(config.profiles) ? config.profiles.map(String) : concreteProfiles;
   const dropped = active(base).filter(name => !active(current).includes(name));
   if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
   return out;
