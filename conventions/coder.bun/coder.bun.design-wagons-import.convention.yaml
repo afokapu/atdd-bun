@@ -1,0 +1,35 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-wagons-import
+kind: rule
+status: active
+name: The design system never imports app or wagon code
+statement: A file under a design root MUST NOT import a relative path that resolves outside the design root. Wagons
+  and app code import FROM the design system, never the reverse, so the system stays wagon-agnostic. Bun realization
+  of the outward half of `coder.design.hierarchy-import`, mirroring `coder.vite.design-wagons-import`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: outward_import
+  text: a relative import from a design-system file whose target lies outside every design root.
+content:
+  summary: Flags relative imports from a design-system file that leave the design root.
+  normative_text: 'A design system that reaches into a wagon has become part of that wagon: it cannot be reused
+    by the next one, and a change to the wagon breaks the system.'
+  fix_hint: Pass the value in as a prop, or move the shared type or constant into the design system (or a shared
+    commons module) so the dependency points inward.
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - Bare package specifiers (`hono/jsx`) are outside the project graph and are not judged.
+  - Aliased specifiers are judged only when they name a design directory.
+metadata:
+  aliases:
+  - BUN-DESIGN-WAGONS-IMPORT-001
+  core_obligation: coder.design.hierarchy-import
+  severity: 3
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

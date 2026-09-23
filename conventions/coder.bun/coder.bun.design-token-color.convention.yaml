@@ -1,0 +1,38 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-token-color
+kind: rule
+status: active
+name: UI files use color tokens, not raw color literals
+statement: Outside the tokens layer, a UI file (`.tsx`, `.jsx`, `.html`, `.htm`, `.css`) MUST NOT write a raw color
+  literal — `#rgb`/`#rrggbb`/`#rrggbbaa`, `rgb()`/`rgba()`, `hsl()`/`hsla()` — in a CSS declaration, a `style` attribute,
+  a `<style>` block, a JSX `style={{…}}` object, or a `fill`/`stroke`/`bgcolor` attribute. Colors come from tokens
+  (`var(--…)`). Bun realization of `coder.design.token-color`, mirroring `coder.vite.design-token-color`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: raw_color_literal
+  text: 'a hex, rgb(a), or hsl(a) color written in a declaration value. Selectors are not values: `#fade:hover {`
+    is never read as a color.'
+content:
+  summary: Reads declarations from stylesheets, style attributes, style blocks, and JSX style objects, and flags
+    raw color literals in their values.
+  normative_text: A raw color is a theme decision made in one place. It does not follow dark mode, it drifts from
+    the palette, and nobody can find it when the palette changes.
+  fix_hint: 'Define the color once as a custom property in the tokens layer and reference it: `color: var(--danger)`.'
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - Custom property definitions (`--danger: #b91c1c`) define tokens wherever they live and are not flagged.
+  - The tokens/foundations layer is where raw colors are defined and is not scanned.
+  - Named colors (`red`, `white`) and `currentColor`/`transparent` are not flagged.
+metadata:
+  aliases:
+  - BUN-DESIGN-TOKEN-COLOR-001
+  core_obligation: coder.design.token-color
+  severity: 2
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

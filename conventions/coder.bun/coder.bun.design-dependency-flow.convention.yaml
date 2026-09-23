@@ -1,0 +1,37 @@
+schema_version: 1.1.0
+rule_id: coder.bun.design-dependency-flow
+kind: rule
+status: active
+name: Design-system layers import only their own layer or a lower one
+statement: A file under a design root MUST import only from its own layer or a lower one in the hierarchy tokens/foundations
+  (0) <- primitives (1) <- components (2) <- templates (3). Upward edges — tokens importing primitives, primitives
+  importing components, components importing templates — are forbidden. Bun realization of the core obligation `coder.design.hierarchy-import`,
+  mirroring `coder.vite.design-dependency-flow`.
+terms:
+- term_id: design_root
+  text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
+    layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
+    is not judged (self-scoping): there is no system to connect to yet.'
+- term_id: upward_import
+  text: an import from a design-system file into a HIGHER layer, resolved from a relative path or from an aliased
+    specifier that names the design directory (`@/design/components/Card`).
+content:
+  summary: Resolves each import of a design-system file to its target layer and flags any edge that points upward.
+  normative_text: A hierarchy is only a hierarchy if dependencies flow one way. A primitive that imports a component
+    can no longer be reused without dragging that component along, and the layers collapse into one tangle.
+  fix_hint: 'Move the shared piece down to the lowest layer that needs it, or compose upward: the component imports
+    the primitive, never the reverse.'
+  exceptions:
+  - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
+  - Imports within the same layer are allowed.
+  - Files directly under the design root, outside any named layer, are not layered.
+metadata:
+  aliases:
+  - BUN-DESIGN-DEPENDENCY-FLOW-001
+  core_obligation: coder.design.hierarchy-import
+  severity: 3
+  disposition: strict
+  introduced_in: 0.2.0
+implementation:
+  type: validator
+  ref: bun_design_system_detector

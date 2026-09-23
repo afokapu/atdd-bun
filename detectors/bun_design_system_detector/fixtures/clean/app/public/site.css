@@ -1,0 +1,9 @@
+/* A standalone sheet may define tokens; it must not use raw values. */
+:root {
+  --accent: #0ea5e9;
+  --gutter: 24px;
+}
+.hero {
+  color: var(--accent);
+  padding: var(--gutter);
+}
