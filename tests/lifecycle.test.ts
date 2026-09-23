@@ -145,6 +145,14 @@ test("a Tested-By entry counts only under a Tested-By header", async () => {
   expect(await traceability(root)).toEqual(["traceability.source.tested-by-present src/stray.ts"]);
 });
 
+test("every Tested-By entry is judged: a malformed one after a valid one fails", async () => {
+  const root = await repo({
+    "plan/orders/E001.yaml": wmbt("E001", "001"), "test/one.test.ts": bound("acc:orders:E001-UNIT-001"),
+    "src/mixed.ts": "// URN: component:orders:a:Mixed:backend:domain\n// Tested-By:\n// - test:orders:x:E001-UNIT-001\n// - not-a-test\nexport const m = 1;\n",
+  });
+  expect(await traceability(root)).toEqual(["traceability.source.tested-by-resolves src/mixed.ts"]);
+});
+
 test("a train-parented acceptance follows its train's lifecycle", async () => {
   const plan = (status: string) => repo({ "plan/_trains/checkout.yaml": `train_id: train:orders:checkout\nstatus: ${status}\n`, "plan/_trains/checkout.acc.yaml": "urn: acc:train:orders:checkout:pays\nid: AC-E2E-001\n" });
   expect(await traceability(await plan("planned"))).toEqual([]);

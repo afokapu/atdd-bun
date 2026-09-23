@@ -68,9 +68,10 @@ for (const root of roots) {
     }
     const component = head.match(/^\s*\/\/\s*URN:\s*(component:[^\s]+)/m);
     if (!component) return;
-    // Only `- test:` entries directly under a `// Tested-By:` header count; a stray list item declares nothing.
+    // Only list entries directly under a `// Tested-By:` header count, and EVERY one of them is judged: a
+    // malformed `- not-a-test` after a valid entry fails too. A stray list item elsewhere declares nothing.
     const lines = head.split("\n"), header = lines.findIndex((line) => /^\s*\/\/\s*Tested-By:\s*$/.test(line)), testedBy = [];
-    if (header !== -1) for (const line of lines.slice(header + 1)) { const entry = line.match(/^\s*\/\/\s*-\s*(test:[^\s]+)/); if (!entry) break; testedBy.push(entry[1]); }
+    if (header !== -1) for (const line of lines.slice(header + 1)) { const entry = line.match(/^\s*\/\/\s*-\s*(\S*)/); if (!entry) break; testedBy.push(entry[1] || "<empty>"); }
     sources.push({ path, head, component: component[1], testedBy });
   });
 }
@@ -92,12 +93,12 @@ for (const acceptance of plans.acc) {
   add("traceability.plan.executable-acceptance-has-test", declared ?? planDisplay, declared ? lineOf(text(declared), acceptance) : 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
-  if (!source.testedBy.length) {
+  if (!source.testedBy.some((entry) => entry.startsWith("test:"))) {
     add("traceability.source.tested-by-present", source.path, lineOf(source.head, source.component), `${source.component} has no Tested-By: test:... declaration`, source.component);
     continue;
   }
   for (const testUrn of source.testedBy) {
-    if (!tests.has(testUrn)) add("traceability.source.tested-by-resolves", source.path, lineOf(source.head, testUrn), `${testUrn} does not resolve to a Bun test`, testUrn);
+    if (!tests.has(testUrn)) add("traceability.source.tested-by-resolves", source.path, lineOf(source.head, testUrn), testUrn.startsWith("test:") ? `${testUrn} does not resolve to a Bun test` : `Tested-By entry ${testUrn} is not a test: URN`, testUrn);
   }
 }
 const statusLine = (path) => { const content = text(path), match = content.match(/^status:.*$/m); return match ? { line: lineOf(content, match[0]), source: match[0] } : { line: 1, source: "" }; };
