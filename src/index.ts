@@ -16,6 +16,8 @@ export { checkIntegrity, checkInstalledPackage, formatIntegrity, integrityInit, 
 export type { IntegrityFinding, IntegrityOptions } from "./integrity";
 export { formatPlannedDebt, isPlannedAcceptance, isPlannedTrain, lifecycleOf, loadLifecycle, plannedDebt, STATUSES } from "./lifecycle";
 export type { AcceptanceOwnership, FeatureLifecycle, Lifecycle, PlannedDebt, Status, TrainLifecycle } from "./lifecycle";
+export { adoptionOf, adoptionPolicy, baseCommit, gate, inSlice, partition, sliceOf, touchedIdentities } from "./adoption";
+export type { Adoption, AdoptionMode, GateResult, Slice } from "./adoption";
 export { releaseCheck } from "./release";
 export { defaultTopology, topologyFor } from "./topology";
 export type { Topology } from "./topology";

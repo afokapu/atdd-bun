@@ -6,6 +6,7 @@ import { agentInit, agentStatus } from "./agent";
 import { checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from "./integrity";
 import { journeyDocs } from "./journey-docs";
 import { formatPlannedDebt, loadLifecycle, plannedDebt } from "./lifecycle";
+import { gate } from "./adoption";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
 
@@ -14,6 +15,7 @@ const usage = {
   command: "atdd-bun",
   usage: [
     "atdd-bun [profile ...] [--root <path>]",
+    "atdd-bun gate [--base <ref>] [--root <path>]",
     "atdd-bun init [--replace]",
     "atdd-bun hooks <install|uninstall|status> [--replace]",
     "atdd-bun worktree <start|finish|status>",
@@ -88,6 +90,12 @@ if (args[0] === "integrity") {
 }
 if (args[0] === "agent") {
   const result = args[1] === "init" ? await agentInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await agentStatus() : fail("agent requires init or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "gate") {
+  const flag = (name: string) => { const at = args.indexOf(name); if (at === -1) return undefined; if (!args[at + 1]) fail(`${name} requires a value`); return args[at + 1]; };
+  const result = await gate({ root: flag("--root"), base: flag("--base") });
+  for (const violation of result.blocking) console.error([violation.file, violation.line, violation.col].join(":") + " " + violation.rule_id + " — " + violation.evidence);
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "lifecycle") {

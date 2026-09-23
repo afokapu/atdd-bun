@@ -1,0 +1,104 @@
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
+import { enforce, type Profile, type Violation } from "./enforce";
+
+/**
+ * ADOPTION. `atdd-bun all` is always the full, strict audit of the whole repository. The GATE is what hooks
+ * and CI block on, and how much of the audit it blocks on depends on how the repository adopted atdd-bun:
+ *
+ *   greenfield (default)  the gate is the full audit: every finding blocks.
+ *   brownfield            the gate blocks on the CHANGED SLICE: findings in a file the change touches, or
+ *                         naming a plan/test/component identity its changed lines touch. Findings elsewhere
+ *                         are legacy debt: counted and reported on every run, never silently dropped, and
+ *                         still failing `atdd-bun all`.
+ *
+ * The slice is computed from Git (base..HEAD plus the working tree, the staged diff, or a pushed range) and
+ * includes removed lines, so deleting a test pulls the acceptance it bound back into scope. When the base
+ * cannot be resolved the gate falls back to the full audit: it never guesses a smaller scope. Moving from
+ * greenfield to brownfield loosens the policy, so the integrity check reports it until a human approves it.
+ */
+export type AdoptionMode = "greenfield" | "brownfield";
+export type Adoption = { mode: AdoptionMode; base: string };
+export const defaultAdoption: Adoption = { mode: "greenfield", base: "origin/HEAD" };
+
+/** The adoption declared in atdd-bun.yaml. An unknown mode is treated as greenfield: the strict reading. */
+export function adoptionOf(config: unknown): Adoption {
+  const value = config && typeof config === "object" ? (config as { adoption?: unknown }).adoption : undefined;
+  const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return { mode: record.mode === "brownfield" ? "brownfield" : "greenfield", base: typeof record.base === "string" && record.base ? record.base : defaultAdoption.base };
+}
+
+export async function adoptionPolicy(root: string): Promise<Adoption> {
+  const file = join(root, "atdd-bun.yaml");
+  return existsSync(file) ? adoptionOf(Bun.YAML.parse(await readFile(file, "utf8"))) : defaultAdoption;
+}
+
+const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()).trim() }; };
+
+/** The commit a change is measured against: the merge base with `ref` (or, in CI, the PR's base branch). A
+ * push to the base branch itself has nothing to merge into, so it is judged against its parent. */
+export async function baseCommit(root: string, ref?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<string | null> {
+  const target = ref ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : defaultAdoption.base);
+  if ((await git(root, ["rev-parse", "--verify", "--quiet", `${target}^{commit}`])).code) return null;
+  let against = (await git(root, ["merge-base", "HEAD", target])).out;
+  if (push && against && against === (await git(root, ["rev-parse", "HEAD"])).out) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
+  return against || null;
+}
+
+/** What a change touches: its files, and the identities named on the lines it adds or removes. */
+export type Slice = { files: Set<string>; identities: Set<string> };
+
+const IDENTITY = /\b(?:wagon|feature|wmbt|acc|train|interlocking|journey|contract|component|test):[A-Za-z0-9_-]+(?:[:.][A-Za-z0-9_-]+)*/g;
+const tokens = (text: string) => [...text.matchAll(IDENTITY)].map(match => match[0]);
+
+/** Identities a changed line touches, widened to the feature and WMBT they belong to: changing one component,
+ * test or acceptance brings that feature's (and WMBT's) own obligations into the slice. */
+export function touchedIdentities(text: string): string[] {
+  return tokens(text).flatMap(id => {
+    const parts = id.split(":"), out = [id];
+    if ((parts[0] === "component" || parts[0] === "test") && parts.length >= 4 && parts[1] !== "train" && parts[1] !== "journey") out.push(`feature:${parts[1]}:${parts[2]}`);
+    const wmbt = id.match(/^acc:([a-z0-9][a-z0-9-]*):([A-Z][0-9]{3})-/);
+    if (wmbt) out.push(`wmbt:${wmbt[1]}:${wmbt[2]}`);
+    return out;
+  });
+}
+
+/** The slice of a `git diff` (e.g. [base] for base..working tree, ["--cached"] for the staged change,
+ * [from, to] for a pushed range), plus untracked files when `untracked`. */
+export async function sliceOf(root: string, diff: string[], untracked = false): Promise<Slice> {
+  const files = new Set((await git(root, ["diff", "--name-only", "--no-renames", ...diff])).out.split("\n").filter(Boolean));
+  const changed = (await git(root, ["diff", "-U0", "--no-renames", "--no-color", ...diff])).out.split("\n").filter(line => /^[+-]/.test(line) && !/^(\+\+\+|---) /.test(line));
+  if (untracked) for (const path of (await git(root, ["ls-files", "--others", "--exclude-standard"])).out.split("\n").filter(Boolean)) {
+    files.add(path);
+    try { changed.push(await readFile(join(root, path), "utf8")); } catch { /* unreadable: the path alone is in the slice */ }
+  }
+  return { files, identities: new Set(changed.flatMap(touchedIdentities)) };
+}
+
+const relativeFile = (root: string, file: string) => (isAbsolute(file) ? relative(root, file) : file).replaceAll("\\", "/");
+
+/** A finding is in the slice when it is reported on a changed file or names an identity the change touches. */
+export function inSlice(root: string, violation: Violation, slice: Slice): boolean {
+  return slice.files.has(relativeFile(root, violation.file)) || tokens(`${violation.evidence} ${violation.source_line}`).some(id => slice.identities.has(id));
+}
+
+export type GateResult = { ok: boolean; mode: AdoptionMode; blocking: Violation[]; outside: number; message: string };
+
+/** Split an audit into what blocks and what is legacy debt. `slice` null means the scope is unknown, so
+ * everything blocks. */
+export function partition(root: string, mode: AdoptionMode, findings: Violation[], slice: Slice | null): GateResult {
+  const blocking = mode === "greenfield" || !slice ? findings : findings.filter(v => inSlice(root, v, slice)), outside = findings.length - blocking.length;
+  const scope = mode === "greenfield" ? "greenfield: full audit" : slice ? `brownfield: changed slice of ${slice.files.size} file(s)` : "brownfield: base not found, full audit";
+  const debt = outside ? `; ${outside} legacy finding(s) outside the slice (atdd-bun all lists them)` : "";
+  return { ok: blocking.length === 0, mode, blocking, outside, message: `atdd-bun gate (${scope}): ${blocking.length} blocking${debt}` };
+}
+
+/** The adoption-aware gate over the working tree: `all` for greenfield, the changed slice for brownfield. */
+export async function gate(options: { root?: string; base?: string; profiles?: Profile[] } = {}): Promise<GateResult> {
+  const root = resolve(options.root ?? process.cwd()), adoption = await adoptionPolicy(root);
+  const findings = await enforce({ root, profiles: options.profiles ?? ["all"] });
+  if (adoption.mode === "greenfield") return partition(root, "greenfield", findings, null);
+  const against = await baseCommit(root, options.base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? undefined : adoption.base));
+  return partition(root, "brownfield", findings, against ? await sliceOf(root, [against], true) : null);
+}
