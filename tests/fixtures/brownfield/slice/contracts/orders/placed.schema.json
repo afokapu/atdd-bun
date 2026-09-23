@@ -1,0 +1,4 @@
+{
+  "$id": "contract:orders:placed",
+  "type": "object"
+}

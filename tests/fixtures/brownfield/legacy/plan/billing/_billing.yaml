@@ -1,0 +1,16 @@
+# Legacy wagon, written before atdd-bun was adopted. It carries debt on purpose.
+wagon: billing
+urn: wagon:billing
+description: Invoices issued for placed orders.
+subject: agent:accountant
+context: billing
+action: invoice
+goal: bill
+outcome: invoiced
+theme: billing
+features:
+  - urn: feature:billing:invoice
+produce: []
+consume: []
+wmbt:
+  total: 1

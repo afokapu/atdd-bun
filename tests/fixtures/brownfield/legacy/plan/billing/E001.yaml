@@ -1,0 +1,6 @@
+urn: wmbt:billing:E001
+acceptances:
+  - identity:
+      urn: acc:billing:E001-UNIT-001-issues-invoice
+  - identity:
+      urn: acc:billing:E001-UNIT-002-numbers-invoice

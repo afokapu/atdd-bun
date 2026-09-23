@@ -1,0 +1,18 @@
+wagon: orders
+urn: wagon:orders
+description: Orders placed by a shopper, the slice being adopted.
+subject: agent:shopper
+context: checkout
+action: place
+goal: order
+outcome: placed
+theme: orders
+features:
+  - urn: feature:orders:place
+produce:
+  - name: orders:placed
+    contract: contract:orders:placed
+    telemetry: telemetry:orders:placed
+consume: []
+wmbt:
+  total: 1

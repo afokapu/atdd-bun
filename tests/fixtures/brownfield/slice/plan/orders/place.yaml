@@ -1,0 +1,15 @@
+urn: feature:orders:place
+wagon: wagon:orders
+description: Place an order from a non-empty cart.
+status: tested
+sizing:
+  wmbts: 1
+  footprint_score: 1
+  footprint_size: XS
+wmbts: [wmbt:orders:E001]
+components:
+  backend:
+    domain:
+      - type: services
+        count: 1
+        rationale: Totals an order's lines.

@@ -1,0 +1,4 @@
+urn: feature:billing:invoice
+wagon: wagon:billing
+description: Issue an invoice.
+wmbts: [wmbt:billing:E001]

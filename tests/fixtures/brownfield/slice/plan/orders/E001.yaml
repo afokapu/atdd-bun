@@ -1,0 +1,21 @@
+urn: wmbt:orders:E001
+step: execute
+direction: minimize
+dimension: time
+object_of_control: order-placement
+lens: functional.efficiency
+acceptances:
+  - identity:
+      urn: acc:orders:E001-UNIT-001-totals-the-cart
+      id: AC-UNIT-001
+      purpose: The order total is the sum of its lines.
+      phase: GREEN
+    harness:
+      type: unit
+      category: backend
+    given:
+      abstract: [a cart with two lines]
+    when:
+      abstract: the order is placed
+    then:
+      abstract: [the total is the sum of the lines]
