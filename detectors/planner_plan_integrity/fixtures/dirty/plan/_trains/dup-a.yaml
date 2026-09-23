@@ -1,0 +1,7 @@
+train_id: train:orders:duplicate
+title: First declaration
+description: Declares an identity a second file also declares.
+themes: [orders]
+participants: [wagon:ghost]
+wagons: [ghost]
+sequence: []

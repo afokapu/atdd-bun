@@ -1,0 +1,30 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.planner.schema
+kind: rule
+status: active
+name: Plan artifacts satisfy their package-shipped schema
+statement: Every recognized plan artifact (wagon, feature, WMBT and its acceptances, train, train interlocking,
+  journey topology, registries) satisfies its JSON Schema in `planner-schemas/`. A violation that belongs to a canonical
+  rule is reported under that rule (for example `planner.train.naming`); every other violation is reported here.
+  Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+content:
+  summary: Plan artifacts satisfy their package-shipped schema.
+  normative_text: The schemas are the shape every other rule assumes. An artifact that breaks its schema breaks
+    those assumptions silently.
+  fix_hint: Correct the field the finding names, as the schema requires.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-PLANNER-SCHEMA
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: planner_schema_validation

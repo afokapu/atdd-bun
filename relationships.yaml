@@ -8,6 +8,19 @@
 schema_version: 1.0.0
 graph_id: "@afokapu/atdd-bun"
 nodes: 
+  - atdd-bun.planner.acceptance-identity
+  - atdd-bun.planner.identity-unique
+  - atdd-bun.planner.interlocking-participant-resolves
+  - atdd-bun.planner.parse
+  - atdd-bun.planner.reference-resolves
+  - atdd-bun.planner.schema
+  - atdd-bun.planner.train-wagon-resolves
+  - atdd-bun.topology.e2e-location
+  - atdd-bun.topology.feature-source-coverage
+  - atdd-bun.topology.feature-test-coverage
+  - atdd-bun.topology.plan-location
+  - atdd-bun.topology.source-location
+  - atdd-bun.topology.test-location
   - coder.bun.boundaries-http-client
   - coder.bun.commons-application-no-integration
   - coder.bun.commons-cross-feature-imports-in
@@ -4786,5 +4799,195 @@ edges:
     source_ref: coder.bun.responsive-viewport-meta
     strength: important
     target_ref: tester.htmx.a11y-harness
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: an artifact is only identified once it parses
+    source_ref: atdd-bun.planner.parse
+    strength: critical
+    target_ref: atdd-bun.planner.identity-unique
+    type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: a reference resolves to exactly one target only when identities are unique
+    source_ref: atdd-bun.planner.identity-unique
+    strength: critical
+    target_ref: atdd-bun.planner.reference-resolves
+    type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: wagon membership of a train is the train-specific case of reference resolution
+    source_ref: atdd-bun.planner.train-wagon-resolves
+    strength: important
+    target_ref: atdd-bun.planner.reference-resolves
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: interlocking participants are the interlocking-specific case of reference resolution
+    source_ref: atdd-bun.planner.interlocking-participant-resolves
+    strength: important
+    target_ref: atdd-bun.planner.reference-resolves
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "a test can bind an acceptance only through the acc: identity the WMBT gives it"
+    source_ref: atdd-bun.planner.acceptance-identity
+    strength: critical
+    target_ref: traceability.test.binding-resolves
+    type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: a document is validated against its schema only after it parses
+    source_ref: atdd-bun.planner.schema
+    strength: critical
+    target_ref: atdd-bun.planner.parse
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: the schema catch-all beside the canonical rules its violations are routed to
+    source_ref: atdd-bun.planner.schema
+    strength: important
+    target_ref: planner.train.naming
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "features are placed by path once the wagon's feature decomposition is declared"
+    source_ref: atdd-bun.topology.plan-location
+    strength: critical
+    target_ref: planner.wagon.features
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "where a feature lives and which wagon owns it: the same ownership, by path and by link"
+    source_ref: atdd-bun.topology.plan-location
+    strength: important
+    target_ref: planner.feature.wagon-link
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: source is placed beneath a feature the plan declares at its canonical path
+    source_ref: atdd-bun.topology.source-location
+    strength: critical
+    target_ref: atdd-bun.topology.plan-location
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "the same component URN, read for its grammar and for where the file must live"
+    source_ref: atdd-bun.topology.source-location
+    strength: important
+    target_ref: coder.bun.green-urn-pattern
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: tests are placed beneath a feature the plan declares
+    source_ref: atdd-bun.topology.test-location
+    strength: critical
+    target_ref: atdd-bun.topology.plan-location
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "the acceptance a test binds, read for presence and for whether a WMBT declares it"
+    source_ref: atdd-bun.topology.test-location
+    strength: important
+    target_ref: tester.bun.acceptance-binding-declared
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: journey E2E paths are derived from the journeys the plan declares
+    source_ref: atdd-bun.topology.e2e-location
+    strength: critical
+    target_ref: planner.journey.definition
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "every route has an end-to-end proof: at its canonical path, and exercising the production runner"
+    source_ref: atdd-bun.topology.e2e-location
+    strength: important
+    target_ref: tester.bun.interlocking-route-coverage
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: "on a frontend journey a browser spec is the route's end-to-end proof"
+    source_ref: atdd-bun.topology.e2e-location
+    strength: important
+    target_ref: tester.htmx.train-e2e-coverage
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: coverage counts only source placed beneath its feature
+    source_ref: atdd-bun.topology.feature-source-coverage
+    strength: critical
+    target_ref: atdd-bun.topology.source-location
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: coverage counts only tests placed beneath their feature and bound to its acceptances
+    source_ref: atdd-bun.topology.feature-test-coverage
+    strength: critical
+    target_ref: atdd-bun.topology.test-location
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: a feature with WMBTs is implemented and tested
+    source_ref: atdd-bun.topology.feature-test-coverage
+    strength: important
+    target_ref: atdd-bun.topology.feature-source-coverage
     type: runs_alongside
     origin: "@afokapu/atdd-bun"

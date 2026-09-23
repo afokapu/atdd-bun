@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.topology.plan-location
+kind: rule
+status: active
+name: Wagons, features and WMBTs live at their canonical plan paths
+statement: Every wagon is declared at `<plan_root>/<wagon>/_<wagon>.yaml`, every feature at `<plan_root>/<wagon>/<feature>.yaml`,
+  and every WMBT at `<plan_root>/<wagon>/<WMBT>.yaml`. Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+- term_id: topology_settings
+  text: the `topology:` keys `plan_root`, `source_root`, `test_root`, `e2e_root` in `atdd-bun.yaml` (defaults `plan`,
+    `src/wagons`, `tests/wagons`, `e2e`).
+content:
+  summary: Wagons, features and WMBTs live at their canonical plan paths.
+  normative_text: The plan is navigated by path as much as by identity. A document at a non-canonical path is found
+    by nothing that walks the layout, and two layouts in one repository make every tool guess.
+  fix_hint: Move the document to the path the finding names.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-TOPOLOGY-PLAN-LOCATION
+  severity: 3
+  disposition: strict
+  introduced_in: 0.6.0
+implementation:
+  type: validator
+  ref: atdd_topology

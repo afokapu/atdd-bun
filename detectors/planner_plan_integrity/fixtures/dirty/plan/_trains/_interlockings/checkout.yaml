@@ -1,0 +1,6 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:checkout
+title: Checkout
+lifelines:
+  - ref: wagon:nobody
+routes: []

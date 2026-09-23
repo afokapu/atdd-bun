@@ -10,7 +10,8 @@ const plannerNodes = join(packageRoot, "planner-nodes");
 
 async function emittedRuleIds(implementation: string): Promise<string[]> {
   const manifest = await readFile(join(detectors, implementation, "atdd.implementation.yaml"), "utf8");
-  if (manifest.includes("subtype: guard")) return [];
+  // Guards are held to the same per-rule checks as every detector: a convention and a failing case
+  // for each rule they emit. Exempting them is how 13 rules once shipped with neither.
   const ids: string[] = [];
   let inList = false;
   for (const line of manifest.split("\n")) {
@@ -73,8 +74,9 @@ test("the dirty corpus triggers every declared convention rule", async () => {
       ? ["dirty_markdown", "dirty_identity", "dirty_duplicate_id", "dirty_unresolved_edge", "dirty_missing_index", "dirty_adr_registry", "dirty_journey_view"]
       : ["dirty"];
     const groups = await Promise.all(fixtureNames.map(async (name) => runImplementation(implementation, { scanRoots: [join(detectors, implementation, "fixtures", name)], excludes: ["node_modules", ".git", ".atdd"] })));
-    const observed = new Set(groups.flat().map((violation) => violation.rule_id));
-    for (const ruleId of await emittedRuleIds(implementation)) {
+    const observed = new Set(groups.flat().map((violation) => violation.rule_id)), declared = await emittedRuleIds(implementation);
+    for (const ruleId of observed) expect(declared.includes(ruleId), `${implementation} emits ${ruleId} without declaring it in emits_rule_ids`).toBeTrue();
+    for (const ruleId of declared) {
       expect(conventionContents.some((content) => content.includes(`rule_id: ${ruleId}`)), `${ruleId} convention ships`).toBeTrue();
       expect(observed.has(ruleId), `${implementation} dirty fixture triggers ${ruleId}`).toBeTrue();
     }
