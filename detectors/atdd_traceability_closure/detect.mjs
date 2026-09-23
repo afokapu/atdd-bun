@@ -33,7 +33,10 @@ function text(path) { try { return readFileSync(path, "utf8"); } catch { return 
 function add(rule_id, file, line, evidence, source_line = "") {
   violations.push({ rule_id, file, line, col: 1, evidence, source_line });
 }
-function lineOf(content, token) { return content.slice(0, content.indexOf(token)).split("\n").length; }
+function lineOf(content, token) { return lineAt(content, content.indexOf(token)); }
+function lineAt(content, index) { return content.slice(0, index).split("\n").length; }
+// The identity each binding header must carry.
+const PREFIX = { Acceptance: "acc:", WMBT: "wmbt:", Train: "train:" };
 
 for (const root of roots) {
   // `plan_root: .` (or `./`) must still match root-relative paths, which never start with `./`.
@@ -48,7 +51,7 @@ for (const root of roots) {
         train: /\btrain:[A-Za-z0-9_.:-]+/g,
       })) for (const match of content.matchAll(re)) plans[kind].add(match[0]);
       // Where each acceptance is DECLARED (its `urn:` line), so a missing test is reported on the artifact to fix.
-      for (const match of content.matchAll(/\burn:[ \t]*["']?(acc:[A-Za-z0-9_.:-]+)/g)) if (!declaredAt.has(match[1])) declaredAt.set(match[1], { path, line: lineOf(content, match[0]) });
+      for (const m of content.matchAll(/["']?\burn["']?[ \t]*:[ \t]*["']?(acc:[A-Za-z0-9_.:-]+)/g)) if (!declaredAt.has(m[1])) declaredAt.set(m[1], { path, line: lineAt(content, m.index) });
       return;
     }
     if (!sourceExtensions.has(name.slice(name.lastIndexOf(".")))) return;
@@ -57,25 +60,30 @@ for (const root of roots) {
       const urn = head.match(/^\s*\/\/\s*URN:\s*(test:[^\s]+)/m);
       if (!urn) return;
       // EVERY binding header is judged, not only the first: a valid Acceptance: must not carry an unresolved Train:.
-      const headers = [...head.matchAll(/^\s*\/\/\s*(Acceptance|WMBT|Train):[ \t]*(\S*)/gm)].map((match) => ({ kind: match[1], id: match[2], raw: match[0].trim() }));
-      const bindings = headers.filter((h) => h.id.startsWith({ Acceptance: "acc:", WMBT: "wmbt:", Train: "train:" }[h.kind]));
+      const headers = [...head.matchAll(/^[ \t]*\/\/[ \t]*(Acceptance|WMBT|Train):[ \t]*(\S*)/gm)].map((m) => ({ kind: m[1], id: m[2], raw: m[0].trim(), line: lineAt(head, m.index) }));
+      const bindings = headers.filter((h) => h.id.startsWith(PREFIX[h.kind]));
       tests.set(urn[1], { path, bindings });
       if (!headers.length) add("traceability.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
-      for (const h of headers) if (!bindings.includes(h)) add("traceability.test.binding-resolves", path, lineOf(head, h.raw), `${h.kind}: ${h.id || "<empty>"} is not a ${h.kind === "Acceptance" ? "acc" : h.kind.toLowerCase()}: identity`, h.raw);
+      for (const h of headers) if (!bindings.includes(h)) add("traceability.test.binding-resolves", path, h.line, `${h.kind}: ${h.id || "<empty>"} is not a ${PREFIX[h.kind]} identity`, h.raw);
       return;
     }
     const component = head.match(/^\s*\/\/\s*URN:\s*(component:[^\s]+)/m);
     if (!component) return;
     // Only list entries directly under a `// Tested-By:` header count, and EVERY one of them is judged: a
     // malformed `- not-a-test` after a valid entry fails too. A stray list item elsewhere declares nothing.
-    const lines = head.split("\n"), testedBy = [];
-    lines.forEach((line, header) => { if (!/^\s*\/\/\s*Tested-By:\s*$/.test(line)) return; for (const next of lines.slice(header + 1)) { const entry = next.match(/^\s*\/\/\s*-\s*(\S*)/); if (!entry) break; testedBy.push(entry[1] || "<empty>"); } });
+    const testedBy = [];
+    let under = false;
+    for (const line of head.split("\n")) {
+      if (/^\s*\/\/\s*Tested-By:\s*$/.test(line)) { under = true; continue; }
+      const entry = under && line.match(/^\s*\/\/\s*-\s*(\S*)/);
+      if (entry) testedBy.push(entry[1] || "<empty>"); else under = false;
+    }
     sources.push({ path, head, component: component[1], testedBy });
   });
 }
 
 for (const test of tests.values()) for (const binding of test.bindings) {
-  if (!plans[binding.id.split(":", 1)[0]].has(binding.id)) add("traceability.test.binding-resolves", test.path, lineOf(text(test.path), binding.raw), `${binding.id} is not declared in plan/`, binding.raw);
+  if (!plans[binding.id.split(":", 1)[0]].has(binding.id)) add("traceability.test.binding-resolves", test.path, binding.line, `${binding.id} is not declared in plan/`, binding.raw);
 }
 const boundAcceptances = new Set([...tests.values()].flatMap((test) => test.bindings.map((binding) => binding.id)).filter((id) => id.startsWith("acc:")));
 for (const acceptance of plans.acc) {

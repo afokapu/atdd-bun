@@ -22,16 +22,21 @@ test("every binding header must resolve, not only the first", async () => {
     "test/bad.test.ts": "// URN: test:orders:x:E001-UNIT-002\n// Acceptance: acc:orders:E001-UNIT-001\n// WMBT: not-a-wmbt\n",
   });
   expect(await findings(root)).toEqual(["traceability.test.binding-resolves test/bad.test.ts", "traceability.test.binding-resolves test/two.test.ts"]);
+  // Identical headers are each reported at their own line.
+  const twice = await repo({ "plan/orders/E001.yaml": WMBT, "test/twice.test.ts": `${BOUND}// Train: train:orders:nowhere\n// Train: train:orders:nowhere\n` });
+  expect((await runImplementation("atdd_traceability_closure", { scanRoots: [twice], excludes: [] })).map(v => v.line)).toEqual([3, 4]);
 });
 
 test("an acceptance without a test is reported where it is declared", async () => {
   const root = await repo({ "plan/orders/E001.yaml": WMBT });
   const [finding] = await runImplementation("atdd_traceability_closure", { scanRoots: [root], excludes: [] });
   expect([finding.rule_id, finding.file, finding.line]).toEqual(["traceability.plan.executable-acceptance-has-test", join(root, "plan/orders/E001.yaml"), 4]);
-  // Also in YAML flow style.
-  const flow = await repo({ "plan/orders/E001.yaml": "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n" });
-  const [inline] = await runImplementation("atdd_traceability_closure", { scanRoots: [flow], excludes: [] });
-  expect([inline.file, inline.line]).toEqual([join(flow, "plan/orders/E001.yaml"), 3]);
+  // Also in YAML flow style, with the key quoted or not.
+  for (const identity of ["{ urn: acc:orders:E001-UNIT-001 }", '{ "urn": acc:orders:E001-UNIT-001 }']) {
+    const flow = await repo({ "plan/orders/E001.yaml": `urn: wmbt:orders:E001\nacceptances:\n  - identity: ${identity}\n` });
+    const [inline] = await runImplementation("atdd_traceability_closure", { scanRoots: [flow], excludes: [] });
+    expect([inline.file, inline.line], identity).toEqual([join(flow, "plan/orders/E001.yaml"), 3]);
+  }
 });
 
 test("a plan at the repository root (plan_root: .) is judged", async () => {
