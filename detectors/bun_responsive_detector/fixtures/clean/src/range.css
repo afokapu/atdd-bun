@@ -1,0 +1,3 @@
+@media (width >= 768px) { .page { padding: 1rem; } }
+@media (1024px <= width) { .page { margin: 0 auto; } }
+.narrow { width: 20rem; }

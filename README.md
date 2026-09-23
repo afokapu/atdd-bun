@@ -101,8 +101,8 @@ name.
 | `docs` | the optional documentation capability and its declared artifacts, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions for that concern |
 | `interlocking` | declared train/interlocking binding, infrastructure, and coverage |
-| `htmx` | htmx-specific source and test conventions |
-| `design` | the design system: tokens ← primitives ← components ← templates, token-only colors, spacing, radii, and motion (also part of `coder`) |
+| `htmx` | htmx-specific source and test conventions, including browser specs |
+| `design` | the design system (tokens ← primitives ← components ← templates, token-only colors, spacing, radii, motion) and responsiveness (also part of `coder`) |
 | `all` | the complete package policy, normally used by CI |
 
 The package ships the canonical planner-node corpus as planning reference, but
@@ -189,6 +189,55 @@ interlockings, the `docs` profile's `planner.docs.journey-view-current` rule
 fails when any generated file is missing, stale, hand-edited, or extra. The
 generator refuses to overwrite a hand-written `index.adoc` unless you pass
 `--force`; use `--out <dir>` to preview elsewhere.
+
+### Every enforced rule is strict
+
+atdd-bun fails on every finding: it has no advisory mode and no ratchet
+baseline. Every convention with a validator is therefore `strict` (or `block`),
+and `tests/dispositions.test.ts` fails on any that promises otherwise. For the
+canonical planner nodes, which ship verbatim, the package states its own
+`disposition: strict` in `planner-nodes/ENFORCEMENT_SCOPE.yaml`.
+
+### Browser specs (Playwright)
+
+The `tester` and `htmx` profiles judge browser specs against the plan. A browser
+spec is a `*.e2e.ts` file run by Playwright, never `*.spec.ts`, which `bun test`
+would try to run itself. It binds to one plan subject and declares its layer
+and test URN:
+
+```ts
+import { expect, test } from "@playwright/test";
+
+// Train: train:orders:place-order        (or // Journey: journey:buy)
+// Layer: assembly
+// URN: test:train:orders:place-order:E2E-001-places-an-order
+```
+
+The harness code in the URN (`E2E`, `SMOKE`, `A11Y`, `VIS`, `RESP`) says what
+the spec must do: an `A11Y` spec runs `@axe-core/playwright` and asserts on its
+violations, a `VIS` spec compares a screenshot, a `RESP` spec renders at every
+declared viewport and asserts on `scrollWidth`. Coverage is read from `plan/`:
+every train has a spec, every covered train is routed by an interlocking, every
+exposed journey has an E2E or SMOKE spec and a RESP spec, and every presentation
+component has a SMOKE spec naming its wagon. Route and Station Master coverage
+remain `tester.bun` rules; browser specs count toward them.
+
+### Responsiveness
+
+The `coder` and `design` profiles check the structural causes of screens that
+break on small devices: every HTML document declares
+`<meta name="viewport" content="width=device-width, initial-scale=1">` and
+never blocks zoom; no `width`/`min-width` is wider than the smallest viewport;
+and every `@media` width is a declared breakpoint (media queries cannot read
+CSS variables, so breakpoints are declared once). The browser proof is the
+`RESP` spec above. Both read the same settings:
+
+```yaml
+# atdd-bun.yaml
+frontend:
+  viewports: [375, 768, 1280]          # default; RESP specs render at each, the smallest bounds fixed widths
+  breakpoints: [480, 768, 1024, 1280]  # default; the only widths @media may use
+```
 
 ### Theme and contract registry
 
@@ -450,6 +499,9 @@ convention cannot land without its relationships.
 
 `bun test` runs the package’s real-Git fixtures and detector clean/dirty corpora.
 The suite proves that every declared convention output has a matching convention
-and a deliberate failing case; it also covers hook isolation, the declarative
+and a deliberate failing case, and runs the frontend chain end to end: a Bun app
+built from a plan, its browser specs accepted by the detectors and passing in
+Chromium, and broken variants of the page failing both the static rules and the
+browser (Chromium must be installed: `bunx playwright install chromium`); it also covers hook isolation, the declarative
 registry policy, CI generation, agent-skill installation, planner scope, release
 validation, and linked-worktree policy.

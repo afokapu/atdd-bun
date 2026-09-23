@@ -1,0 +1,11 @@
+train_id: train:orders:reject-empty-cart
+title: Reject an empty cart
+description: Reject an empty cart.
+themes: [orders]
+participants: [user:buyer, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Refuse the empty cart
+    from: user:buyer
+    to: wagon:checkout
+    artifact: orders:rejection

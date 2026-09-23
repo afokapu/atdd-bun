@@ -1,0 +1,19 @@
+schema_version: 1.0.0
+journey_id: journey:buy
+title: Buy a product
+status: checked
+entrypoint:
+  interlocking_id: interlocking:checkout
+  exposed: true
+  actions: [place-order]
+  reason: null
+  surfaces: [frontend]
+continuations:
+  - from: { interlocking_id: interlocking:checkout, route_id: nominal }
+    artifact: orders:cart
+    to: { interlocking_id: interlocking:payment }
+terminals:
+  - from: { interlocking_id: interlocking:checkout, route_id: empty-cart }
+    outcome: rejected
+  - from: { interlocking_id: interlocking:payment, route_id: charged }
+    outcome: paid

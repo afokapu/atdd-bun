@@ -1,0 +1,16 @@
+{
+  "e2e_spec_naming": "tester.htmx.e2e-spec-naming",
+  "journey_binding_header": "tester.htmx.journey-binding-header",
+  "journey_urn_format": "tester.htmx.journey-urn-format",
+  "journey_layer_assembly": "tester.htmx.journey-layer-assembly",
+  "journey_no_acceptance_marker": "tester.htmx.journey-no-acceptance-marker",
+  "e2e_binds_declared_subject": "tester.htmx.e2e-binds-declared-subject",
+  "covered_train_is_routed": "tester.htmx.covered-train-is-routed",
+  "train_e2e_coverage": "tester.htmx.train-e2e-coverage",
+  "exposed_journey_e2e_coverage": "tester.htmx.exposed-journey-e2e-coverage",
+  "presentation_smoke_coverage": "tester.htmx.presentation-smoke-coverage",
+  "a11y_harness": "tester.htmx.a11y-harness",
+  "visual_harness": "tester.htmx.visual-harness",
+  "responsive_harness": "tester.htmx.responsive-harness",
+  "responsive_journey_coverage": "tester.htmx.responsive-journey-coverage"
+}

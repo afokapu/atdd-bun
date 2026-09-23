@@ -1,2 +1,7 @@
 rule_id: traceability.source.tested-by-resolves
 statement: Each implementation testing witness resolves to an identified Bun test.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

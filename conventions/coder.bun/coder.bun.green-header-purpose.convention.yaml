@@ -38,17 +38,8 @@ metadata:
   - GREEN-HEADER-002
   - BUN-GREEN-HEADER-PURPOSE-001
   severity: 2
-  # DIVERGENCE FROM THE VITE/PYTHON REALIZATIONS, deliberate and reversible.
-  # Those two carry `documentation-only`, which core's coverage_report treats as
-  # never-fails-the-build — the right call when RETROFITTING a large existing
-  # codebase, where day-one enforcement would red every file at once.
-  # A new Bun + htmx repo has no such debt: headers can be present from the first
-  # file, and a traceability rule that cannot fail is a rule that will quietly not
-  # be adopted. `suppress-and-clean` fails on violation AND is ratchetable, so an
-  # existing repo adopting this can still `--record-ratchet` a baseline and be held
-  # flat rather than blocked. Change this one field back to `documentation-only`
-  # for exact Vite parity.
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

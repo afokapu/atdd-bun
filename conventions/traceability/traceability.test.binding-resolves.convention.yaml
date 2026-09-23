@@ -1,2 +1,7 @@
 rule_id: traceability.test.binding-resolves
 statement: Each identified Bun test names a plan acceptance, WMBT, or train that resolves.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

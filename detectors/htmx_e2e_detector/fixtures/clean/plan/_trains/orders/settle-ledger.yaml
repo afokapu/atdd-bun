@@ -1,0 +1,11 @@
+train_id: train:orders:settle-ledger
+title: Settle the ledger
+description: A nightly settlement between systems; no person takes part.
+themes: [orders]
+participants: [wagon:checkout, system:ledger]
+sequence:
+  - step: 1
+    intent: Post the day's payments to the ledger
+    from: wagon:checkout
+    to: system:ledger
+    artifact: orders:settlement

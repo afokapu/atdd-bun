@@ -1,0 +1,29 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.journey-layer-assembly
+kind: rule
+status: active
+name: 'A journey spec declares Layer: assembly'
+statement: 'A journey spec MUST carry `// Layer: assembly`. Bun/htmx realization of `tester.vite.journey-layer-assembly`,
+  strict.'
+terms:
+- term_id: browser_spec
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
+content:
+  summary: 'A journey spec declares Layer: assembly.'
+  normative_text: A browser test exercises the assembled application, not a layer of it. A missing or wrong Layer
+    routes the result to the wrong layer bucket.
+  fix_hint: 'Add `// Layer: assembly` to the header block.'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-E2E-JOURNEY-LAYER-ASSEMBLY-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.journey-layer-assembly
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

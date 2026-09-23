@@ -1,0 +1,5 @@
+{
+  "responsive_viewport_meta": "coder.bun.responsive-viewport-meta",
+  "responsive_no_fixed_width": "coder.bun.responsive-no-fixed-width",
+  "responsive_breakpoints_declared": "coder.bun.responsive-breakpoints-declared"
+}

@@ -12,17 +12,6 @@ terms:
   text: >-
     every authored `.adoc` beneath `docs/`, across all areas, excluding `docs/dist/`. Uniqueness is
     global — `archive/` is part of the corpus, not a separate id space.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '0 .adoc files, therefore 0 declared ids and 0 collisions. Not evidence of health: the corpus does not exist yet. Re-measure after migration, which is exactly when collisions appear.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
-    escalate_when: 'The corpus has been migrated and a full scan reports zero duplicate ids — the scale test spec 2 §1 names, since 89 documents is the first corpus large enough to collide.'
 content:
   summary: >-
     A duplicated id makes edge resolution ambiguous: `:supersedes: architecture.foo` cannot say which
@@ -58,7 +47,8 @@ metadata:
   aliases:
   - DOCS-IDENTITY-002
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

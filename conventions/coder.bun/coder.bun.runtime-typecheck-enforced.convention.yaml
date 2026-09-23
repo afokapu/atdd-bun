@@ -25,20 +25,6 @@ terms:
     family AND extends no base config. A tsconfig that `extends` something is NOT judged: this
     rule's detector cannot resolve the base, and reporting what it cannot see would be a false
     positive.
-- term_id: disposition_rationale
-  text: >-
-    advisory because this states a stack norm rather than a defect, and because the consuming
-    projects have not been surveyed. The measurement below was TAKEN on 2026-09-06, not recalled.
-  values:
-    measured_2026_09_06: >-
-      0 consumer Bun projects surveyed. This hub is a package repository and contains no Bun
-      application to measure — its own .ts files are deliberately-wrong detector fixtures, which
-      is exactly why this rule is authored for consumers and never run against the hub.
-    measurement_target: afokapu/atdd-extensions @ main (the hub itself — deliberately not a consumer)
-    measurement_command: "find official -name '*.ts' -not -path '*/fixtures/*' | wc -l"
-    escalate_when: >-
-      A consumer Bun project has been surveyed, typescript + a wired no-emit typecheck are present,
-      and the team accepts blocking on it. Escalating to strict is a MAJOR change class.
 content:
   summary: >-
     Bun's own gap, stated as a convention. `bun test`, `bun install`, `bun build`, `Bun.serve` and a
@@ -84,7 +70,8 @@ metadata:
   aliases:
   - BUN-TYPECHECK-ENFORCED-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

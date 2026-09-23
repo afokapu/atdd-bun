@@ -22,17 +22,6 @@ terms:
   text: >-
     creating a graph node for a target no document declares, so that an edge appears to resolve. The
     defect this rule exists to make impossible.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '0 .adoc files, so 0 authored edges and 0 unresolved targets. The number that motivates this rule is the OTHER graph''s, quoted in full under normative_text and measured on the same date: 147 of 168 containment edges invented, 44 fabricated nodes out of 3208.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
-    escalate_when: 'A full corpus scan reports zero unresolved relationship targets. The no-fabrication half is NOT subject to escalation — it is a property of the resolver, true from the first commit, and is asserted by the #1758 regression test rather than deferred to a disposition flip.'
 content:
   summary: >-
     Resolve or report — never invent. The graph is DERIVED from the `.adoc` attributes and rebuilt on
@@ -80,7 +69,8 @@ metadata:
   aliases:
   - DOCS-GRAPH-001
   severity: 1
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

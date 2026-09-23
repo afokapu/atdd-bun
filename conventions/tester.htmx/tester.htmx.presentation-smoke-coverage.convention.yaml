@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.presentation-smoke-coverage
+kind: rule
+status: active
+name: Every presentation component is covered by a SMOKE browser spec
+statement: Every `.tsx`/`.jsx` component under a `presentation/` path segment MUST be covered by a SMOKE browser
+  spec whose path names the component's wagon (the segment before `presentation`). Bun/htmx realization of `tester.vite.presentation-smoke-coverage`,
+  strict.
+terms:
+- term_id: browser_spec
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
+content:
+  summary: Every presentation component is covered by a SMOKE browser spec.
+  normative_text: Structural tests stay green while a rendered feature is blank; only rendering it in a browser
+    proves it appears.
+  fix_hint: Add a SMOKE spec whose file name contains the wagon, for example `e2e/checkout-cart.smoke.e2e.ts`.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - Components outside a `presentation/` segment are out of scope.
+metadata:
+  aliases:
+  - BUN-E2E-PRESENTATION-SMOKE-COVERAGE-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.presentation-smoke-coverage
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

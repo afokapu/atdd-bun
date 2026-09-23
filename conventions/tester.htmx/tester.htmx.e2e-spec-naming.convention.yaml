@@ -1,0 +1,32 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.e2e-spec-naming
+kind: rule
+status: active
+name: Playwright specs are named *.e2e.ts
+statement: A file that imports `@playwright/test` and declares tests (`test(...)`, `test.describe(...)`) MUST be
+  named `*.e2e.ts` (`.js`, `.mjs`, `.tsx` variants allowed). `bun test` collects every `*.test.*` and `*.spec.*`
+  file, so a Playwright spec named that way is executed by the wrong runner and fails, or worse is skipped by a
+  filter nobody remembers. New in the Bun/htmx browser tester, strict.
+terms:
+- term_id: browser_spec
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
+content:
+  summary: Playwright specs are named *.e2e.ts.
+  normative_text: 'One naming rule keeps the two runners apart: `bun test` runs unit, acceptance and smoke tests,
+    Playwright runs browser specs, and neither ever picks up the other''s files.'
+  fix_hint: Rename `login.spec.ts` to `login.e2e.ts` and point Playwright's `testMatch` at `**/*.e2e.ts`.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - Files that do not import `@playwright/test` are out of scope.
+  - '`playwright.config.*` and fixture modules that only extend `test` declare no tests and are out of scope.'
+metadata:
+  aliases:
+  - BUN-E2E-E2E-SPEC-NAMING-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

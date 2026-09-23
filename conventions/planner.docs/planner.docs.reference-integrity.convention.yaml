@@ -17,17 +17,6 @@ terms:
   text: >-
     a render failure the capability cannot pin to a document — a crashed renderer, an unreadable
     tree, a toolchain that is not installed. It is reported as `COULD_NOT_CHECK`, which BLOCKS.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: 'ABSENT — `command -v asciidoctor` exits 1 on this machine. The capability therefore returns COULD_NOT_CHECK here today, which BLOCKS, and that is the specified behaviour rather than a defect. Re-take this probe in the CI image before escalating; asciidoctor absence on a developer machine is expected and is not a reason to weaken the rule.'
-    measurement_target: 'this machine (the extension''s own toolchain probe)'
-    measurement_command: 'command -v asciidoctor'
-    escalate_when: 'asciidoctor is available in CI and a full render of the migrated corpus completes with zero unresolvable internal references. Note that the COULD_NOT_CHECK path already BLOCKS at the capability seam regardless of this disposition — advisory governs the reported findings, not the capability''s verdict contract.'
 content:
   summary: >-
     Reference integrity is why asciidoctor (Ruby) is the reference implementation rather than a pure
@@ -67,7 +56,8 @@ metadata:
   aliases:
   - DOCS-RENDER-001
   severity: 1
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

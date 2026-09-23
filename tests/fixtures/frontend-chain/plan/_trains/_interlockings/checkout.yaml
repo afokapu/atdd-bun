@@ -1,0 +1,21 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:checkout
+title: checkout
+theme: orders
+status: checked
+entrypoint:
+  exposed: true
+  actions: [place-order]
+  reason: null
+  surfaces: [frontend]
+routes:
+  - route_id: nominal
+    category: nominal
+    priority: 1
+    guard_ref: guard:nominal
+    train_id: train:orders:place-order
+  - route_id: empty-cart
+    category: error
+    priority: 2
+    guard_ref: guard:empty-cart
+    train_id: train:orders:reject-empty-cart

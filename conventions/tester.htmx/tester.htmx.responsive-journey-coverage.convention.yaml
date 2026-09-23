@@ -1,0 +1,30 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.responsive-journey-coverage
+kind: rule
+status: active
+name: Every exposed journey has a RESP browser spec
+statement: Every journey whose entrypoint is exposed and whose `surfaces` include `frontend` (or declare none) MUST
+  have a journey spec bound to it by `// Journey:` with a RESP test URN. New in the Bun/htmx browser tester, strict.
+terms:
+- term_id: browser_spec
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
+content:
+  summary: Every exposed journey has a RESP browser spec.
+  normative_text: Every screen a user can reach should be proven to fit from mobile to desktop; exposed journeys
+    are exactly those screens, and new ones appear here as soon as the plan declares them.
+  fix_hint: 'Add `e2e/<journey>.responsive.e2e.ts` bound with `// Journey: <journey id>`.'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - Internal journeys, and exposed journeys whose entrypoint `surfaces` exclude `frontend`, have no screen to fit
+    and are out of scope.
+metadata:
+  aliases:
+  - BUN-E2E-RESPONSIVE-JOURNEY-COVERAGE-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

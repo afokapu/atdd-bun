@@ -1,0 +1,30 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.covered-train-is-routed
+kind: rule
+status: active
+name: A train a browser spec covers is selected by an interlocking route
+statement: A declared train that a journey spec binds to MUST be selected by at least one interlocking route. Bun/htmx
+  realization of `tester.vite.covered-train-is-routed`, strict.
+terms:
+- term_id: browser_spec
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
+content:
+  summary: A train a browser spec covers is selected by an interlocking route.
+  normative_text: A spec can stay green while exercising a train nothing in the application can reach. Covering
+    an unrouted train proves nothing about the product.
+  fix_hint: Route the train from an interlocking, or bind the spec to a routed train.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - Undeclared trains are reported by `tester.htmx.e2e-binds-declared-subject`.
+metadata:
+  aliases:
+  - BUN-E2E-COVERED-TRAIN-IS-ROUTED-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.covered-train-is-routed
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

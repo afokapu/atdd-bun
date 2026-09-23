@@ -33,16 +33,14 @@ content:
   exceptions:
   - A call already passing a second argument is not flagged.
   - Non-logger receivers are out of scope.
-  - Disposition is `suppress-and-clean`, matching the Python sibling: a ratchet holds existing lines flat.
 metadata:
   aliases:
   # LOGGING-STRUCTURED-001 is the SHARED core alias, also carried by the agnostic node and its
   # python-pytest realization.
   - LOGGING-STRUCTURED-001
   severity: 2
-  # RE-REALIZED, not ported: the python-pytest sibling inspects a Python
-  # AST for constructs this stack does not have. Same obligation, new detector.
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

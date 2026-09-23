@@ -1,0 +1,16 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:payment
+title: payment
+theme: orders
+status: checked
+entrypoint:
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+routes:
+  - route_id: charged
+    category: nominal
+    priority: 1
+    guard_ref: guard:charged
+    train_id: train:orders:take-payment

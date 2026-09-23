@@ -1,0 +1,11 @@
+train_id: train:orders:place-order
+title: Place an order
+description: Place an order.
+themes: [orders]
+participants: [user:buyer, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Submit the cart
+    from: user:buyer
+    to: wagon:checkout
+    artifact: orders:cart

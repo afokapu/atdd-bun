@@ -17,17 +17,6 @@ terms:
   text: >-
     the value of the `:status:` attribute — `current`, `superseded`, or `historical`. It answers "is
     this accepted truth today?" and is the flag issue #1782 exists to introduce.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '0 .adoc files exist, so 0 documents declare a doc-id and the rule currently has an empty corpus to check. It ships advisory because it will fire on every file the moment conversion begins and before the attributes are backfilled.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: 'find . -name ''*.adoc'' -not -path ''./.git/*'' | wc -l'
-    escalate_when: 'Every authored `.adoc` beneath `docs/` declares both attributes — reachable only after the migration lands, since the attribute is authored during conversion.'
 content:
   summary: >-
     Identity and currency, declared in the document itself. Without `doc-id` there is no graph:
@@ -61,7 +50,8 @@ metadata:
   aliases:
   - DOCS-IDENTITY-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

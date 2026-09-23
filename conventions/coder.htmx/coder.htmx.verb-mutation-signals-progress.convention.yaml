@@ -42,7 +42,7 @@ content:
       <form hx-post="/orders" hx-disabled-elt="find button">…</form>  <!-- ✓ prevents re-submit -->
 
     Prefer `hx-disabled-elt` where a duplicate would be expensive; the indicator alone tells the user
-    to wait but does not stop them. `suppress-and-clean`: a ratchet holds existing cases flat.
+    to wait but does not stop them.
   exceptions:
   - "`hx-get` is not scoped by this rule (idempotent)."
   - An element declaring both signals is fine; only declaring neither is a violation.
@@ -52,7 +52,8 @@ metadata:
   aliases:
   - HTMX-MUTATION-PROGRESS-001
   severity: 3
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

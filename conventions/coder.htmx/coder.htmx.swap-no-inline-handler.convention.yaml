@@ -41,8 +41,7 @@ content:
       <button hx-get="/rows/1" hx-on::after-request="track('open')">Open</button>   <!-- ✓ -->
 
     For behaviour that is genuinely presentational and not request-related, attach it in a delegated
-    listener on a stable ancestor that is never swapped. Disposition is `suppress-and-clean`: existing
-    handlers are held flat by a ratchet baseline while they are migrated.
+    listener on a stable ancestor that is never swapped.
   exceptions:
   - Files containing no `hx-` attribute are never scanned (self-scoping).
   - React/JSX camelCase props (`onClick={…}`, `onSubmit={…}`) are a different mechanism and are out of
@@ -52,7 +51,8 @@ metadata:
   aliases:
   - HTMX-NO-INLINE-HANDLER-001
   severity: 3
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

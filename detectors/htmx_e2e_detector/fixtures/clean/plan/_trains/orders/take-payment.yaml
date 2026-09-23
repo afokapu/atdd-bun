@@ -1,0 +1,11 @@
+train_id: train:orders:take-payment
+title: Take payment
+description: Take payment.
+themes: [orders]
+participants: [system:gateway, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Charge the card
+    from: wagon:checkout
+    to: system:gateway
+    artifact: orders:paid

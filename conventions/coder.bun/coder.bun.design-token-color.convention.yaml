@@ -23,7 +23,7 @@ content:
   fix_hint: 'Define the color once as a custom property in the tokens layer and reference it: `color: var(--danger)`.'
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
-  - Custom property definitions (`--danger: #b91c1c`) define tokens wherever they live and are not flagged.
+  - 'Custom property definitions (`--danger: #b91c1c`) define tokens wherever they live and are not flagged.'
   - The tokens/foundations layer is where raw colors are defined and is not scanned.
   - Named colors (`red`, `white`) and `currentColor`/`transparent` are not flagged.
 metadata:

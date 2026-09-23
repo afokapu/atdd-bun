@@ -34,7 +34,8 @@ metadata:
   # Core obligation: coder.backend.code-is-organized
   - BUN-LAYER-NAMING-001
   severity: 2
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator
