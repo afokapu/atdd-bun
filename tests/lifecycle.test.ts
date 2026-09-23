@@ -128,6 +128,23 @@ test("orphan and unknown bindings fail even when they point into planned scope",
   expect(await traceability(root)).toEqual(["traceability.test.binding-resolves test/orphan.test.ts", "traceability.test.binding-resolves test/train.test.ts", "traceability.test.binding-resolves test/unbound.test.ts"]);
 });
 
+test("every binding header must resolve, not only the first", async () => {
+  const root = await repo({
+    "plan/orders/E001.yaml": wmbt("E001", "001"),
+    "test/two.test.ts": "// URN: test:orders:x:E001-UNIT-001\n// Acceptance: acc:orders:E001-UNIT-001\n// Train: train:orders:does-not-exist\n",
+    "test/bad.test.ts": "// URN: test:orders:x:E001-UNIT-002\n// Acceptance: acc:orders:E001-UNIT-001\n// WMBT: not-a-wmbt\n",
+  });
+  expect(await traceability(root)).toEqual(["traceability.test.binding-resolves test/bad.test.ts", "traceability.test.binding-resolves test/two.test.ts"]);
+});
+
+test("a Tested-By entry counts only under a Tested-By header", async () => {
+  const root = await repo({
+    "plan/orders/E001.yaml": wmbt("E001", "001"), "test/one.test.ts": bound("acc:orders:E001-UNIT-001"),
+    "src/stray.ts": "// URN: component:orders:a:Stray:backend:domain\n// - test:orders:x:E001-UNIT-001\nexport const s = 1;\n",
+  });
+  expect(await traceability(root)).toEqual(["traceability.source.tested-by-present src/stray.ts"]);
+});
+
 test("a train-parented acceptance follows its train's lifecycle", async () => {
   const plan = (status: string) => repo({ "plan/_trains/checkout.yaml": `train_id: train:orders:checkout\nstatus: ${status}\n`, "plan/_trains/checkout.acc.yaml": "urn: acc:train:orders:checkout:pays\nid: AC-E2E-001\n" });
   expect(await traceability(await plan("planned"))).toEqual([]);
