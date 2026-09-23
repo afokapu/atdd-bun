@@ -51,10 +51,13 @@ for (const root of roots) {
     const head = content.split("\n").slice(0, 40).join("\n");
     if (testName.test(name)) {
       const urn = head.match(/^\s*\/\/\s*URN:\s*(test:[^\s]+)/m);
-      const binding = head.match(/^\s*\/\/\s*(Acceptance|WMBT|Train):\s*((?:acc|wmbt|train):[^\s]+)/m);
       if (!urn) return;
-      tests.set(urn[1], { path, binding: binding?.[2], bindingKind: binding?.[1] });
-      if (!binding) add("traceability.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
+      // EVERY binding header is judged, not only the first: a valid Acceptance: must not carry an unresolved Train:.
+      const headers = [...head.matchAll(/^\s*\/\/\s*(Acceptance|WMBT|Train):[ \t]*(\S*)/gm)].map((match) => ({ kind: match[1], id: match[2], raw: match[0].trim() }));
+      const bindings = headers.filter((h) => h.id.startsWith({ Acceptance: "acc:", WMBT: "wmbt:", Train: "train:" }[h.kind]));
+      tests.set(urn[1], { path, bindings });
+      if (!headers.length) add("traceability.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
+      for (const h of headers) if (!bindings.includes(h)) add("traceability.test.binding-resolves", path, lineOf(head, h.raw), `${h.kind}: ${h.id || "<empty>"} is not a ${h.kind === "Acceptance" ? "acc" : h.kind.toLowerCase()}: identity`, h.raw);
       return;
     }
     const component = head.match(/^\s*\/\/\s*URN:\s*(component:[^\s]+)/m);
@@ -64,14 +67,10 @@ for (const root of roots) {
   });
 }
 
-for (const test of tests.values()) {
-  if (!test.binding) continue;
-  const kind = test.binding.startsWith("acc:") ? "acc" : test.binding.startsWith("wmbt:") ? "wmbt" : "train";
-  if (!plans[kind].has(test.binding)) {
-    add("traceability.test.binding-resolves", test.path, lineOf(text(test.path), test.binding), `${test.binding} is not declared in plan/`, `// ${test.bindingKind}: ${test.binding}`);
-  }
+for (const test of tests.values()) for (const binding of test.bindings) {
+  if (!plans[binding.id.split(":", 1)[0]].has(binding.id)) add("traceability.test.binding-resolves", test.path, lineOf(text(test.path), binding.raw), `${binding.id} is not declared in plan/`, binding.raw);
 }
-const boundAcceptances = new Set([...tests.values()].map((test) => test.binding).filter((id) => id?.startsWith("acc:")));
+const boundAcceptances = new Set([...tests.values()].flatMap((test) => test.bindings.map((binding) => binding.id)).filter((id) => id.startsWith("acc:")));
 for (const acceptance of plans.acc) {
   if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
 }
