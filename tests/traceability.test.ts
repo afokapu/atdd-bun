@@ -30,6 +30,13 @@ test("an acceptance without a test is reported where it is declared", async () =
   expect([finding.rule_id, finding.file, finding.line]).toEqual(["traceability.plan.executable-acceptance-has-test", join(root, "plan/orders/E001.yaml"), 4]);
 });
 
+test("a plan at the repository root (plan_root: .) is judged", async () => {
+  for (const planRoot of [".", "./"]) {
+    const root = await repo({ "atdd-bun.yaml": `topology:\n  plan_root: ${planRoot}\n`, "E001.yaml": WMBT });
+    expect(await findings(root), planRoot).toEqual(["traceability.plan.executable-acceptance-has-test E001.yaml"]);
+  }
+});
+
 test("a Tested-By entry counts only under a Tested-By header, and every entry is judged", async () => {
   const root = await repo({
     "plan/orders/E001.yaml": WMBT, "test/one.test.ts": BOUND,
