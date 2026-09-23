@@ -1,0 +1,27 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.visual-harness
+kind: rule
+status: active
+name: A VIS spec compares a screenshot
+statement: A spec identified as visual (a `VIS` test URN, or a `visual`/`vis` token in its file name) MUST call
+  `toHaveScreenshot()` or `toMatchSnapshot()`. Bun/htmx realization of `tester.vite.visual-harness`, strict.
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A VIS spec compares a screenshot.
+  normative_text: A visual spec that captures nothing performs no visual regression.
+  fix_hint: '`await expect(page).toHaveScreenshot("checkout.png");`'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-E2E-VISUAL-HARNESS-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.visual-harness
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

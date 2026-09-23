@@ -1,0 +1,29 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.a11y-harness
+kind: rule
+status: active
+name: An A11Y spec runs axe and asserts on its violations
+statement: A spec identified as accessibility (an `A11Y` test URN, or an `a11y` token in its file name) MUST import
+  `AxeBuilder` from `@axe-core/playwright`, call `new AxeBuilder(...).analyze()`, and assert on the returned `violations`.
+  Bun/htmx realization of `tester.vite.a11y-harness`, strict.
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: An A11Y spec runs axe and asserts on its violations.
+  normative_text: An accessibility spec that navigates but never runs axe, or never asserts on the result, passes
+    whatever the page's real state.
+  fix_hint: '`const results = await new AxeBuilder({ page }).analyze(); expect(results.violations).toEqual([]);`'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-E2E-A11Y-HARNESS-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.a11y-harness
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

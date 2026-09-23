@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.journey-urn-format
+kind: rule
+status: active
+name: A journey spec carries well-formed test URNs for its own subject
+statement: A journey spec MUST carry at least one test URN `test:{train|journey}:<id>:{E2E|SMOKE|A11Y|VIS|RESP}-NNN-<slug>`,
+  and every URN it carries MUST be well-formed and name the subject its binding header declares. Bun/htmx realization
+  of `tester.vite.journey-urn-format`, strict.
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A journey spec carries well-formed test URNs for its own subject.
+  normative_text: The URN identifies the test instance and its harness. A malformed URN, or one naming another subject,
+    silently traces the result to the wrong place.
+  fix_hint: Use `test:train:orders:place-order:E2E-001-places-an-order` in the header and the test title.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - A URN is compared with the binding only when the binding itself is valid; a malformed binding is reported by
+    `tester.htmx.journey-binding-header` alone.
+metadata:
+  aliases:
+  - BUN-E2E-JOURNEY-URN-FORMAT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.journey-urn-format
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

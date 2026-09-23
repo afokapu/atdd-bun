@@ -1,0 +1,30 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.e2e-binds-declared-subject
+kind: rule
+status: active
+name: A journey spec binds to a train or journey plan/ declares
+statement: When the repository declares a plan, the train or journey a journey spec binds to MUST be declared under
+  `plan/`. Bun/htmx realization of `tester.vite.e2e-names-valid-train`, strict.
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A journey spec binds to a train or journey plan/ declares.
+  normative_text: 'A spec bound to an undeclared subject is orphaned: it can pass forever while the plan it claims
+    to cover says nothing about it.'
+  fix_hint: Bind the spec to the declared id, or declare the train or journey.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - A repository with no plan (no trains, no journeys) is out of scope.
+  - A malformed binding is reported by `tester.htmx.journey-binding-header`, not here.
+metadata:
+  aliases:
+  - BUN-E2E-E2E-BINDS-DECLARED-SUBJECT-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.e2e-names-valid-train
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

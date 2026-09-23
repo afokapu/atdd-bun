@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.journey-binding-header
+kind: rule
+status: active
+name: A journey spec binds to exactly one train or journey
+statement: 'A journey spec (a `*.e2e.ts` file, or any test file carrying a `// Train:`, `// Journey:`, `test:train:`
+  or `test:journey:` marker) MUST carry exactly one binding header: `// Train: train:<subject>:<slug>` or `// Journey:
+  journey:<id>`, each matching the planner''s identity grammar. Bun/htmx realization of `tester.vite.journey-train-header`,
+  strict.'
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A journey spec binds to exactly one train or journey.
+  normative_text: The binding is how a browser test is traced to the plan it exercises. A spec with no binding,
+    two bindings, or an id the planner would reject cannot be traced.
+  fix_hint: 'Add `// Train: train:orders:place-order` (or `// Journey: journey:buy`) to the header block.'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+  - Unit and acceptance tests carrying none of the journey markers are out of scope.
+metadata:
+  aliases:
+  - BUN-E2E-JOURNEY-BINDING-HEADER-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.journey-train-header
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

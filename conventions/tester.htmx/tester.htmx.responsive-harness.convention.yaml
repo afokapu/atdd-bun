@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.responsive-harness
+kind: rule
+status: active
+name: A RESP spec renders at every declared viewport and asserts no horizontal overflow
+statement: 'A spec identified as responsive (a `RESP` test URN, or a `responsive`/`resp` token in its file name)
+  MUST render the page at every viewport width declared in `atdd-bun.yaml` under `frontend.viewports` (default 375,
+  768, 1280), through `page.setViewportSize({ width })`, a `viewport: { width }` option, or a `VIEWPORTS = [...]`
+  list it iterates, and MUST assert on `scrollWidth` so the test fails when the page overflows horizontally. New
+  in the Bun/htmx browser tester, strict.'
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A RESP spec renders at every declared viewport and asserts no horizontal overflow.
+  normative_text: A screen that works on a desktop can be unusable on a phone. Rendering at each declared width
+    and asserting the document never scrolls sideways is the least that proves it fits.
+  fix_hint: '`for (const width of [375, 768, 1280]) { await page.setViewportSize({ width, height: 900 }); ... expect(scrollWidth
+    - clientWidth).toBeLessThanOrEqual(0); }`'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-E2E-RESPONSIVE-HARNESS-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

@@ -1,0 +1,16 @@
+schema_version: 1.0.0
+journey_id: journey:buy
+title: Buy
+status: checked
+entrypoint:
+  interlocking_id: interlocking:checkout
+  exposed: true
+  actions: [buy]
+  reason: null
+  surfaces: [frontend]
+continuations: []
+terminals:
+  - from: { interlocking_id: interlocking:checkout, route_id: nominal }
+    outcome: done
+  - from: { interlocking_id: interlocking:checkout, route_id: other }
+    outcome: other

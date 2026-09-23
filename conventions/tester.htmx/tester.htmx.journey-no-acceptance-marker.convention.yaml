@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+rule_id: tester.htmx.journey-no-acceptance-marker
+kind: rule
+status: active
+name: A journey spec carries no Acceptance or WMBT header
+statement: A journey spec MUST NOT carry `// Acceptance:` or `// WMBT:` header lines. Bun/htmx realization of `tester.vite.journey-no-acceptance-marker`,
+  strict.
+terms:
+- term_id: browser_spec
+  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
+    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+content:
+  summary: A journey spec carries no Acceptance or WMBT header.
+  normative_text: 'Journey and acceptance identities are exclusive: a journey test binds to a train or journey,
+    an acceptance test to an Acceptance/WMBT pair. Carrying both makes the test ambiguous about what it proves.'
+  fix_hint: Move acceptance assertions to an acceptance test, or drop the Acceptance/WMBT lines.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - BUN-E2E-JOURNEY-NO-ACCEPTANCE-MARKER-001
+  severity: 3
+  disposition: strict
+  introduced_in: 0.5.0
+  mirrors: tester.vite.journey-no-acceptance-marker
+implementation:
+  type: validator
+  ref: htmx_e2e_detector

@@ -1,0 +1,11 @@
+train_id: train:orders:unrouted
+title: unrouted
+description: unrouted.
+themes: [orders]
+participants: [user:buyer, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Do unrouted
+    from: user:buyer
+    to: wagon:checkout
+    artifact: orders:unrouted

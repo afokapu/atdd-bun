@@ -1,0 +1,21 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:checkout
+title: checkout
+theme: orders
+status: checked
+entrypoint:
+  exposed: true
+  actions: [buy]
+  reason: null
+  surfaces: [frontend]
+routes:
+  - route_id: nominal
+    category: nominal
+    priority: 1
+    guard_ref: guard:nominal
+    train_id: train:orders:covered
+  - route_id: other
+    category: alternate
+    priority: 2
+    guard_ref: guard:other
+    train_id: train:orders:uncovered

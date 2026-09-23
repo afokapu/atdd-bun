@@ -1,0 +1,40 @@
+schema_version: 1.1.0
+kind: implementation
+subtype: validator
+implementation_id: htmx_e2e_detector
+targets_workspace: atdd.workspace.bun
+contract_version: 1.1.0
+emits_rule_ids:
+- tester.htmx.e2e-spec-naming
+- tester.htmx.journey-binding-header
+- tester.htmx.journey-urn-format
+- tester.htmx.journey-layer-assembly
+- tester.htmx.journey-no-acceptance-marker
+- tester.htmx.e2e-binds-declared-subject
+- tester.htmx.covered-train-is-routed
+- tester.htmx.train-e2e-coverage
+- tester.htmx.exposed-journey-e2e-coverage
+- tester.htmx.presentation-smoke-coverage
+- tester.htmx.a11y-harness
+- tester.htmx.visual-harness
+- tester.htmx.responsive-harness
+- tester.htmx.responsive-journey-coverage
+entrypoint: detect.mjs
+report: detect.mjs
+realizes_convention:
+# The Bun/htmx browser tester: Playwright specs (*.e2e.ts), their bindings to plan/, and the
+# harnesses they must use. Ported from frontend.extension.tester.vite, strict throughout.
+- tester.htmx.e2e-spec-naming
+- tester.htmx.journey-binding-header
+- tester.htmx.journey-urn-format
+- tester.htmx.journey-layer-assembly
+- tester.htmx.journey-no-acceptance-marker
+- tester.htmx.e2e-binds-declared-subject
+- tester.htmx.covered-train-is-routed
+- tester.htmx.train-e2e-coverage
+- tester.htmx.exposed-journey-e2e-coverage
+- tester.htmx.presentation-smoke-coverage
+- tester.htmx.a11y-harness
+- tester.htmx.visual-harness
+- tester.htmx.responsive-harness
+- tester.htmx.responsive-journey-coverage

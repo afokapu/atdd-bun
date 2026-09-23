@@ -44,6 +44,7 @@ test("the package ships every current Bun implementation", () => {
     "bun_security_hygiene_detector",
     "bun_tester_discipline_detector",
     "bun_ts_metrics_detector",
+    "htmx_e2e_detector",
     "htmx_hypermedia_detector",
     "htmx_tester_detector",
     "planner_docs_capability",
