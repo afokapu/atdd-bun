@@ -11,7 +11,7 @@ test("ci init is idempotent, preserves an existing workflow, and emits the requi
   const root = await mkdtemp(join(tmpdir(), "atdd-ci-")); try { expect((await ciInit(root)).ok).toBeTrue(); expect((await ciInit(root)).ok).toBeFalse(); const workflow = join(root, ".github/workflows/atdd-bun.yml"), content = await readFile(workflow, "utf8"); for (const term of ["pull_request:", "merge_group:", "actions/checkout@v4", "oven-sh/setup-bun@v2", "bun install --frozen-lockfile", "bun run atdd-bun all"]) expect(content).toContain(term); for (const forbidden of ["bunx", "atdd ", "python", "gh ", "curl", "wget"]) expect(content).not.toContain(forbidden); await writeFile(workflow, "kept\n"); expect((await ciInit(root)).ok).toBeFalse(); expect(await readFile(workflow, "utf8")).toBe("kept\n"); expect((await ciInit(root, true)).ok).toBeTrue(); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("agent init writes the skill for every agent and a managed AGENTS.md block, preserving existing content", async () => {
+test("agent init writes the skill for every agent and a managed AGENTS.md and CLAUDE.md block, preserving existing content", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-agent-"));
   try {
     await writeFile(join(root, "AGENTS.md"), "# Team rules\n");
@@ -26,6 +26,10 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     const agents = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(agents.startsWith("# Team rules\n\n<!-- atdd-bun:start")).toBeTrue();
     expect(agents).toContain(".agents/skills/atdd/SKILL.md");
+    // The same block reaches Claude Code, and it says what an agent may and may not change.
+    const claude = await readFile(join(root, "CLAUDE.md"), "utf8");
+    expect(claude.match(/<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/)?.[0]).toBe(agents.match(/<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/)?.[0]);
+    for (const text of ["enabled gradually", "greenfield", "brownfield", "status: planned", "atdd-bun lifecycle", "Never modify the toolkit itself", "Change only the configuration"]) expect(claude.replace(/\s+/g, " ")).toContain(text);
     expect((await agentInit(root)).ok).toBeFalse();
     const skill = join(root, ".claude/skills/atdd/SKILL.md");
     await writeFile(skill, "kept\n"); expect((await agentInit(root)).ok).toBeFalse(); expect(await readFile(skill, "utf8")).toBe("kept\n");
@@ -33,6 +37,7 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     const replaced = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(replaced.match(/atdd-bun:start/g)?.length).toBe(1); expect(replaced.startsWith("# Team rules\n")).toBeTrue();
     expect((await agentStatus(root)).ok).toBeTrue();
+    await writeFile(join(root, "CLAUDE.md"), "# mine\n"); expect((await agentStatus(root)).ok).toBeFalse();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -48,7 +53,7 @@ test("repository bootstrap installs hooks, the CI workflow, and the agent skill 
     expect((await Bun.file(join(root, ".githooks/pre-commit")).text()).length).toBeGreaterThan(0);
     expect(await Bun.file(join(root, ".github/workflows/atdd-bun.yml")).text()).toContain("atdd-bun");
     for (const path of [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"]) expect(await Bun.file(join(root, path)).text()).toContain("name: atdd");
-    expect(await Bun.file(join(root, "AGENTS.md")).text()).toContain("atdd-bun:start");
+    for (const path of ["AGENTS.md", "CLAUDE.md"]) expect(await Bun.file(join(root, path)).text()).toContain("atdd-bun:start");
     expect((await initializeRepository(root)).ok).toBeTrue();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
