@@ -116,8 +116,12 @@ for (const root of roots) {
   for (const path of walk(e2eRoot, path => /\.e2e\.[cm]?[jt]sx?$/.test(path))) {
     const content = read(path), h = header(path);
     if (!/from\s+["']@playwright\/test["']/.test(content) || !/(^|[^.\w])test(\.(describe|only|skip|fixme|fail|slow|step))?\s*\(/m.test(content)) continue;
-    if (h.train.value) browserTrains.add(h.train.value);
-    if (h.journey.value) browserJourneys.add(h.journey.value);
+    // A browser spec carries its journey identity as a test URN, not an Acceptance (tester.htmx forbids
+    // Acceptance on journey specs). It substitutes only when that URN is a valid E2E or SMOKE proof for the
+    // very train or journey it is bound to.
+    const proves = (subject) => new RegExp(`test:${subject.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:(E2E|SMOKE)-\\d{3}-[a-z0-9][a-z0-9-]*`).test(content);
+    if (h.train.value && proves(h.train.value)) browserTrains.add(h.train.value);
+    if (h.journey.value && proves(h.journey.value)) browserJourneys.add(h.journey.value);
   }
   const interlockingRoutes = new Set();
   const interlockings = new Map(docs.filter(doc => text(doc.data, "interlocking_id").startsWith("interlocking:")).map(doc => [text(doc.data, "interlocking_id"), doc]));

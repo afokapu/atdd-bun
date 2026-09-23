@@ -57,6 +57,26 @@ export function implementationsFor(requested: Profile[] = ["all"]): string[] {
   return [...selected].sort();
 }
 
+/** The rule ids a detector's manifest declares it emits (emits_rule_ids and api_emits_rule_ids). */
+export async function declaredRuleIds(implementation: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  let inList = false;
+  for (const line of (await readFile(join(detectorRoot, implementation, "atdd.implementation.yaml"), "utf8")).split("\n")) {
+    if (line === "emits_rule_ids:" || line === "api_emits_rule_ids:") { inList = true; continue; }
+    if (/^[A-Za-z_][\w-]*:/.test(line)) { inList = false; continue; }
+    const match = inList && line.match(/^\s*-\s+([^#\s]+)/);
+    if (match) ids.add(match[1]);
+  }
+  return ids;
+}
+
+/** Rule ids a detector actually emitted without declaring them. Checked at run time, so an id built at run
+ * time (a template string, a concatenation, a value read from YAML) cannot escape the per-rule checks. */
+export async function undeclaredEmissions(implementation: string, violations: Pick<Violation, "rule_id">[]): Promise<string[]> {
+  const declared = await declaredRuleIds(implementation);
+  return [...new Set(violations.map(v => v.rule_id).filter(id => !declared.has(id)))].sort();
+}
+
 export async function runImplementation(
   implementation: string,
   config: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">>,
@@ -88,6 +108,8 @@ export async function runImplementation(
     if (!raw || !Array.isArray(raw.violations)) {
       throw new Error(`${implementation} emitted no structured violation report`);
     }
+    const undeclared = await undeclaredEmissions(implementation, raw.violations as Violation[]);
+    if (undeclared.length) throw new Error(`${implementation} emitted rule id(s) its manifest does not declare: ${undeclared.join(", ")}. Declare them in emits_rule_ids, each with a convention.`);
     return raw.violations as Violation[];
   } finally {
     await rm(scratch, { recursive: true, force: true });

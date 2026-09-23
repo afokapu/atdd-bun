@@ -95,3 +95,30 @@ test("#7 _generated is never scanned, by the topology gate or the plan kernel", 
     expect(await run("planner_plan_integrity", dir)).toEqual([]);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+
+// Second Codex review (MERGE AFTER FIXES): two more findings, pinned the same way.
+test("#8 a Playwright spec substitutes for a journey's E2E test only with a valid E2E/SMOKE URN for that journey", async () => {
+  const fixture = join(root, "detectors/atdd_topology/fixtures/clean"), dir = await mkdtemp(join(tmpdir(), "atdd-guard-review-"));
+  const e2e = (lines: string) => `${lines}\nimport { test } from "@playwright/test";\ntest("checkout", async () => {});\n`;
+  try {
+    await Bun.$`cp -R ${fixture}/. ${dir}/`.quiet();
+    await rm(join(dir, "e2e/journeys/checkout.journey.test.ts"));
+    const spec = join(dir, "e2e/checkout.e2e.ts");
+    const journeyFindings = async () => (await run("atdd_topology", dir)).filter(f => f.startsWith("atdd-bun.topology.e2e-location exposed journey:checkout"));
+    await writeFile(spec, e2e("// Journey: journey:checkout"));                                      // Codex's exact bypass: a bare binding
+    expect(await journeyFindings()).toHaveLength(1);
+    await writeFile(spec, e2e("// Journey: journey:checkout\n// URN: test:journey:other:SMOKE-001-x")); // a URN for another journey
+    expect(await journeyFindings()).toHaveLength(1);
+    await writeFile(spec, e2e("// Journey: journey:checkout\n// URN: test:journey:checkout:SMOKE-001-renders"));
+    expect(await journeyFindings()).toEqual([]);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("#9 a rule id a detector emits without declaring it is rejected at run time, however it was built", async () => {
+  const { undeclaredEmissions } = await import("../src/enforce");
+  const built = ["planner.docs", "bogus"].join(".");                                                   // an id no literal scan can see
+  expect(await undeclaredEmissions("planner_docs_capability", [{ rule_id: built }, { rule_id: "planner.docs.asciidoc-only" }])).toEqual(["planner.docs.bogus"]);
+  expect(await undeclaredEmissions("planner_docs_capability", [{ rule_id: "planner.docs.reference-integrity" }])).toEqual([]); // declared under api_emits_rule_ids
+  const source = await readFile(join(root, "src/enforce.ts"), "utf8");
+  expect(source).toMatch(/const undeclared = await undeclaredEmissions\(implementation, raw\.violations[^\n]*\n\s*if \(undeclared\.length\) throw/);
+});
