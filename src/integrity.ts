@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { profileNames } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -103,7 +104,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
 }
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookPolicy>): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -112,6 +113,10 @@ export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookP
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
+  // Deactivating a profile stops enforcing it; the operator may do it, as a change a human approves.
+  const active = (config: { profiles?: unknown }) => Array.isArray(config.profiles) ? config.profiles.map(String) : profileNames.filter(name => name !== "all");
+  const dropped = active(base).filter(name => !active(current).includes(name));
+  if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
   return out;
 }
 

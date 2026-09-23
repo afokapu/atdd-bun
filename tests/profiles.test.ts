@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { enabledProfiles, enforce, profileNames } from "../src/enforce";
 import { runHook } from "../src/hooks";
+import { loosenedPolicy } from "../src/integrity";
 
 // The operator decides what atdd-bun enforces: every profile by default, or the list in atdd-bun.yaml.
 const repo = async (files: Record<string, string>) => {
@@ -39,6 +40,12 @@ test("an unknown profile name or an empty list is an error, never a silent run o
   const root = await repo({ ...TRACE, "atdd-bun.yaml": "profiles: [nope]\n" });
   const child = Bun.spawn({ cmd: [process.execPath, resolve(import.meta.dir, "../src/cli.ts"), "all"], cwd: root, stdout: "pipe", stderr: "pipe" });
   expect(await child.exited).not.toBe(0);
+});
+
+test("deactivating a profile is reported as loosening atdd-bun.yaml; activating one is not", () => {
+  expect(loosenedPolicy({}, { profiles: ["traceability", "planner"] })).toEqual([`profiles drops ${profileNames.filter(p => !["all", "traceability", "planner"].includes(p)).join(", ")}`]);
+  expect(loosenedPolicy({ profiles: ["traceability"] }, { profiles: ["traceability", "coder"] })).toEqual([]);
+  expect(loosenedPolicy({ profiles: ["traceability"] }, {})).toEqual([]);
 });
 
 test("hooks enforce only the activated profiles", async () => {
