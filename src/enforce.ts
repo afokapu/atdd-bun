@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { topologyFor } from "./topology";
+import { NESTED_WORKTREES, topologyFor } from "./topology";
 
 export type Profile = "traceability" | "topology" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
 
@@ -80,7 +80,7 @@ export async function undeclaredEmissions(implementation: string, violations: Pi
 /** Nested checkouts of the same repository (agent worktrees) are other branches, not this tree. They are
  * excluded as absolute paths under each scan root, never as bare names: a scan run from INSIDE
  * `.claude/worktrees/<name>` must still see its own files. */
-export const NESTED_WORKTREES = [".claude/worktrees"];
+export { NESTED_WORKTREES };
 export const nestedWorktreeExcludes = (scanRoots: string[]) => scanRoots.flatMap((root) => NESTED_WORKTREES.map((dir) => join(resolve(root), dir)));
 
 export async function runImplementation(

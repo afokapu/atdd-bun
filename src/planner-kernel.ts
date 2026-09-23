@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { topologyFor } from "./topology";
+import { NESTED_WORKTREES, topologyFor } from "./topology";
 
 export type PlanKind = "wagon" | "feature" | "wmbt" | "acceptance" | "train" | "interlocking" | "journey" | "contract";
 export type PlanFinding = { rule_id: string; file: string; evidence: string };
@@ -12,13 +12,15 @@ const typedKinds: Record<string, PlanKind> = { wagon: "wagon", feature: "feature
 const id = (value: unknown) => typeof value === "string" ? value : "";
 const finding = (rule_id: string, file: string, evidence: string): PlanFinding => ({ rule_id, file, evidence });
 
-async function walk(root: string): Promise<string[]> {
+/** Plan files beneath `root`. `skip` holds absolute directories that are not this plan: nested agent worktrees
+ * (another checkout, visible when plan_root is `.`), dependencies and Git metadata. */
+async function walk(root: string, skip: Set<string>): Promise<string[]> {
   if (!existsSync(root)) return [];
   const entries = await readdir(root, { withFileTypes: true });
   return (await Promise.all(entries.map(async entry => {
     const path = join(root, entry.name);
-    if (entry.isDirectory() && entry.name === "_generated") return [];
-    return entry.isDirectory() ? walk(path) : entry.isFile() && /\.(?:yaml|yml|json)$/.test(entry.name) ? [path] : [];
+    if (entry.isDirectory() && (entry.name === "_generated" || entry.name === "node_modules" || entry.name === ".git" || skip.has(path))) return [];
+    return entry.isDirectory() ? walk(path, skip) : entry.isFile() && /\.(?:yaml|yml|json)$/.test(entry.name) ? [path] : [];
   }))).flat().sort();
 }
 
@@ -68,7 +70,7 @@ function structuralRefs(artifact: PlanArtifact): string[] {
  * excludes authoring/session/store behavior from ATDD core. */
 export async function loadPlan(root = process.cwd()): Promise<PlanGraph> {
   const absolute = resolve(root), topology = await topologyFor(absolute), plan = join(absolute, topology.planRoot), artifacts: PlanArtifact[] = [], findings: PlanFinding[] = [];
-  for (const path of await walk(plan)) {
+  for (const path of await walk(plan, new Set(NESTED_WORKTREES.map(dir => join(absolute, dir))))) {
     const file = relative(absolute, path).replaceAll("\\", "/");
     try {
       const text = await readFile(path, "utf8"); const data = path.endsWith(".json") ? JSON.parse(text) : Bun.YAML.parse(text);

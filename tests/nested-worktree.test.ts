@@ -3,6 +3,7 @@ import { cp, mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { enforce, implementationsFor, runImplementation } from "../src/enforce";
+import { loadPlan } from "../src/planner-kernel";
 // @ts-expect-error: plain ESM helper shared by the detectors
 import { isExcludedPath } from "../lib/scan.mjs";
 
@@ -30,6 +31,13 @@ test("a nested worktree cannot satisfy the host's obligations", async () => {
     ".claude/worktrees/wt/test/one.test.ts": "// URN: test:orders:x:E001-UNIT-001\n// Acceptance: acc:orders:E001-UNIT-001\n",
   });
   expect((await enforce({ root, profiles: ["traceability"] })).map(v => v.rule_id)).toEqual(["traceability.plan.executable-acceptance-has-test"]);
+});
+
+test("with plan_root `.`, nested worktree plans are not loaded as the host's plan", async () => {
+  const root = await repo({ "atdd-bun.yaml": "topology:\n  plan_root: .\n" });
+  for (const fixture of ["planner_schema_validation", "planner_plan_integrity", "atdd_traceability_closure"]) await nest(root, fixture, "dirty");
+  expect(await enforce({ root, profiles: ["planner", "traceability"] })).toEqual([]);
+  expect((await loadPlan(root)).artifacts).toEqual([]);
 });
 
 test("a scan run from inside a nested worktree still judges that worktree", async () => {

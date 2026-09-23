@@ -4,6 +4,10 @@ import { join, resolve } from "node:path";
 
 export type Topology = { planRoot: string; sourceRoot: string; testRoot: string; e2eRoot: string };
 
+/** Nested checkouts of the same repository (agent worktrees), relative to a repository root. They are other
+ * branches, not this tree, and every scan skips them. */
+export const NESTED_WORKTREES = [".claude/worktrees"];
+
 export const defaultTopology: Topology = {
   planRoot: "plan",
   sourceRoot: "src/wagons",
