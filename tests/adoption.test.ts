@@ -138,11 +138,15 @@ test("pre-push gates the pushed commits in brownfield: compliant passes, a broke
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 60_000);
 
-test("greenfield hooks still block on legacy debt", async () => {
+test("greenfield hooks run the full gate: even a README-only commit or push is blocked by existing debt", async () => {
   const root = await legacyRepo(null);
   try {
-    await addSlice(root); await git(root, "add", "-A");
-    expect((await runHook("pre-commit", root)).ok).toBeFalse();
+    await writeFile(join(root, "README.md"), "# notes\n"); await git(root, "add", "README.md");
+    const commit = await runHook("pre-commit", root);
+    expect(commit.ok).toBeFalse();
+    expect(commit.message).toContain("traceability.plan.executable-acceptance-has-test");
+    await git(root, "commit", "-qm", "readme", "--no-verify");
+    expect((await runHook("pre-push", root, [], `refs/heads/work ${await git(root, "rev-parse", "HEAD")} refs/heads/work ${"0".repeat(40)}\n`)).ok).toBeFalse();
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
