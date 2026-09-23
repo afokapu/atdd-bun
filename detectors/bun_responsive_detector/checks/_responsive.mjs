@@ -4,7 +4,8 @@ import { walk, readRoots, readExcludes, readText, emit, locate } from "../../../
 export { frontendConfig } from "../../../lib/frontend.mjs";
 export { declarations } from "../../bun_design_system_detector/checks/_design.mjs";
 
-const UI = new Set([".html", ".htm", ".css", ".tsx", ".jsx"]);
+// Bun/htmx pages are often built in .ts/.js template strings, so those are judged like markup.
+const UI = new Set([".html", ".htm", ".css", ".tsx", ".jsx", ".ts", ".js", ".mjs"]);
 
 /** Run a check over each scan root: `judge(root, files, report)` where files are { file, text }. */
 export function runCheck(tag, judge) {

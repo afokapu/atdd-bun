@@ -7,8 +7,9 @@ statement: Every train declared under `plan/` MUST have at least one journey spe
   realization of `tester.vite.train-e2e-coverage`, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: Every declared train has a browser spec.
   normative_text: 'A train with no browser spec is a silent gap: the journey it declares can regress with nothing

@@ -6,7 +6,7 @@ await runCheck("journey-binding-header", (root, specs, plan, report) => {
   for (const s of specs) {
     if (!isJourneySpec(s)) continue;
     if (!s.binding) { report(RULE, s.file, 1, "journey spec has no `// Train: train:<subject>:<slug>` or `// Journey: journey:<id>` header", firstLine(s.text)); continue; }
-    if (s.bothBindings) report(RULE, s.file, s.binding.line, "journey spec declares both `// Train:` and `// Journey:`; bind it to exactly one plan subject");
+    if (s.bindingCount > 1) report(RULE, s.file, s.binding.line, `journey spec declares ${s.bindingCount} \`// Train:\`/\`// Journey:\` headers; bind it to exactly one plan subject`);
     const valid = s.binding.kind === "train" ? TRAIN_ID : JOURNEY_ID;
     if (!valid.test(s.binding.id)) report(RULE, s.file, s.binding.line, `\`${s.binding.id}\` is not a valid ${s.binding.kind} id (${valid.source})`);
   }

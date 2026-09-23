@@ -7,8 +7,9 @@ statement: Every journey whose entrypoint is exposed MUST have at least one jour
   with an E2E or SMOKE test URN. New in the Bun/htmx browser tester, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: Every exposed journey has an E2E or SMOKE browser spec.
   normative_text: An exposed journey is what a user can start. The route-level rules prove each routing decision;

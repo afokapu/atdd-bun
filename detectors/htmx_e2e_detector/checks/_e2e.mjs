@@ -2,8 +2,8 @@
 //
 // A BROWSER SPEC is a `*.e2e.ts` file. It is named that way, not `*.spec.ts`, because `bun test`
 // collects every `*.spec.*` and `*.test.*` file and would try to run a Playwright spec with the
-// wrong runner. A JOURNEY SPEC is a browser spec, or any test file carrying a journey marker
-// (`// Train:`, `// Journey:`, `test:train:`, `test:journey:`), so a misnamed one is still judged.
+// wrong runner. A JOURNEY SPEC is a browser spec, or any test file whose header comments carry a
+// journey marker (`// Train:`, `// Journey:`, `// URN: test:train|journey:`), so a misnamed one is still judged.
 //
 // A journey spec binds to ONE plan subject through its header, and every test URN it carries
 // must agree with that binding:
@@ -39,15 +39,18 @@ export function parseSpec(file, text) {
   if (/(^|[.-])(responsive|resp)([.-]|$)/.test(name)) harnesses.add("RESP");
   if (/(^|[.-])smoke([.-]|$)/.test(name)) harnesses.add("SMOKE");
   const binding = train ? { kind: "train", id: train.value, line: train.line } : journey ? { kind: "journey", id: journey.value, line: journey.line } : null;
+  const bindingCount = [...text.matchAll(/^[ \t]*\/\/[ \t]*(Train|Journey):/gm)].length;
   return {
-    file, text, binding, bothBindings: Boolean(train && journey), urns, harnesses,
+    file, text, binding, bindingCount, urns, harnesses,
     layer: header(text, "Layer"),
     acceptance: text.match(/^[ \t]*\/\/[ \t]*(Acceptance|WMBT):[ \t]*\S/m),
     playwright: /from\s+["']@playwright\/test["']/.test(text),
     // A spec declares tests; a config (`defineConfig`) or a fixture module (`base.extend`) only imports the runner.
     declaresTests: !/(^|[\\/])playwright\.config\.[cm]?[jt]s$/.test(file) && /(^|[^.\w])test(\.(describe|only|skip|fixme|fail|slow|step))?\s*\(/m.test(maskLiteralsAndComments(text)),
     e2eNamed: E2E_RE.test(file),
-    journeyMarked: Boolean(train || journey) || urns.length > 0,
+    // Outside *.e2e.ts only HEADER comments mark a journey spec; a unit test that merely mentions a
+    // journey URN in a string is not one.
+    journeyMarked: Boolean(train || journey) || /^[ \t]*\/\/[ \t]*URN:[ \t]*test:(train|journey):/m.test(text),
   };
 }
 

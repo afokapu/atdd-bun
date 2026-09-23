@@ -1,3 +1,4 @@
+import { escapeHtml, fragment } from "./html";
 import { Cart } from "./wagons/checkout/presentation/cart";
 
 const port = Number(process.env.PORT ?? 4317);
@@ -6,12 +7,12 @@ const page = (title: string, body: string, status = 200) => new Response(`<!doct
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
   <link rel="stylesheet" href="/app.css">
 </head>
 <body>
   <header class="bar"><p class="brand">Shop</p></header>
-  <main class="page"><h1>${title}</h1>${body}</main>
+  <main class="page"><h1>${escapeHtml(title)}</h1>${fragment(body)}</main>
 </body>
 </html>`, { status, headers: { "content-type": "text/html; charset=utf-8" } });
 

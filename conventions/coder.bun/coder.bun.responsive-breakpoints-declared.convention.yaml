@@ -3,10 +3,10 @@ rule_id: coder.bun.responsive-breakpoints-declared
 kind: rule
 status: active
 name: Media queries use only the declared breakpoints
-statement: Every `min-width`/`max-width` condition in an `@media` query MUST use one of the breakpoints declared
-  under `frontend.breakpoints` in `atdd-bun.yaml` (default 480, 768, 1024, 1280). A `max-width` within 1px below
-  a breakpoint (`767px`, `767.98px`) counts as that breakpoint, and `em`/`rem` convert at 16px. New in atdd-bun,
-  strict.
+statement: Every width condition in an `@media` query, `min-width`/`max-width` or the range syntax (`width >= 768px`,
+  `768px <= width`), MUST use one of the breakpoints declared under `frontend.breakpoints` in `atdd-bun.yaml` (default
+  480, 768, 1024, 1280). A `max-width` within 1px below a breakpoint (`767px`, `767.98px`) counts as that breakpoint,
+  and `em`/`rem` convert at 16px. New in atdd-bun, strict.
 terms:
 - term_id: frontend_settings
   text: '`atdd-bun.yaml` → `frontend.viewports` (the widths responsive specs render at; the smallest bounds fixed

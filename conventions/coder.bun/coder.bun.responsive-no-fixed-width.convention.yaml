@@ -4,8 +4,8 @@ kind: rule
 status: active
 name: No width or min-width wider than the smallest viewport
 statement: A `width` or `min-width` declaration, in a stylesheet, a `<style>` block, a `style` attribute or a JSX
-  `style` object, MUST NOT exceed the smallest viewport declared under `frontend.viewports` in `atdd-bun.yaml` (default
-  375px). New in atdd-bun, strict.
+  `style` object, MUST NOT exceed (with `rem` and `em` counted at 16px) the smallest viewport declared under `frontend.viewports`
+  in `atdd-bun.yaml` (default 375px). New in atdd-bun, strict.
 terms:
 - term_id: frontend_settings
   text: '`atdd-bun.yaml` → `frontend.viewports` (the widths responsive specs render at; the smallest bounds fixed

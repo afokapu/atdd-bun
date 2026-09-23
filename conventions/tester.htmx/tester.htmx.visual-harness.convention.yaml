@@ -7,8 +7,9 @@ statement: A spec identified as visual (a `VIS` test URN, or a `visual`/`vis` to
   `toHaveScreenshot()` or `toMatchSnapshot()`. Bun/htmx realization of `tester.vite.visual-harness`, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A VIS spec compares a screenshot.
   normative_text: A visual spec that captures nothing performs no visual regression.

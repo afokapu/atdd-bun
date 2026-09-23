@@ -1,0 +1,3 @@
+.wide { width: 40rem; }
+@media (width >= 900px) { .wide { width: 100%; } }
+@media screen and (600px <= width) { .wide { color: currentColor; } }

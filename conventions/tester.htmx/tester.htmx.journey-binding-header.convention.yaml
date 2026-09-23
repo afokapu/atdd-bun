@@ -3,14 +3,15 @@ rule_id: tester.htmx.journey-binding-header
 kind: rule
 status: active
 name: A journey spec binds to exactly one train or journey
-statement: 'A journey spec (a `*.e2e.ts` file, or any test file carrying a `// Train:`, `// Journey:`, `test:train:`
-  or `test:journey:` marker) MUST carry exactly one binding header: `// Train: train:<subject>:<slug>` or `// Journey:
-  journey:<id>`, each matching the planner''s identity grammar. Bun/htmx realization of `tester.vite.journey-train-header`,
+statement: 'A journey spec (a `*.e2e.ts` file, or any test file whose header comments carry a `// Train:`, `// Journey:`
+  or `// URN: test:train|journey:` marker) MUST carry exactly one binding header: `// Train: train:<subject>:<slug>`
+  or `// Journey: journey:<id>`, each matching the planner''s identity grammar. Bun/htmx realization of `tester.vite.journey-train-header`,
   strict.'
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A journey spec binds to exactly one train or journey.
   normative_text: The binding is how a browser test is traced to the plan it exercises. A spec with no binding,

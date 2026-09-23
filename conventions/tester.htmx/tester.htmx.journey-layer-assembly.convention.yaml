@@ -7,8 +7,9 @@ statement: 'A journey spec MUST carry `// Layer: assembly`. Bun/htmx realization
   strict.'
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: 'A journey spec declares Layer: assembly.'
   normative_text: A browser test exercises the assembled application, not a layer of it. A missing or wrong Layer

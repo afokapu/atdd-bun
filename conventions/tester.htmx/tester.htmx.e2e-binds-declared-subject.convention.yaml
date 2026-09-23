@@ -7,8 +7,9 @@ statement: When the repository declares a plan, the train or journey a journey s
   `plan/`. Bun/htmx realization of `tester.vite.e2e-names-valid-train`, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A journey spec binds to a train or journey plan/ declares.
   normative_text: 'A spec bound to an undeclared subject is orphaned: it can pass forever while the plan it claims

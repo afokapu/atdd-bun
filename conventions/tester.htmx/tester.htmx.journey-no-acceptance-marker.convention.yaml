@@ -7,8 +7,9 @@ statement: A journey spec MUST NOT carry `// Acceptance:` or `// WMBT:` header l
   strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A journey spec carries no Acceptance or WMBT header.
   normative_text: 'Journey and acceptance identities are exclusive: a journey test binds to a train or journey,

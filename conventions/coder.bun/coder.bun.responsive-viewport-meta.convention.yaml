@@ -3,9 +3,9 @@ rule_id: coder.bun.responsive-viewport-meta
 kind: rule
 status: active
 name: Every HTML document declares a device-width viewport and allows zoom
-statement: Every full HTML document (an `.html`/`.htm` file or a `.tsx`/`.jsx` layout that renders `<html>`) MUST
-  declare `<meta name="viewport">` whose content sets `width=device-width`, and MUST NOT block zoom with `user-scalable=no`
-  or a `maximum-scale` below 2. New in atdd-bun, strict.
+statement: Every full HTML document (an `.html`/`.htm` file, a `.tsx`/`.jsx` layout that renders `<html>`, or a
+  `.ts`/`.js` template that builds one) MUST declare `<meta name="viewport">` whose content sets `width=device-width`,
+  and MUST NOT block zoom with `user-scalable=no` or a `maximum-scale` below 2. New in atdd-bun, strict.
 terms:
 - term_id: frontend_settings
   text: '`atdd-bun.yaml` → `frontend.viewports` (the widths responsive specs render at; the smallest bounds fixed
@@ -18,6 +18,8 @@ content:
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - HTML fragments that are not full documents (no `<html>`) are out of scope.
+  - A viewport `content` given as a JSX expression (`content={VIEWPORT}`) cannot be read statically; the meta's
+    presence is required, its value is not judged.
 metadata:
   aliases:
   - BUN-RESPONSIVE-RESPONSIVE-VIEWPORT-META-001

@@ -7,8 +7,9 @@ statement: A declared train that a journey spec binds to MUST be selected by at 
   realization of `tester.vite.covered-train-is-routed`, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A train a browser spec covers is selected by an interlocking route.
   normative_text: A spec can stay green while exercising a train nothing in the application can reach. Covering

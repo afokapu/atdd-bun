@@ -8,8 +8,9 @@ statement: A journey spec MUST carry at least one test URN `test:{train|journey}
   of `tester.vite.journey-urn-format`, strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A journey spec carries well-formed test URNs for its own subject.
   normative_text: The URN identifies the test instance and its harness. A malformed URN, or one naming another subject,

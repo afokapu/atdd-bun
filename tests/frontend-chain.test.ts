@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { runImplementation } from "../src/enforce";
+import { enforce, runImplementation } from "../src/enforce";
 import { validateStaticPlannerConventions } from "../src/planner-validators";
 
 // THE FULL FRONTEND CHAIN, in both directions: plan/ -> a Bun app -> Playwright browser specs.
@@ -34,9 +34,10 @@ async function playwright(root: string, ...args: string[]) {
 }
 const failed = (statuses: Map<string, string>) => [...statuses].filter(([, status]) => status !== "passed").map(([title]) => title).sort();
 
-test("the chain fixture satisfies the planner and every frontend detector", async () => {
+test("the chain fixture satisfies the planner's journey rules and the complete htmx, design and tester profiles", async () => {
   expect((await validateStaticPlannerConventions(fixture)).filter(f => f.rule_id.startsWith("planner.journey"))).toEqual([]);
-  for (const detector of ["htmx_e2e_detector", "bun_responsive_detector", "bun_design_system_detector"]) expect(await runImplementation(detector, { scanRoots: [fixture], excludes }), detector).toEqual([]);
+  const findings = await enforce({ root: fixture, profiles: ["htmx", "design", "tester"], excludes });
+  expect(findings.map(f => `${f.rule_id} ${f.file.slice(fixture.length + 1)}:${f.line}`)).toEqual([]);
 });
 
 test("every browser spec passes in Chromium", async () => {

@@ -8,8 +8,9 @@ statement: Every `.tsx`/`.jsx` component under a `presentation/` path segment MU
   strict.
 terms:
 - term_id: browser_spec
-  text: a `*.e2e.ts` file run by Playwright, or any test file carrying a journey marker (`// Train:`, `// Journey:`,
-    `test:train:`, `test:journey:`), so a misnamed one is still judged.
+  text: 'a `*.e2e.ts` file run by Playwright, or any test file whose header comments carry a journey marker (`//
+    Train:`, `// Journey:`, `// URN: test:train:…`, `// URN: test:journey:…`), so a misnamed one is still judged.
+    A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: Every presentation component is covered by a SMOKE browser spec.
   normative_text: Structural tests stay green while a rendered feature is blank; only rendering it in a browser
