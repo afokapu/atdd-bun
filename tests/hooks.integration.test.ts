@@ -66,6 +66,22 @@ test("declarative registries are exempt from the micro-commit size caps but stil
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("the uncommitted-files cap counts unstaged and untracked work, never the staged commit itself", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 100\nmax_uncommitted_files: 10\nrequire_traceability: false\n");
+    for (let i = 0; i < 15; i++) await writeFile(join(root, `part-${i}.md`), "x\n");
+    await git(root, ["add", "-A"]);
+    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    for (let i = 0; i < 11; i++) await writeFile(join(root, `untracked-${i}.md`), "x\n");
+    const blocked = await runHook("pre-commit", root);
+    expect(blocked.ok).toBeFalse(); expect(blocked.message).toContain("unstaged or untracked files 11 exceed 10");
+    for (let i = 0; i < 11; i++) await rm(join(root, `untracked-${i}.md`));
+    await git(root, ["commit", "-qm", "seed", "--no-verify"]);
+    for (let i = 0; i < 11; i++) await writeFile(join(root, `part-${i}.md`), "changed\n");
+    expect((await runHook("pre-commit", root)).message).toContain("unstaged or untracked files 11 exceed 10");
+  } finally { await cleanup(root); }
+}, 20_000);
+
 test("pre-push fails closed on a protected destination and post-commit remains advisory without network or ATDD", async () => {
   const root = await repo(); try { await installHooks(root); const head = (await git(root, ["rev-parse", "HEAD"])).out.trim(); expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse(); expect((await runHook("post-commit", root)).ok).toBeTrue(); const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8"); expect(dispatcher).not.toContain("http"); expect(dispatcher).not.toContain("bunx"); expect(dispatcher).not.toContain("atdd "); }
   finally { await cleanup(root); }
