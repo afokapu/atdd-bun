@@ -38,6 +38,12 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     expect(replaced.match(/atdd-bun:start/g)?.length).toBe(1); expect(replaced.startsWith("# Team rules\n")).toBeTrue();
     expect((await agentStatus(root)).ok).toBeTrue();
     await writeFile(join(root, "CLAUDE.md"), "# mine\n"); expect((await agentStatus(root)).ok).toBeFalse();
+    // The rest of an instruction file is never touched, trailing blank lines included.
+    for (const own of ["# mine", "# mine\n", "# mine\n\n\n\n"]) {
+      await writeFile(join(root, "CLAUDE.md"), own); await agentInit(root, true);
+      const written = await readFile(join(root, "CLAUDE.md"), "utf8");
+      expect(written.slice(0, written.indexOf("<!-- atdd-bun:start")), JSON.stringify(own)).toBe(own.endsWith("\n\n") ? own : own.replace(/\n?$/, "\n\n"));
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

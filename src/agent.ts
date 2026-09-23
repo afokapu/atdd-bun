@@ -10,8 +10,8 @@ const skillPaths = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.m
 // AGENTS.md is read by Codex, Cursor and most agents; CLAUDE.md by Claude Code. Both carry the same block.
 export const instructionPaths = ["AGENTS.md", "CLAUDE.md"];
 const block = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->\n?/;
-/** `current` with the managed block replaced, or appended after one blank line. */
-const withBlock = (current: string, managed: string) => block.test(current) ? current.replace(block, managed) : `${current.replace(/\n*$/, current ? "\n\n" : "")}${managed}`;
+/** `current` with the managed block replaced, or appended after at least one blank line; `current` itself is kept. */
+const withBlock = (current: string, managed: string) => block.test(current) ? current.replace(block, managed) : `${current}${current ? "\n\n".slice(current.match(/\n{0,2}$/)![0].length) : ""}${managed}`;
 
 /** Write the ATDD skill for every agent and a managed pointer block in AGENTS.md and CLAUDE.md. Existing files
  * and an existing block are kept unless `replace`; the rest of each instruction file is never touched. */
