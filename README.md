@@ -5,8 +5,8 @@ that keep their plan, acceptance evidence, tests, and implementation in the
 same Git history. It gives developers and coding agents fast local feedback,
 then runs the same checks in GitHub Actions.
 
-It does not require Python, the `atdd` executable, an ATdd state store, a
-global installation, or network access while enforcing a repository.
+It runs entirely on Bun from the repository's own `node_modules`: no global
+installation and no network access while enforcing a repository.
 
 ## What it protects
 
@@ -42,12 +42,22 @@ not the only thing standing between an invalid branch and `main`.
 
 ## Install and first use
 
-When the package is published to the configured package registry, add it as a
-development dependency:
+Add the package from npm as a development dependency, then bootstrap the
+repository once:
 
 ```sh
 bun add -d @afokapu/atdd-bun
+bun run atdd-bun init
 ```
+
+`init` installs the three local surfaces described below: Git
+[hooks](#hooks-fast-feedback-not-merge-authority), the
+[CI workflow](#ci-the-merge-gate), and the
+[agent skill](#agent-skill-the-lifecycle-in-the-agents-context). Commit what it
+generates (`.githooks/`, `.github/workflows/atdd-bun.yml`, `.agents/`, `.claude/`,
+`AGENTS.md`) so every clone and every agent session gets them. To keep the
+package and the skill current automatically, see
+[Staying up to date](#staying-up-to-date).
 
 Run the complete installed policy from the repository root:
 
@@ -163,8 +173,9 @@ bun run atdd-bun init
 It creates `.githooks/` dispatchers, sets a worktree-local `core.hooksPath`,
 generates `.github/workflows/atdd-bun.yml`, and installs the coding-agent skill
 when they are absent. It never overwrites another hook path, an existing
-generated workflow, or an existing skill unless you explicitly pass `--replace`. Installing the dependency alone deliberately does
-neither: package installation must not mutate a repository through postinstall.
+generated workflow, or an existing skill unless you explicitly pass `--replace`.
+The package itself has no install script: adding the dependency never changes
+the repository until you run `init`.
 
 Use `hooks install`, `ci init`, `agent init`, or `integrity init` when only one surface is wanted:
 
@@ -228,8 +239,9 @@ The skill names the lifecycle PLAN → RED → GREEN → SMOKE → REFACTOR → 
 conventions each stage follows, and the `atdd-bun` profile that gates it. It
 points at the conventions shipped in this package instead of restating them, so
 it stays correct as they change; after upgrading, refresh it with
-`bun run atdd-bun agent init --replace`. The skill steers the agent; the
-profiles, hooks, and CI remain the enforcement.
+`bun run atdd-bun agent init --replace`, or let the repository's own
+`postinstall` do it (see [Staying up to date](#staying-up-to-date)). The skill
+steers the agent; the profiles, hooks, and CI remain the enforcement.
 
 ## Integrity: files agents must not change
 
@@ -273,6 +285,45 @@ without `bunx`, runs `bun test`, and uploads reports when present.
 After generating it, configure the GitHub branch ruleset to require the workflow
 job before merging. `merge_group` is included so the same protection works with
 GitHub Merge Queue.
+
+## Staying up to date
+
+Every change merged into this package's `main` is published to npm
+automatically as the next patch version, with provenance, and tagged `vX.Y.Z`.
+
+The hooks and the CI workflow run the package installed in `node_modules`, so
+conventions, validators, and hook policy change as soon as a repository
+upgrades the dependency; nothing needs reinstalling. The agent skill is the one
+generated copy. To refresh it on every install, add a script to the
+repository's own `package.json` (Bun runs a project's own lifecycle scripts, not
+a dependency's):
+
+```json
+"scripts": {
+  "postinstall": "atdd-bun agent init --replace"
+}
+```
+
+To receive each release as a pull request, add `.github/dependabot.yml` on the
+default branch:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "@afokapu/atdd-bun"
+```
+
+Merging that pull request installs the new version and, through `postinstall`,
+rewrites the skill. Without Dependabot, upgrade with
+`bun update @afokapu/atdd-bun`. The lockfile pins the installed version, so
+nothing changes until one of these runs. While the package is `0.x`, a `^0.1.x`
+range accepts only `0.1.*`; move to a new minor with
+`bun add -d @afokapu/atdd-bun@latest`.
 
 ## Linked worktrees for agent work
 
@@ -340,12 +391,6 @@ publish using its own credentials and registry configuration.
 
 `bun test` runs the package’s real-Git fixtures and detector clean/dirty corpora.
 The suite proves that every declared convention output has a matching convention
-and a deliberate failing case; it also covers hook isolation, CI generation,
-planner scope, release validation, and linked-worktree policy.
-
-## Boundaries
-
-This package intentionally excludes ATdd’s Python runtime orchestration,
-registry/state reconciliation, GitHub API integration, cluster access, and
-deployment execution. Those capabilities may be configured around the package,
-but repository enforcement remains deterministic and locally runnable.
+and a deliberate failing case; it also covers hook isolation, the declarative
+registry policy, CI generation, agent-skill installation, planner scope, release
+validation, and linked-worktree policy.
