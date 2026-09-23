@@ -59,7 +59,15 @@ jobs:
       - name: Write integrity manifest
         run: bun -e 'import { writeManifest } from "./src/integrity"; const files = JSON.parse(Bun.spawnSync(["npm", "pack", "--dry-run", "--json"]).stdout.toString())[0].files.map((f) => f.path); console.log(await writeManifest(process.cwd(), files), "files hashed");'
       - run: npm publish --provenance --access public
+      # The tag must carry the version it names. The bump above is never committed to main, so the tag goes
+      # on a release commit made on top of the published commit (only the tag is pushed, main is untouched).
+      # Without it, v0.6.1 pointed at a commit whose package.json still said 0.6.0.
       - name: Tag release
         run: |
-          git tag "v${{ steps.version.outputs.next }}"
-          git push origin "v${{ steps.version.outputs.next }}"
+          next="${{ steps.version.outputs.next }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- package.json; then git commit -m "release: v$next [skip ci]" -- package.json; fi
+          test "$(git show HEAD:package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')" = "$next"
+          git tag "v$next"
+          git push origin "v$next"
