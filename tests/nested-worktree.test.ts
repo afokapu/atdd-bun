@@ -40,6 +40,13 @@ test("with plan_root `.`, nested worktree plans are not loaded as the host's pla
   expect((await loadPlan(root)).artifacts).toEqual([]);
 });
 
+test("a plan root configured inside a nested worktree is not the host's plan either", async () => {
+  for (const planRoot of [".claude/worktrees", ".claude/worktrees/wt/plan"]) {
+    const root = await repo({ "atdd-bun.yaml": `topology:\n  plan_root: ${planRoot}\n`, ".claude/worktrees/wt/plan/orders/E001.yaml": "urn: wmbt:orders:E001\n" });
+    expect((await loadPlan(root)).artifacts, planRoot).toEqual([]);
+  }
+});
+
 test("a scan run from inside a nested worktree still judges that worktree", async () => {
   const host = await repo({}), inside = join(host, ".claude/worktrees/atdd_traceability_closure-dirty");
   await nest(host, "atdd_traceability_closure", "dirty");

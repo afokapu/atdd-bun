@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { NESTED_WORKTREES, topologyFor } from "./topology";
 
 export type PlanKind = "wagon" | "feature" | "wmbt" | "acceptance" | "train" | "interlocking" | "journey" | "contract";
@@ -15,7 +15,8 @@ const finding = (rule_id: string, file: string, evidence: string): PlanFinding =
 /** Plan files beneath `root`. `skip` holds absolute directories that are not this plan: nested agent worktrees
  * (another checkout, visible when plan_root is `.`), dependencies and Git metadata. */
 async function walk(root: string, skip: Set<string>): Promise<string[]> {
-  if (!existsSync(root)) return [];
+  // Also when the plan root itself lies inside a skipped directory (plan_root: .claude/worktrees/x/plan).
+  if (!existsSync(root) || [...skip].some(dir => root === dir || root.startsWith(dir + sep))) return [];
   const entries = await readdir(root, { withFileTypes: true });
   return (await Promise.all(entries.map(async entry => {
     const path = join(root, entry.name);
