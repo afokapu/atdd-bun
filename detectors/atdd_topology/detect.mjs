@@ -34,7 +34,7 @@ function header(path) {
     const index = lines.findIndex(line => new RegExp(`^\\s*//\\s*${name}:\\s*(\\S.*?)\\s*$`).test(line));
     return index < 0 ? { value: "", line: 1, raw: "" } : { value: lines[index].replace(new RegExp(`^\\s*//\\s*${name}:\\s*`), "").trim(), line: index + 1, raw: lines[index].trim() };
   };
-  return { urn: field("URN"), acceptance: field("Acceptance"), train: field("Train") };
+  return { urn: field("URN"), acceptance: field("Acceptance"), train: field("Train"), journey: field("Journey") };
 }
 
 for (const root of roots) {
@@ -74,7 +74,11 @@ for (const root of roots) {
   }
 
   const declaredFeatures = new Set(features.map(feature => `${feature.wagon}:${feature.slug}`));
-  for (const path of walk(join(root, cfg.source_root), path => sourceExt.has(path.slice(path.lastIndexOf("."))) && !testName.test(path))) {
+  // A repository can ship an independent frontend or infrastructure fixture with journeys but
+  // no wagon/feature plan. Feature layout begins only when the plan models a feature; this
+  // preserves that boundary while making every modeled feature strict.
+  const modelsFeatures = wagons.length > 0 || features.length > 0 || wmbts.length > 0;
+  if (modelsFeatures) for (const path of walk(join(root, cfg.source_root), path => sourceExt.has(path.slice(path.lastIndexOf("."))) && !testName.test(path))) {
     const h = header(path), match = componentUrn.exec(h.urn.value);
     if (!match) { add("atdd-bun.topology.source-location", root, path, "source requires URN: component:{wagon}:{feature}:{name}:{frontend|backend}:{domain|application|integration|presentation}", h.urn.line, h.urn.raw); continue; }
     const wagon = match[1], feature = match[2], layer = match[4], expected = `${cfg.source_root}/${wagon}/features/${feature}/${layer === "integration" ? "infrastructure" : layer}/`;
@@ -82,7 +86,7 @@ for (const root of roots) {
     else sourceByFeature.set(`${wagon}:${feature}`, [...(sourceByFeature.get(`${wagon}:${feature}`) || []), path]);
     if (wagon && feature && !declaredFeatures.has(`${wagon}:${feature}`)) add("planner.feature.wagon-link", root, path, `${h.urn.value} names undeclared feature:${wagon}:${feature}`, h.urn.line, h.urn.raw);
   }
-  for (const path of walk(join(root, cfg.test_root), path => testName.test(path))) {
+  if (modelsFeatures) for (const path of walk(join(root, cfg.test_root), path => testName.test(path))) {
     const h = header(path), match = testUrn.exec(h.urn.value);
     if (!match) { add("atdd-bun.topology.test-location", root, path, "test requires URN: test:{wagon}:{feature}:{acceptance}", h.urn.line, h.urn.raw); continue; }
     const [, wagon, feature, acceptance] = match, expected = `${cfg.test_root}/${wagon}/features/${feature}/`;
@@ -99,28 +103,54 @@ for (const root of roots) {
     if (!testByFeature.get(key)?.length) add("atdd-bun.topology.feature-test-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no test bound to one of its acceptances`);
   }
   const e2eRoot = join(root, cfg.e2e_root);
+  // A browser test is the E2E proof for a frontend behavior. It deliberately
+  // substitutes for the Bun E2E path below, never supplements it: one behavior,
+  // one runner. htmx_e2e_detector (included in the tester profile) owns the
+  // stricter Playwright naming, header, subject, and harness validation.
+  const browserTrains = new Set(), browserJourneys = new Set();
+  for (const path of walk(e2eRoot, path => /\.e2e\.[cm]?[jt]sx?$/.test(path))) {
+    const content = read(path), h = header(path);
+    if (!/from\s+["']@playwright\/test["']/.test(content) || !/(^|[^.\w])test(\.(describe|only|skip|fixme|fail|slow|step))?\s*\(/m.test(content)) continue;
+    if (h.train.value) browserTrains.add(h.train.value);
+    if (h.journey.value) browserJourneys.add(h.journey.value);
+  }
   const interlockingRoutes = new Set();
   const interlockings = new Map(docs.filter(doc => text(doc.data, "interlocking_id").startsWith("interlocking:")).map(doc => [text(doc.data, "interlocking_id"), doc]));
+  const journeys = docs.filter(doc => text(doc.data, "journey_id").startsWith("journey:"));
+  const journeyReachability = journey => {
+    const continuations = list(journey.data, "continuations"), reachable = new Set(), queue = [text(journey.data.entrypoint, "interlocking_id")].filter(Boolean);
+    while (queue.length) {
+      const interlockingId = queue.shift(); if (!interlockingId || reachable.has(interlockingId)) continue;
+      reachable.add(interlockingId);
+      for (const continuation of continuations) if (text(continuation?.from, "interlocking_id") === interlockingId && text(continuation?.to, "interlocking_id")) queue.push(text(continuation.to, "interlocking_id"));
+    }
+    return reachable;
+  };
+  const hasFrontendSurface = entry => !Array.isArray(entry?.surfaces) || entry.surfaces.map(String).includes("frontend");
+  const frontendInterlockings = new Set(journeys.filter(journey => {
+    const entry = journey.data.entrypoint;
+    return entry && typeof entry === "object" && entry.exposed === true && hasFrontendSurface(entry);
+  }).flatMap(journey => [...journeyReachability(journey)]));
   for (const interlocking of interlockings.values()) {
     const id = text(interlocking.data, "interlocking_id").slice(13);
     for (const route of list(interlocking.data, "routes")) {
       const routeId = text(route, "route_id"); if (!routeId) continue;
       const expected = join(e2eRoot, "interlockings", id, `${routeId}.routes.test.ts`);
       interlockingRoutes.add(rel(root, expected));
-      if (!existsSync(expected)) add("atdd-bun.topology.e2e-location", root, interlocking.path, `${text(interlocking.data, "interlocking_id")} route ${routeId} requires ${rel(root, expected)}`);
+      const browserEligible = frontendInterlockings.has(text(interlocking.data, "interlocking_id"));
+      if (!existsSync(expected) && !(browserEligible && browserTrains.has(text(route, "train_id")))) add("atdd-bun.topology.e2e-location", root, interlocking.path, browserEligible
+        ? `${text(interlocking.data, "interlocking_id")} route ${routeId} requires ${rel(root, expected)} or a Playwright E2E spec bound to Train: ${text(route, "train_id")}`
+        : `${text(interlocking.data, "interlocking_id")} route ${routeId} is not on an exposed frontend journey and requires ${rel(root, expected)}`);
     }
   }
-  for (const journey of docs.filter(doc => text(doc.data, "journey_id").startsWith("journey:"))) {
+  for (const journey of journeys) {
     const entry = journey.data.entrypoint, id = text(journey.data, "journey_id").slice(8), path = join(e2eRoot, "journeys", `${id}.journey.test.ts`);
-    const continuations = list(journey.data, "continuations"), reachable = new Set(), queue = [text(entry, "interlocking_id")].filter(Boolean), journeyTrains = new Set();
-    while (queue.length) {
-      const interlockingId = queue.shift(); if (!interlockingId || reachable.has(interlockingId)) continue;
-      reachable.add(interlockingId);
-      for (const route of list(interlockings.get(interlockingId)?.data, "routes")) if (text(route, "train_id")) journeyTrains.add(text(route, "train_id"));
-      for (const continuation of continuations) if (text(continuation?.from, "interlocking_id") === interlockingId && text(continuation?.to, "interlocking_id")) queue.push(text(continuation.to, "interlocking_id"));
-    }
-    if (entry && typeof entry === "object" && entry.exposed === true && !existsSync(path)) add("atdd-bun.topology.e2e-location", root, journey.path, `exposed journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts`);
-    else if (entry && typeof entry === "object" && entry.exposed === true) {
+    const reachable = journeyReachability(journey), journeyTrains = new Set([...reachable].flatMap(interlockingId => list(interlockings.get(interlockingId)?.data, "routes").map(route => text(route, "train_id")).filter(Boolean)));
+    const browserEligible = entry && typeof entry === "object" && hasFrontendSurface(entry);
+    if (entry && typeof entry === "object" && entry.exposed === true && !existsSync(path) && !(browserEligible && browserJourneys.has(`journey:${id}`))) add("atdd-bun.topology.e2e-location", root, journey.path, browserEligible
+      ? `exposed journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts or a Playwright E2E spec bound to Journey: journey:${id}`
+      : `exposed backend journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts`);
+    else if (entry && typeof entry === "object" && entry.exposed === true && existsSync(path)) {
       const h = header(path), match = testUrn.exec(h.urn.value);
       if (!match || !declaredFeatures.has(`${match[1]}:${match[2]}`)) add("atdd-bun.topology.e2e-location", root, path, "journey E2E test requires a test:{wagon}:{feature}:{acceptance} URN naming a declared feature", h.urn.line, h.urn.raw);
       if (!trains.has(h.train.value) || !journeyTrains.has(h.train.value)) add("atdd-bun.topology.e2e-location", root, path, `journey E2E Train: must resolve to a reachable selected train; found ${h.train.value || "<missing>"}`, h.train.line, h.train.raw);

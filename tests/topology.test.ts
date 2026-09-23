@@ -6,6 +6,7 @@ import { enforce, runImplementation } from "../src/enforce";
 import { validatePlan } from "../src/planner-kernel";
 
 const fixture = (kind: "clean" | "dirty") => resolve(import.meta.dir, `../detectors/atdd_topology/fixtures/${kind}`);
+const frontend = resolve(import.meta.dir, "fixtures/frontend-chain");
 
 test("topology closes wagon -> feature -> WMBT and binds configured source/test/E2E locations", async () => {
   expect(await runImplementation("atdd_topology", { scanRoots: [fixture("clean")], excludes: ["node_modules", ".git", ".atdd"] })).toEqual([]);
@@ -36,5 +37,24 @@ test("a configured plan root is shared by plan loading, traceability, tester acc
     await write(join(root, "tests/wagons/orders/features/place-order/unit/order.test.ts"), "// URN: test:orders:place-order:E001-UNIT-001\n// Acceptance: acc:orders:E001-UNIT-001\n// Phase: UNIT\n// Layer: domain\nimport { test } from 'bun:test';\ntest('order', () => {});\n");
     expect((await validatePlan(root)).artifacts.map(item => item.id)).toContain("feature:orders:place-order");
     expect(await enforce({ root, profiles: ["traceability", "tester", "topology"] })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a bound Playwright browser spec is the E2E proof for its journey and train, not a second test obligation", async () => {
+  expect(await runImplementation("atdd_topology", { scanRoots: [frontend], excludes: ["node_modules", ".git", ".atdd", "test-results"] })).toEqual([]);
+});
+
+test("a browser spec cannot replace the Bun execution proof for a backend-only journey", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-topology-backend-"));
+  const write = async (path: string, content: string) => { await mkdir(join(path, ".."), { recursive: true }); await writeFile(path, content); };
+  try {
+    await write(join(root, "plan/_trains/orders/batch.yaml"), "train_id: train:orders:batch\n");
+    await write(join(root, "plan/_trains/_interlockings/batch.yaml"), "interlocking_id: interlocking:batch\nentrypoint:\n  exposed: true\n  surfaces: [backend]\nroutes:\n  - route_id: nominal\n    train_id: train:orders:batch\n");
+    await write(join(root, "plan/_journeys/batch.yaml"), "journey_id: journey:batch\nentrypoint:\n  interlocking_id: interlocking:batch\n  exposed: true\n  surfaces: [backend]\ncontinuations: []\n");
+    await write(join(root, "e2e/batch.e2e.ts"), "import { test } from '@playwright/test';\n// Train: train:orders:batch\ntest('batch', () => {});\n");
+    expect((await runImplementation("atdd_topology", { scanRoots: [root], excludes: [] })).map(item => item.file).sort()).toEqual([
+      "plan/_journeys/batch.yaml",
+      "plan/_trains/_interlockings/batch.yaml",
+    ]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
