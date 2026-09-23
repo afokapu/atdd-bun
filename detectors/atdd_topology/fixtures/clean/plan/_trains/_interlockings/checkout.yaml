@@ -1,0 +1,3 @@
+interlocking_id: interlocking:checkout
+routes:
+  - route_id: nominal

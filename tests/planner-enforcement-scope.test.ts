@@ -25,7 +25,7 @@ test("planner scope distinguishes canonical realizations, partial coverage, and 
     "planner.contract.registry-coherence", "planner.theme.must-be-canonical", "planner.theme.theme-zero-mandatory",
     "planner.theme.urn-namespace-matches", "planner.artifact-naming.theme-first-identity",
   ]);
-  expect(implementationsFor(["planner"])).toEqual(["planner_plan_integrity", "planner_schema_validation", "planner_static_validators"]);
+  expect(implementationsFor(["planner"])).toEqual(["atdd_topology", "planner_plan_integrity", "planner_schema_validation", "planner_static_validators"]);
 });
 
 test("package plan-integrity diagnostics never impersonate canonical planner conventions", async () => {

@@ -1,0 +1,3 @@
+urn: feature:orders:place-order
+wagon: wagon:orders
+wmbts: []

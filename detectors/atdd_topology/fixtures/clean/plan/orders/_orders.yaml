@@ -1,0 +1,5 @@
+urn: wagon:orders
+wmbt:
+  total: 1
+features:
+  - urn: feature:orders:place-order

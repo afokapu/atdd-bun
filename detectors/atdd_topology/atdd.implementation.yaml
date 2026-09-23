@@ -1,0 +1,11 @@
+kind: implementation
+subtype: guard
+implementation_id: atdd_topology
+emits_rule_ids:
+- planner.wagon.features
+- planner.feature.wagon-link
+- atdd-bun.topology.plan-location
+- atdd-bun.topology.source-location
+- atdd-bun.topology.test-location
+- atdd-bun.topology.e2e-location
+entrypoint: detect.mjs

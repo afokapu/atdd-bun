@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-export type Profile = "traceability" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
+export type Profile = "traceability" | "topology" | "docs" | "planner" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
 
 export type Violation = {
   rule_id: string;
@@ -22,10 +22,11 @@ export type EnforcementConfig = {
 
 const profiles: Record<Exclude<Profile, "all">, string[]> = {
   traceability: ["atdd_traceability_closure"],
+  topology: ["atdd_topology"],
   docs: ["planner_docs_capability"],
-  planner: ["planner_plan_integrity", "planner_schema_validation", "planner_static_validators"],
-  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector", "bun_responsive_detector"],
-  tester: ["bun_tester_discipline_detector", "htmx_e2e_detector"],
+  planner: ["planner_plan_integrity", "planner_schema_validation", "planner_static_validators", "atdd_topology"],
+  coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector", "bun_responsive_detector", "atdd_topology"],
+  tester: ["bun_tester_discipline_detector", "htmx_e2e_detector", "atdd_topology"],
   security: ["bun_security_hygiene_detector"],
   architecture: ["bun_clean_architecture_detector"],
   metrics: ["bun_ts_metrics_detector"],
