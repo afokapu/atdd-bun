@@ -54,6 +54,8 @@ jobs:
           echo "published=$published next=$next"
           echo "next=$next" >> "$GITHUB_OUTPUT"
       - run: npm version "${{ steps.version.outputs.next }}" --no-git-tag-version --allow-same-version
+      - name: Write integrity manifest
+        run: bun -e 'import { writeManifest } from "./src/integrity"; const files = JSON.parse(Bun.spawnSync(["npm", "pack", "--dry-run", "--json"]).stdout.toString())[0].files.map((f) => f.path); console.log(await writeManifest(process.cwd(), files), "files hashed");'
       - run: npm publish --provenance --access public
       - name: Tag release
         run: |

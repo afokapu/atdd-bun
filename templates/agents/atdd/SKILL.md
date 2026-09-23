@@ -14,3 +14,5 @@ Conventions live in `node_modules/@afokapu/atdd-bun/` (`planner-nodes/nodes/`, `
 6. TRACE — Every acceptance has a test, every test resolves to a declared acceptance, every source file resolves to its tests. Gate: `bun run atdd-bun traceability`, then `bun run atdd-bun all`.
 
 When a gate fails, open `<rule_id>.convention.yaml` for the reported rule ID and fix the artifact. Never skip, suppress, or edit a convention to get green.
+
+Never edit `node_modules/@afokapu/atdd-bun`, the files atdd-bun generates (this skill, `AGENTS.md` block, `.github/workflows/atdd-bun.yml`, `atdd-bun.integrity.test.ts`), or loosen `atdd-bun.yaml`. `atdd-bun.integrity.test.ts` fails if you do, and CI repeats the check on a clean install. If one of them needs to change, stop and ask the human.

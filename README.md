@@ -166,12 +166,13 @@ when they are absent. It never overwrites another hook path, an existing
 generated workflow, or an existing skill unless you explicitly pass `--replace`. Installing the dependency alone deliberately does
 neither: package installation must not mutate a repository through postinstall.
 
-Use `hooks install`, `ci init`, or `agent init` when only one surface is wanted:
+Use `hooks install`, `ci init`, `agent init`, or `integrity init` when only one surface is wanted:
 
 ```sh
 bun run atdd-bun hooks install
 bun run atdd-bun ci init
 bun run atdd-bun agent init
+bun run atdd-bun integrity init
 ```
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete
@@ -229,6 +230,31 @@ points at the conventions shipped in this package instead of restating them, so
 it stays correct as they change; after upgrading, refresh it with
 `bun run atdd-bun agent init --replace`. The skill steers the agent; the
 profiles, hooks, and CI remain the enforcement.
+
+## Integrity: files agents must not change
+
+Coding agents can edit anything on the machine they run on, including
+`node_modules/@afokapu/atdd-bun`, the files this package generates, and
+`atdd-bun.yaml`. `init` therefore writes `atdd-bun.integrity.test.ts` (into the
+`[test] root` from `bunfig.toml`, if one is set), and the generated CI workflow
+runs `bun run atdd-bun integrity` before enforcement. Both run the same check:
+
+| Checked | Canonical source | Restore |
+|---|---|---|
+| Every file of the installed package | `integrity.json`, the hashes published with the package | `bun install --force` |
+| The dependency is an npm version range, locked to the registry with an integrity hash | npm | `bun add -d @afokapu/atdd-bun` |
+| The CI workflow, both skills, the `AGENTS.md` block, and the integrity test | what the installed version generates (its version stamp is ignored) | `bun run atdd-bun init --replace` |
+| `atdd-bun.yaml` is not looser than on the branch being merged into | the merge base; for a push to the base branch, the previous commit | `git checkout <base> -- atdd-bun.yaml` |
+
+A failure is addressed to the agent: it lists every changed file with its
+restore command and tells it to stop and ask a human instead of working around
+the check. Locally, this is a reminder an agent can still ignore, because
+anything on its machine can be edited. In CI the check runs on a clean install,
+so its verdict cannot be faked. Loosening the policy remains possible, as a
+separate change a human approves.
+
+After upgrading to a version that changes generated files, run
+`bun run atdd-bun init --replace` and commit the result.
 
 ## CI: the merge gate
 

@@ -1,6 +1,6 @@
 {
   "name": "@afokapu/atdd-bun",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/afokapu/atdd-bun.git"
@@ -23,7 +23,8 @@
     "bunfig.toml",
     "PLANNER_PORT.md",
     "HOOK_AUDIT.md",
-    "templates"
+    "templates",
+    "integrity.json"
   ],
   "scripts": {
     "test": "bun test",
