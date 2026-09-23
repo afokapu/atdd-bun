@@ -12,7 +12,7 @@
 //   // Layer: assembly
 //   test:train:orders:place-order:E2E-001-places-an-order   (harness E2E | SMOKE | A11Y | VIS | RESP)
 import { basename, join, resolve } from "node:path";
-import { walk, readText } from "../../../lib/scan.mjs";
+import { walk, readText, maskLiteralsAndComments } from "../../../lib/scan.mjs";
 import { loadPlan } from "../../../src/planner-kernel.ts";
 
 export const TRAIN_ID = /^train:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
@@ -44,6 +44,8 @@ export function parseSpec(file, text) {
     layer: header(text, "Layer"),
     acceptance: text.match(/^[ \t]*\/\/[ \t]*(Acceptance|WMBT):[ \t]*\S/m),
     playwright: /from\s+["']@playwright\/test["']/.test(text),
+    // A spec declares tests; a config (`defineConfig`) or a fixture module (`base.extend`) only imports the runner.
+    declaresTests: !/(^|[\\/])playwright\.config\.[cm]?[jt]s$/.test(file) && /(^|[^.\w])test(\.(describe|only|skip|fixme|fail|slow|step))?\s*\(/m.test(maskLiteralsAndComments(text)),
     e2eNamed: E2E_RE.test(file),
     journeyMarked: Boolean(train || journey) || urns.length > 0,
   };
