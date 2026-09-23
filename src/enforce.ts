@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -37,8 +38,27 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   design: ["bun_design_system_detector", "bun_responsive_detector"],
 };
 
+type ConcreteProfile = Exclude<Profile, "all">;
+/** Every profile but `all`. */
+export const concreteProfiles = Object.keys(profiles) as ConcreteProfile[];
 /** Profile names accepted by the CLI and public integrations. */
-export const profileNames = [...Object.keys(profiles), "all"] as Profile[];
+export const profileNames = [...concreteProfiles, "all"] as Profile[];
+
+/**
+ * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every profile when absent. A legacy
+ * repository can adopt enforcement gradually by listing only what it is ready for. `all`, the hooks and the
+ * generated CI run exactly these; naming a profile explicitly still runs it. An unknown name or an empty list is
+ * a configuration error, never a silent "run nothing".
+ */
+export async function enabledProfiles(root = process.cwd()): Promise<ConcreteProfile[]> {
+  const file = join(resolve(root), "atdd-bun.yaml");
+  const listed = existsSync(file) ? (Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null)?.profiles : undefined;
+  if (listed === undefined) return concreteProfiles;
+  if (!Array.isArray(listed) || !listed.length) throw new Error("atdd-bun.yaml profiles must be a non-empty list of profile names");
+  const unknown = listed.filter(name => !concreteProfiles.includes(name));
+  if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${concreteProfiles.join(", ")}`);
+  return [...new Set(listed as ConcreteProfile[])];
+}
 
 const packageRoot = resolve(import.meta.dir, "..");
 const detectorRoot = join(packageRoot, "detectors");
@@ -120,8 +140,12 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   const root = resolve(config.root ?? process.cwd());
   const scanRoots = (config.scanRoots?.length ? config.scanRoots : [root]).map((path) => resolve(root, path));
   const excludes = ["node_modules", ".git", ".atdd", ...(config.excludes ?? [])];
+  // `all` means every profile the operator activated; explicitly named profiles run as asked. The operator's list
+  // is validated on every run, so a misspelled atdd-bun.yaml fails whichever profile is requested.
+  const requested = config.profiles ?? ["all"], enabled = await enabledProfiles(root);
+  const selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...enabled])] : requested;
   const results = await Promise.all(
-    implementationsFor(config.profiles).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
+    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
   );
   return results.flat().sort((left, right) =>
     left.rule_id.localeCompare(right.rule_id) || left.file.localeCompare(right.file) || left.line - right.line,

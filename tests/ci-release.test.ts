@@ -26,6 +26,10 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     const agents = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(agents.startsWith("# Team rules\n\n<!-- atdd-bun:start")).toBeTrue();
     expect(agents).toContain(".agents/skills/atdd/SKILL.md");
+    // Claude Code reads CLAUDE.md: the same block, saying what an agent may change.
+    const claude = await readFile(join(root, "CLAUDE.md"), "utf8"), managed = /<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/;
+    expect(claude.match(managed)?.[0]).toBe(agents.match(managed)?.[0]);
+    for (const text of ["Never modify the toolkit itself", "change only the configuration it offers", "enabled gradually", "profiles:"]) expect(claude).toContain(text);
     expect((await agentInit(root)).ok).toBeFalse();
     const skill = join(root, ".claude/skills/atdd/SKILL.md");
     await writeFile(skill, "kept\n"); expect((await agentInit(root)).ok).toBeFalse(); expect(await readFile(skill, "utf8")).toBe("kept\n");
@@ -33,6 +37,13 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     const replaced = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(replaced.match(/atdd-bun:start/g)?.length).toBe(1); expect(replaced.startsWith("# Team rules\n")).toBeTrue();
     expect((await agentStatus(root)).ok).toBeTrue();
+    await writeFile(join(root, "CLAUDE.md"), "# mine\n"); expect((await agentStatus(root)).ok).toBeFalse();
+    // The rest of an instruction file is never touched, trailing blank lines included.
+    for (const own of ["# mine", "# mine\n", "# mine\n\n\n\n"]) {
+      await writeFile(join(root, "CLAUDE.md"), own); await agentInit(root, true);
+      const written = await readFile(join(root, "CLAUDE.md"), "utf8");
+      expect(written.slice(0, written.indexOf("<!-- atdd-bun:start")), JSON.stringify(own)).toBe(own.endsWith("\n\n") ? own : own.replace(/\n?$/, "\n\n"));
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

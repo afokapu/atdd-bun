@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { instructionPaths } from "./agent";
+import { concreteProfiles } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -95,15 +97,17 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   await same(WORKFLOW, "templates/github/atdd-bun.yml", "bun run atdd-bun ci init --replace");
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
-  const agents = existsSync(join(root, "AGENTS.md")) ? await readFile(join(root, "AGENTS.md"), "utf8") : "";
-  const block = agents.match(BLOCK)?.[0], canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
-  if (!block) findings.push({ file: "AGENTS.md", detail: "is missing the atdd-bun block", restore: "bun run atdd-bun agent init --replace" });
-  else if (unstamp(block) !== unstamp(canonical)) findings.push({ file: "AGENTS.md", detail: "atdd-bun block was edited", restore: "bun run atdd-bun agent init --replace" });
+  const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
+  for (const file of instructionPaths) {
+    const agents = existsSync(join(root, file)) ? await readFile(join(root, file), "utf8") : "", block = agents.match(BLOCK)?.[0];
+    if (!block) findings.push({ file, detail: "is missing the atdd-bun block", restore: "bun run atdd-bun agent init --replace" });
+    else if (unstamp(block) !== unstamp(canonical)) findings.push({ file, detail: "atdd-bun block was edited", restore: "bun run atdd-bun agent init --replace" });
+  }
   return findings;
 }
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookPolicy>): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -112,6 +116,10 @@ export function loosenedPolicy(base: Partial<HookPolicy>, current: Partial<HookP
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
+  // Deactivating a profile stops enforcing it; the operator may do it, as a change a human approves.
+  const active = (config: { profiles?: unknown }): string[] => Array.isArray(config.profiles) ? config.profiles.map(String) : concreteProfiles;
+  const dropped = active(base).filter(name => !active(current).includes(name));
+  if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
   return out;
 }
 
