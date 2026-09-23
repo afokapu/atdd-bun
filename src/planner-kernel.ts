@@ -17,6 +17,7 @@ async function walk(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   return (await Promise.all(entries.map(async entry => {
     const path = join(root, entry.name);
+    if (entry.isDirectory() && entry.name === "_generated") return [];
     return entry.isDirectory() ? walk(path) : entry.isFile() && /\.(?:yaml|yml|json)$/.test(entry.name) ? [path] : [];
   }))).flat().sort();
 }
@@ -97,7 +98,7 @@ export async function validatePlan(root = process.cwd()): Promise<PlanGraph> {
     const references = structuralRefs(artifact);
     for (const reference of new Set(references)) if (!known.has(reference) && !reference.startsWith("contract:")) graph.findings.push(finding("planner.kernel.reference-resolves", artifact.file, `${artifact.id} references undeclared ${reference}`));
     if (artifact.kind === "train") for (const wagon of values(artifact.data.wagons)) { const reference = `wagon:${id(wagon)}`; if (id(wagon) && !known.has(reference)) graph.findings.push(finding("planner.kernel.train-wagon-resolves", artifact.file, `${artifact.id} lists undeclared ${reference}`)); }
-    if (artifact.kind === "interlocking") for (const participant of [...values(artifact.data.participants), ...values(artifact.data.lifelines).map(value => value && typeof value === "object" ? (value as Record<string, unknown>).ref : value)]) { const reference = id(participant); if (reference.startsWith("wagon:") && !known.has(reference)) graph.findings.push(finding("planner.kernel.interlocking-participant-resolves", artifact.file, `${artifact.id} lists undeclared ${reference}`)); }
+    if (artifact.kind === "interlocking") for (const participant of [...values(artifact.data.participants), ...values(artifact.data.lifelines).map(value => value && typeof value === "object" ? (value as Record<string, unknown>).ref : value)]) { const reference = id(participant); if (reference && !/^(user|system):/.test(reference) && !known.has(reference)) graph.findings.push(finding("planner.kernel.interlocking-participant-resolves", artifact.file, `${artifact.id} lists undeclared ${reference}`)); }
   }
   return graph;
 }

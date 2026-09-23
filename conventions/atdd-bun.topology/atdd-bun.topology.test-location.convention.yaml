@@ -3,8 +3,10 @@ rule_id: atdd-bun.topology.test-location
 kind: rule
 status: active
 name: Feature tests live beneath their feature and bind a declared acceptance
-statement: 'Every test beneath `<test_root>` carries `URN: test:{wagon}:{feature}:{acceptance}`, lives beneath `<test_root>/<wagon>/features/<feature>/{unit,contract,integration}/`,
-  and binds `Acceptance: acc:{wagon}:{acceptance}` declared by a WMBT in the plan. Package rule, strict.'
+statement: 'When the plan models at least one wagon, feature or WMBT, every test beneath `<test_root>` carries `URN:
+  test:{wagon}:{feature}:{acceptance}`, lives beneath `<test_root>/<wagon>/features/<feature>/{unit,contract,integration}/`,
+  and binds `Acceptance: acc:{wagon}:{acceptance}` declared by a WMBT that the test''s own feature lists. Package
+  rule, strict.'
 terms:
 - term_id: package_rule
   text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical

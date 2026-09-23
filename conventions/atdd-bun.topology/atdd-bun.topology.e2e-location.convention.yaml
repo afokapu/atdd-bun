@@ -3,10 +3,11 @@ rule_id: atdd-bun.topology.e2e-location
 kind: rule
 status: active
 name: Every interlocking route and exposed journey has an end-to-end test at its canonical path
-statement: Every interlocking route has `<e2e_root>/interlockings/<interlocking>/<route>.routes.test.ts`, and every
-  exposed journey `<e2e_root>/journeys/<journey>.journey.test.ts`, each naming a declared feature and acceptance.
-  On an exposed journey whose surfaces include `frontend`, a Playwright spec (`*.e2e.ts`) bound to the route's train
-  or the journey substitutes for the Bun test. Package rule, strict.
+statement: 'Every interlocking route has `<e2e_root>/interlockings/<interlocking>/<route>.routes.test.ts`, and every
+  exposed journey `<e2e_root>/journeys/<journey>.journey.test.ts`, each carrying a `test:{wagon}:{feature}:{acceptance}`
+  URN for a declared feature and binding `Acceptance: acc:{wagon}:{acceptance}` declared by a WMBT. On an exposed
+  journey whose surfaces include `frontend`, a Playwright spec (`*.e2e.ts`) bound to the route''s train or the journey
+  substitutes for the Bun test. Package rule, strict.'
 terms:
 - term_id: package_rule
   text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical

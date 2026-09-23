@@ -9,6 +9,7 @@ schema_version: 1.0.0
 graph_id: "@afokapu/atdd-bun"
 nodes: 
   - atdd-bun.planner.acceptance-identity
+  - atdd-bun.planner.identity-required
   - atdd-bun.planner.identity-unique
   - atdd-bun.planner.interlocking-participant-resolves
   - atdd-bun.planner.parse
@@ -4990,4 +4991,24 @@ edges:
     strength: important
     target_ref: atdd-bun.topology.feature-source-coverage
     type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: identities can only be compared once every artifact carries one
+    source_ref: atdd-bun.planner.identity-required
+    strength: critical
+    target_ref: atdd-bun.planner.identity-unique
+    type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: an artifact is read for its identity only once it parses
+    source_ref: atdd-bun.planner.parse
+    strength: critical
+    target_ref: atdd-bun.planner.identity-required
+    type: enables
     origin: "@afokapu/atdd-bun"

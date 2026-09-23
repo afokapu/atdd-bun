@@ -6,6 +6,7 @@ const roots = JSON.parse(process.env.ATDD_SCAN_ROOTS ?? "[]"), report = process.
 if (!report) throw new Error("ATDD_VIOLATIONS_REPORT is required");
 const ids = {
   "planner.kernel.parse": "atdd-bun.planner.parse",
+  "planner.kernel.identity-required": "atdd-bun.planner.identity-required",
   "planner.kernel.identity-unique": "atdd-bun.planner.identity-unique",
   "planner.kernel.reference-resolves": "atdd-bun.planner.reference-resolves",
   "planner.kernel.train-wagon-resolves": "atdd-bun.planner.train-wagon-resolves",
@@ -14,7 +15,9 @@ const ids = {
 };
 const violations = (await Promise.all(roots.map(validatePlan))).flatMap(graph => graph.findings).map(item => ({
   ...item,
-  rule_id: ids[item.rule_id] ?? item.rule_id,
+  // Every kernel finding reports under a declared package rule. An unmapped one is a new emission path:
+  // fail loudly rather than publish a rule id nothing declares (tests/rule-coverage.test.ts maps them all).
+  rule_id: ids[item.rule_id] ?? (() => { throw new Error(`planner_plan_integrity: kernel rule ${item.rule_id} has no declared package rule; map it in detect.mjs`); })(),
   line: 1,
   col: 1,
   source_line: "",

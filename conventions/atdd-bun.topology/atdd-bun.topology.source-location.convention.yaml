@@ -3,7 +3,8 @@ rule_id: atdd-bun.topology.source-location
 kind: rule
 status: active
 name: Feature source lives beneath its feature and carries a component URN
-statement: 'Every source file beneath `<source_root>` carries `URN: component:{wagon}:{feature}:{name}:{frontend|backend}:{domain|application|integration|presentation}`
+statement: 'When the plan models at least one wagon, feature or WMBT, every source file beneath `<source_root>`
+  carries `URN: component:{wagon}:{feature}:{name}:{frontend|backend}:{domain|application|integration|presentation}`
   and lives beneath `<source_root>/<wagon>/features/<feature>/`, for a feature the plan declares. Package rule,
   strict.'
 terms:

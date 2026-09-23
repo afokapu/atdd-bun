@@ -33,7 +33,7 @@ test("package plan-integrity diagnostics never impersonate canonical planner con
   const findings = await runImplementation("planner_plan_integrity", { scanRoots: [fixture], excludes: ["node_modules", ".git", ".atdd"] });
   // Every plan-integrity rule is exercised, and each reports under the package namespace, never a canonical id.
   expect([...new Set(findings.map(finding => finding.rule_id))].sort()).toEqual([
-    "atdd-bun.planner.acceptance-identity", "atdd-bun.planner.identity-unique", "atdd-bun.planner.interlocking-participant-resolves",
+    "atdd-bun.planner.acceptance-identity", "atdd-bun.planner.identity-required", "atdd-bun.planner.identity-unique", "atdd-bun.planner.interlocking-participant-resolves",
     "atdd-bun.planner.parse", "atdd-bun.planner.reference-resolves", "atdd-bun.planner.train-wagon-resolves",
   ]);
 });

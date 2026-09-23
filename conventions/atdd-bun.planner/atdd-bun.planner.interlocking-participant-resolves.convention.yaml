@@ -3,8 +3,8 @@ rule_id: atdd-bun.planner.interlocking-participant-resolves
 kind: rule
 status: active
 name: Interlocking participants resolve
-statement: Every participant and lifeline an interlocking lists names a declared wagon or other participant. Package
-  rule, strict.
+statement: Every participant and lifeline an interlocking lists is either an external actor (`user:…`, `system:…`)
+  or a typed reference to an artifact the plan declares. Package rule, strict.
 terms:
 - term_id: package_rule
   text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical

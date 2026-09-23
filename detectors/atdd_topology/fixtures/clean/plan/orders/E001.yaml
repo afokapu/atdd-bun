@@ -3,4 +3,6 @@ acceptances:
   - identity:
       urn: acc:orders:E001-UNIT-001
   - identity:
+      urn: acc:orders:E001-E2E-001
+  - identity:
       urn: acc:orders:E001-E2E-002
