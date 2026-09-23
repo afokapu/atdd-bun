@@ -76,7 +76,8 @@ export async function loadPlan(root = process.cwd()): Promise<PlanGraph> {
       const record = data as Record<string, unknown>, kind = kindOf(record, file); if (!kind) continue;
       const artifact = artifactId(kind, record); if (!artifact) { findings.push(finding("planner.kernel.identity-required", file, `${kind} artifact has no canonical identity`)); continue; }
       artifacts.push({ kind, id: artifact, file, data: record });
-      if (kind === "wmbt") for (const acceptance of values(record.acceptances)) {
+      // WMBTs and trains both embed acceptances (a train's are acc:train:<subject>:<slug>:<name>).
+      if (kind === "wmbt" || kind === "train") for (const acceptance of values(record.acceptances)) {
         if (!acceptance || typeof acceptance !== "object") { findings.push(finding("planner.kernel.acceptance-well-formed", file, "acceptance must be an object")); continue; }
         const identity = (acceptance as { identity?: { urn?: unknown } }).identity; const acceptanceId = identity && typeof identity === "object" ? id((identity as { urn?: unknown }).urn) : "";
         if (!acceptanceId.startsWith("acc:")) findings.push(finding("planner.kernel.acceptance-well-formed", file, "embedded acceptance has no acc: identity.urn"));

@@ -134,6 +134,15 @@ test("a train-parented acceptance follows its train's lifecycle", async () => {
   expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
 });
 
+test("an acceptance embedded in a planned train is planned debt, and counted as such", async () => {
+  const embedded = "acceptances:\n  - identity:\n      urn: acc:train:orders:checkout:pays\n";
+  const plan = (status: string) => repo({ "plan/_trains/checkout.yaml": `train_id: train:orders:checkout\nstatus: ${status}\n${embedded}` });
+  const planned = await plan("planned");
+  expect(await traceability(planned)).toEqual([]);
+  expect(plannedDebt(await loadLifecycle(planned)).plannedAcceptances).toEqual([{ acceptance: "acc:train:orders:checkout:pays", owner: "train:orders:checkout" }]);
+  expect(await traceability(await plan("tested"))).toEqual(["traceability.plan.executable-acceptance-has-test plan/", "traceability.train.executable-train-has-test plan/_trains/checkout.yaml"]);
+});
+
 test("the planned-debt report is deterministic: identical for identical plans, whatever the write order", async () => {
   const files: Record<string, string> = {
     "plan/orders/b.yaml": feature("b", "planned", ["wmbt:orders:E002"]), "plan/orders/a.yaml": feature("a", "planned", ["wmbt:orders:E001"]), "plan/orders/c.yaml": feature("c", "tested", ["wmbt:orders:E003"]),
