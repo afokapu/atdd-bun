@@ -17,6 +17,7 @@ on:
       - bunfig.toml
       - package.json
       - bun.lock
+      - relationships.yaml
       - README.md
       - PLANNER_PORT.md
       - HOOK_AUDIT.md
