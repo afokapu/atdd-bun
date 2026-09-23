@@ -40,6 +40,13 @@ test("the chain fixture satisfies the planner's journey rules and the complete h
   expect(findings.map(f => `${f.rule_id} ${f.file.slice(fixture.length + 1)}:${f.line}`)).toEqual([]);
 });
 
+test("browser specs are tests: no coder rule judges a *.e2e.ts file as implementation", async () => {
+  // The fixture does not model green traceability (URN/Purpose/Tested-By headers on implementation
+  // files), so the coder profile has findings on src/ here; none may land on a browser spec.
+  const findings = await enforce({ root: fixture, profiles: ["coder"], excludes });
+  expect(findings.filter(f => /\.e2e\.[cm]?[jt]sx?$/.test(f.file)).map(f => `${f.rule_id} ${f.file.slice(fixture.length + 1)}`)).toEqual([]);
+});
+
 test("every browser spec passes in Chromium", async () => {
   const root = await copy();
   try {

@@ -56,7 +56,8 @@ export function isExcluded(path, excludes) {
 
 function isScannable(file) {
   const ext = extname(file);
-  return (SOURCE_EXT.has(ext) || TEMPLATE_EXT.has(ext)) && !TEST_RE.test(file);
+  // Playwright browser specs (*.e2e.*) are tests, not implementation: they carry journey headers, not URN headers.
+  return (SOURCE_EXT.has(ext) || TEMPLATE_EXT.has(ext)) && !TEST_RE.test(file) && !/\.e2e\.[cm]?[jt]sx?$/.test(file);
 }
 
 export function* walk(root, excludes) {
