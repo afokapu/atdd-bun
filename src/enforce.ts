@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -39,6 +40,23 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
 
 /** Profile names accepted by the CLI and public integrations. */
 export const profileNames = [...Object.keys(profiles), "all"] as Profile[];
+
+/**
+ * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every profile when absent. A legacy
+ * repository can adopt enforcement gradually by listing only what it is ready for. `all`, the hooks and the
+ * generated CI run exactly these; naming a profile explicitly still runs it. An unknown name or an empty list is
+ * a configuration error, never a silent "run nothing".
+ */
+export async function enabledProfiles(root = process.cwd()): Promise<Exclude<Profile, "all">[]> {
+  const every = Object.keys(profiles) as Exclude<Profile, "all">[], file = join(resolve(root), "atdd-bun.yaml");
+  const config = existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null : null;
+  if (config?.profiles === undefined) return every;
+  const listed = config.profiles;
+  if (!Array.isArray(listed) || !listed.length) throw new Error("atdd-bun.yaml profiles must be a non-empty list of profile names");
+  const unknown = listed.filter(name => !every.includes(name as Exclude<Profile, "all">));
+  if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${every.join(", ")}`);
+  return [...new Set(listed as Exclude<Profile, "all">[])];
+}
 
 const packageRoot = resolve(import.meta.dir, "..");
 const detectorRoot = join(packageRoot, "detectors");
@@ -120,8 +138,10 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   const root = resolve(config.root ?? process.cwd());
   const scanRoots = (config.scanRoots?.length ? config.scanRoots : [root]).map((path) => resolve(root, path));
   const excludes = ["node_modules", ".git", ".atdd", ...(config.excludes ?? [])];
+  // `all` means every profile the operator activated; explicitly named profiles run as asked.
+  const requested = config.profiles ?? ["all"], selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...await enabledProfiles(root)])] : requested;
   const results = await Promise.all(
-    implementationsFor(config.profiles).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
+    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
   );
   return results.flat().sort((left, right) =>
     left.rule_id.localeCompare(right.rule_id) || left.file.localeCompare(right.file) || left.line - right.line,
