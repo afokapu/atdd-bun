@@ -1,0 +1,43 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:checkout
+title: Checkout decision
+theme: orders
+status: checked
+source:
+  path: plan/_trains/_interlockings/checkout.yaml
+  content_digest: fixture
+entrypoint:
+  exposed: true
+  actions: [place-order]
+  reason: null
+  surfaces: [frontend]
+route_resolution:
+  strategy: fail_on_multiple_match
+lifelines:
+  - ref: wagon:checkout
+messages: []
+fragments:
+  - id: fragment:checkout
+    kind: alt
+    guards:
+      - id: guard:nominal
+        expression: cart.items > 0
+      - id: guard:empty-cart
+        expression: cart.items == 0
+routes:
+  - route_id: nominal
+    category: nominal
+    priority: 1
+    guard_ref: guard:nominal
+    train_id: train:orders:place-order
+    train_path: plan/_trains/orders/place-order.yaml
+    projection:
+      expected_sequence_digest: fixture
+  - route_id: empty-cart
+    category: error
+    priority: 2
+    guard_ref: guard:empty-cart
+    train_id: train:orders:reject-empty-cart
+    train_path: plan/_trains/orders/reject-empty-cart.yaml
+    projection:
+      expected_sequence_digest: fixture

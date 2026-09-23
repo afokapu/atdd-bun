@@ -18,6 +18,7 @@ emits_rule_ids:
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
   - planner.journey.continuation-closure
+  - planner.journey.interlocking-composed
 realizes_convention:
   - planner.wagon.urn
   - planner.wagon.urn-naming
@@ -32,5 +33,6 @@ realizes_convention:
   - planner.wagon.telemetry-filesystem
   - planner.train.registry-coherence
   - planner.journey.continuation-closure
+  - planner.journey.interlocking-composed
 entrypoint: detect.mjs
 report: detect.mjs

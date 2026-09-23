@@ -2,7 +2,7 @@ schema_version: "1.0.0"
 package: "@afokapu/atdd-bun"
 node_corpus:
   source: "src/atdd/planner/conventions/nodes/"
-  count: 195
+  count: 196
   policy: >-
     Every node is shipped as canonical planner reference material. A node is not
     represented as enforced merely because it is present in this corpus.
@@ -31,6 +31,12 @@ canonical_bun_enforcement:
       - continuation artifacts occur in the selected train sequence
       - continuation destinations resolve to interlockings
       - disconnected continuation or terminal sources are rejected
+  - rule_id: planner.journey.interlocking-composed
+    origin: bun-custom-validator
+    coverage: complete
+    predicates:
+      - a plan that declares interlockings declares at least one journey
+      - every interlocking is a journey entrypoint or the destination of a continuation reachable from one
   - rule_id: planner.wagon.no-consume-cycle
     origin: core-validator-port
     coverage: partial

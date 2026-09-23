@@ -1,0 +1,4514 @@
+# Relationship graph for every convention this package ships (planner-nodes/ and conventions/).
+# planner.relationship.no-orphan-nodes: every node appears as the source or target of at least one edge.
+# Edges with an `origin` other than @afokapu/atdd-bun are imported unchanged from the upstream graphs
+# (atdd@36ce055a, atdd-extensions@3aa141e) because they touch a shipped convention; the rest are the
+# package's own. Each edge follows planner-schemas/author/relationship.schema.json. Upstream edges whose
+# type the schema does not define (realized-by, scoped-by, gated-by, refines: 32 at the commits above)
+# are not imported; several do not relate two conventions at all.
+schema_version: 1.0.0
+graph_id: '@afokapu/atdd-bun'
+nodes:
+- coder.bun.boundaries-http-client
+- coder.bun.commons-application-no-integration
+- coder.bun.commons-cross-feature-imports-in
+- coder.bun.commons-domain-no-framework-import
+- coder.bun.commons-domain-no-outbound
+- coder.bun.complexity-cyclomatic
+- coder.bun.complexity-length
+- coder.bun.complexity-nesting
+- coder.bun.composition-consumer
+- coder.bun.composition-root
+- coder.bun.dead-code-reachability
+- coder.bun.design-connected
+- coder.bun.design-dependency-flow
+- coder.bun.design-hierarchy-import
+- coder.bun.design-orphan-export
+- coder.bun.design-primitives
+- coder.bun.design-token-color
+- coder.bun.design-token-hardcoded
+- coder.bun.design-tokens-pure
+- coder.bun.design-wagons-import
+- coder.bun.dto-mapper
+- coder.bun.dto-placement
+- coder.bun.dto-purity
+- coder.bun.duplication-intra-layer
+- coder.bun.error-response-bare-string
+- coder.bun.error-response-code-format
+- coder.bun.green-header-order
+- coder.bun.green-header-purpose
+- coder.bun.green-header-runtime
+- coder.bun.green-header-tested-by
+- coder.bun.green-urn-layer
+- coder.bun.green-urn-marker
+- coder.bun.green-urn-name-matches
+- coder.bun.green-urn-pattern
+- coder.bun.green-urn-side
+- coder.bun.green-urn-wagon-feature
+- coder.bun.interlocking-bilateral-binding
+- coder.bun.interlocking-delegates-to-trainrunner
+- coder.bun.interlocking-does-not-carry-cargo
+- coder.bun.interlocking-resolution-model-exists
+- coder.bun.interlocking-runner-exists
+- coder.bun.journey-runner-boundary
+- coder.bun.layer-naming
+- coder.bun.logging-console
+- coder.bun.logging-structured
+- coder.bun.quality-comments
+- coder.bun.quality-mi
+- coder.bun.runtime-executes-the-declaration
+- coder.bun.runtime-server-is-bun-serve
+- coder.bun.runtime-single-lockfile
+- coder.bun.runtime-typecheck-enforced
+- coder.bun.security-hardcoded-secret
+- coder.bun.security-missing-auth
+- coder.bun.security-sql-injection
+- coder.bun.station-master-interlocking-routing
+- coder.bun.station-master-journey-routing
+- coder.bun.wagon-honours-its-contract
+- coder.htmx.fragment-escapes-interpolation
+- coder.htmx.swap-no-inline-handler
+- coder.htmx.swap-oob-carries-id
+- coder.htmx.verb-destructive-confirms
+- coder.htmx.verb-endpoint-is-routed
+- coder.htmx.verb-endpoint-same-origin
+- coder.htmx.verb-mutation-signals-progress
+- planner.docs.adr-registry-derived
+- planner.docs.area-index-required
+- planner.docs.artifact-path-shape
+- planner.docs.asciidoc-only
+- planner.docs.doc-id-unique
+- planner.docs.graph-target-resolves
+- planner.docs.identity-required
+- planner.docs.journey-view-current
+- planner.docs.reference-integrity
+- planner.docs.undeclared-change
+- tester.bun.acceptance-binding-declared
+- tester.bun.acceptance-covers-tag-well-formed
+- tester.bun.acceptance-resolves-to-declared
+- tester.bun.interlocking-production-runner-used
+- tester.bun.interlocking-route-coverage
+- tester.bun.interlocking-smoke-coverage-for-station-master
+- tester.bun.interlocking-trace-binds-declared-route
+- tester.bun.interlocking-train-sequence-is-exercised
+- tester.bun.red-behavioral-assertion
+- tester.bun.red-fails-first
+- tester.bun.routing-runtime-family
+- tester.bun.security-auth
+- tester.bun.security-input
+- tester.bun.smoke-no-collaborator-substitution
+- tester.bun.smoke-observable-assertion
+- tester.bun.telemetry-emit
+- tester.bun.test-carries-urn-identity
+- tester.bun.test-imports-bun-test
+- tester.bun.test-isolation-no-live-state
+- tester.bun.test-no-self-skip
+- tester.bun.test-phase-declared
+- tester.htmx.fragment-asserts-returned-markup
+- tester.htmx.swap-oob-asserts-destination-id
+- tester.htmx.verb-endpoint-coverage
+- traceability.plan.executable-acceptance-has-test
+- traceability.source.tested-by-present
+- traceability.source.tested-by-resolves
+- traceability.test.binding-resolves
+- planner.acceptance.abstract-fields-required
+- planner.acceptance.authoring-guidelines
+- planner.acceptance.boundary-kind-vocabulary
+- planner.acceptance.execution-kind
+- planner.acceptance.extraction-no-inference
+- planner.acceptance.generator-prompts
+- planner.acceptance.given-when-then-structure
+- planner.acceptance.harness-vocabulary
+- planner.acceptance.harness
+- planner.acceptance.hermetic-fake-contract
+- planner.acceptance.id-pattern
+- planner.acceptance.max-per-wmbt
+- planner.acceptance.plane-keywords
+- planner.acceptance.route-construction
+- planner.acceptance.signal-telemetry-naming
+- planner.acceptance.urn-generation
+- planner.acceptance.well-formed
+- planner.appendix.llm-guidelines
+- planner.appendix.naming-pattern
+- planner.appendix.storage
+- planner.appendix.structure
+- planner.appendix.types
+- planner.artifact-naming.anti-patterns
+- planner.artifact-naming.cardinality-from-aspect
+- planner.artifact-naming.colon-for-hierarchy
+- planner.artifact-naming.contract-file-mapping
+- planner.artifact-naming.depth-guidelines
+- planner.artifact-naming.dot-for-variant
+- planner.artifact-naming.logical-physical-mapping
+- planner.artifact-naming.migration-guide
+- planner.artifact-naming.naming-pattern
+- planner.artifact-naming.path-mirrors-identity
+- planner.artifact-naming.planner-artifacts-use-stable
+- planner.artifact-naming.pluralization
+- planner.artifact-naming.schema-identifier
+- planner.artifact-naming.separator-semantics
+- planner.artifact-naming.theme-first-identity
+- planner.artifact-naming.urn-structure
+- planner.artifact-naming.validation-rules
+- planner.artifact-naming.verb-object-corpus-drift
+- planner.artifact.definition
+- planner.component.artifact-derivation
+- planner.component.business-focus
+- planner.component.count-limit
+- planner.component.derivation
+- planner.component.io-alignment
+- planner.component.layer-assignment
+- planner.component.layer-consistency
+- planner.component.method-limit
+- planner.component.structure
+- planner.component.type-catalog
+- planner.component.urn
+- planner.contract.registry-coherence
+- planner.convention.remedy-must-be-followable
+- planner.coverage.bidirectional-coverage-between-trains
+- planner.coverage.bidirectional-coverage-between-wagons
+- planner.coverage.coverage-graph
+- planner.coverage.every-wmbt-must-be
+- planner.coverage.every-wmbt-must-have
+- planner.coverage.exception-handling
+- planner.criteria.defaults
+- planner.criteria.harness-templates
+- planner.criteria.metric-mapping
+- planner.criteria.plane-keywords
+- planner.criteria.sequence-routing
+- planner.criteria.shape
+- planner.decomposition.canonical-steps
+- planner.decomposition.document-trouble-obligation
+- planner.decomposition.domain-vs-technology
+- planner.decomposition.jtbd-vs-odi-grammar
+- planner.decomposition.keep-pivot-kill
+- planner.decomposition.local-scope
+- planner.decomposition.natural-language-normalization
+- planner.decomposition.train-journey
+- planner.decomposition.wagon-rationale
+- planner.definition.anchor-required
+- planner.feature.artifact-seeded-naming
+- planner.feature.definition
+- planner.feature.estimation
+- planner.feature.feedback-loop-close-the-loop
+- planner.feature.feedback-loop-kind
+- planner.feature.feedback-loop-suppression
+- planner.feature.footprint-scoring
+- planner.feature.grouping-strategy
+- planner.feature.hard-limits
+- planner.feature.name-is-verb-object
+- planner.feature.shape
+- planner.feature.size-max-rule
+- planner.feature.urn-naming
+- planner.feature.validation-rules
+- planner.feature.verb-selection-by-artifact-type
+- planner.feature.wagon-link
+- planner.interface.api-mapping
+- planner.interface.artifact-transformation
+- planner.interface.contract-urn
+- planner.interface.naming-patterns
+- planner.interface.orphan-detection
+- planner.interface.ownership-rules
+- planner.interface.structure-rules
+- planner.interface.tests-subdirectory
+- planner.interlocking.definition
+- planner.interlocking.registry-mirrors-document
+- planner.issue-body.dependency-entries-must-be-classified
+- planner.issue-body.graph-context-required
+- planner.journey.continuation-closure
+- planner.journey.definition
+- planner.journey.interlocking-composed
+- planner.plan.confirm-before-author
+- planner.plan.confirm-binds-an-issue
+- planner.plan.confirm-requires-interlocking-sanity
+- planner.plan.granularity-completeness
+- planner.plan.session-lifecycle
+- planner.plan.spec-is-schema-valid
+- planner.relationship.no-orphan-nodes
+- planner.smoke.feedback-loop-close-the-loop
+- planner.smoke.synthetic-fixture-bypass
+- planner.steps.architecture-routing
+- planner.steps.jtbd-taxonomy
+- planner.steps.linguistic-patterns
+- planner.steps.sequence
+- planner.subject.invariants
+- planner.theme.definition
+- planner.theme.must-be-canonical
+- planner.theme.theme-zero-mandatory
+- planner.theme.urn-namespace-matches
+- planner.train.acceptance-commit-failures-covered
+- planner.train.acceptances
+- planner.train.artifact-flow
+- planner.train.categories
+- planner.train.definition
+- planner.train.dependencies
+- planner.train.dispatch-composite-key-exceptional
+- planner.train.dispatch-map-is-registry
+- planner.train.family-matches-terminal-contract
+- planner.train.family
+- planner.train.initial-cargo-inputs-declared
+- planner.train.interlocking-does-not-carry-cargo
+- planner.train.interlocking-entrypoint-shape
+- planner.train.interlocking-fragment-acceptance-binding
+- planner.train.interlocking-guard-coverage
+- planner.train.interlocking-guard-grammar
+- planner.train.interlocking-home
+- planner.train.interlocking-message-payload-typed
+- planner.train.interlocking-payload-contract-body-required
+- planner.train.interlocking-payload-contract-registered
+- planner.train.interlocking-projection-equivalence
+- planner.train.interlocking-route-category-matches-train-id
+- planner.train.interlocking-route-resolution-deterministic
+- planner.train.interlocking-structural-residual-explicit
+- planner.train.interlocking-wmbt-surface-or-residual
+- planner.train.linearity
+- planner.train.naming
+- planner.train.participants
+- planner.train.production-implementation
+- planner.train.registry-coherence
+- planner.train.registry
+- planner.train.route-category-assessment
+- planner.train.route-space-admission
+- planner.train.scope
+- planner.train.sequence
+- planner.train.terminal-contract
+- planner.train.theme-alignment
+- planner.train.theme-orchestrator-urn
+- planner.train.theme-ranges
+- planner.train.validation-rules
+- planner.train.variation-strategies
+- planner.wagon.artifact-contracts
+- planner.wagon.complexity-model
+- planner.wagon.coupling-complexity
+- planner.wagon.definition
+- planner.wagon.features-format
+- planner.wagon.features
+- planner.wagon.logical-vs-filesystem-naming
+- planner.wagon.name-is-verb-object
+- planner.wagon.no-consume-cycle
+- planner.wagon.produce-consume-artifacts
+- planner.wagon.refinement-extraction
+- planner.wagon.semantic-coherence
+- planner.wagon.separability
+- planner.wagon.slug-dirname-conversion
+- planner.wagon.telemetry-filesystem
+- planner.wagon.urn-naming
+- planner.wagon.urn
+- planner.wmbt.context-clarifier
+- planner.wmbt.definition
+- planner.wmbt.dimension-selection
+- planner.wmbt.direction-selection
+- planner.wmbt.filename-pattern
+- planner.wmbt.lens-selection
+- planner.wmbt.must-have-smoke-acceptance
+- planner.wmbt.object-of-control
+- planner.wmbt.shape
+- planner.wmbt.splitting-rules
+- planner.wmbt.statement-template
+- planner.wmbt.step-code-vocabulary
+- planner.wmbt.urn-naming
+edges:
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the acceptance commit is the delivery terminal contract
+  source_ref: coder.train.acceptance-commit-idempotent
+  strength: important
+  target_ref: planner.train.terminal-contract
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the coder train composition root realizes the planner's production-implementation train spec
+  source_ref: coder.train.production-composition-cargo-zero-drift
+  strength: important
+  target_ref: planner.train.production-implementation
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: fan-out at the Station Master preserves train linearity
+  source_ref: coder.train.station-master-owns-child-train-fanout
+  strength: important
+  target_ref: planner.train.linearity
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: following the authoring guidelines is what yields a complete acceptance
+  source_ref: planner.acceptance.authoring-guidelines
+  strength: minor
+  target_ref: planner.acceptance.complete
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: following the authoring guidelines is what yields a well-formed acceptance
+  source_ref: planner.acceptance.authoring-guidelines
+  strength: minor
+  target_ref: planner.acceptance.well-formed
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: completeness includes the required abstract Gherkin fields
+  source_ref: planner.acceptance.complete
+  strength: important
+  target_ref: planner.acceptance.abstract-fields-required
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a complete acceptance presupposes the Given/When/Then structure
+  source_ref: planner.acceptance.complete
+  strength: critical
+  target_ref: planner.acceptance.given-when-then-structure
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a verifiable outcome includes its telemetry signal
+  source_ref: planner.acceptance.complete
+  strength: important
+  target_ref: planner.acceptance.signal-telemetry-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: completeness and harness-type declaration are two required facets of the same acceptance
+  source_ref: planner.acceptance.complete
+  strength: important
+  target_ref: planner.acceptance.harness
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: boundary declaration is meaningful once the runtime axis is set
+  source_ref: planner.acceptance.execution-kind
+  strength: important
+  target_ref: planner.acceptance.boundary-kind-vocabulary
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: direct extraction supplies the context the abstract fields require
+  source_ref: planner.acceptance.extraction-no-inference
+  strength: important
+  target_ref: planner.acceptance.abstract-fields-required
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: extracting (not inferring) the missing context is what makes the acceptance complete and faithful
+  source_ref: planner.acceptance.extraction-no-inference
+  strength: minor
+  target_ref: planner.acceptance.complete
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: extracting (not inferring) the missing context is what makes the acceptance well-formed and faithful
+  source_ref: planner.acceptance.extraction-no-inference
+  strength: minor
+  target_ref: planner.acceptance.well-formed
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: the generator prompts compose the required abstract acceptance fields
+  source_ref: planner.acceptance.generator-prompts
+  strength: minor
+  target_ref: planner.acceptance.abstract-fields-required
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: each section's required abstract narrative is part of the structure
+  source_ref: planner.acceptance.given-when-then-structure
+  strength: important
+  target_ref: planner.acceptance.abstract-fields-required
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the when section is harness-specific and draws on the harness vocabulary
+  source_ref: planner.acceptance.given-when-then-structure
+  strength: important
+  target_ref: planner.acceptance.harness-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: declaring a harness presupposes the harness vocabulary
+  source_ref: planner.acceptance.harness
+  strength: critical
+  target_ref: planner.acceptance.harness-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: exercised_boundaries draws on the boundary-kind controlled vocabulary
+  source_ref: planner.acceptance.hermetic-fake-contract
+  strength: critical
+  target_ref: planner.acceptance.boundary-kind-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: conditional
+  control: internal
+  foundation: finish_to_start
+  reason: the hermetic fake-contract is required only when execution_kind is hermetic_integration
+  source_ref: planner.acceptance.hermetic-fake-contract
+  strength: critical
+  target_ref: planner.acceptance.execution-kind
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the legacy AC id and the acceptance URN are parallel identifiers
+  source_ref: planner.acceptance.id-pattern
+  strength: minor
+  target_ref: planner.acceptance.urn-generation
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the <=5 cap bounds structured acceptances per WMBT
+  source_ref: planner.acceptance.max-per-wmbt
+  strength: important
+  target_ref: planner.acceptance.given-when-then-structure
+  type: blocks
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the per-WMBT acceptance cap is a sizing constraint applied alongside acceptance completeness
+  source_ref: planner.acceptance.max-per-wmbt
+  strength: minor
+  target_ref: planner.acceptance.complete
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the per-WMBT acceptance cap is a sizing constraint applied alongside acceptance well-formedness
+  source_ref: planner.acceptance.max-per-wmbt
+  strength: minor
+  target_ref: planner.acceptance.well-formed
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: the route describes the layer flow the when/then exercises
+  source_ref: planner.acceptance.route-construction
+  strength: minor
+  target_ref: planner.acceptance.given-when-then-structure
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the route sequence is built alongside the Given/When/Then structure
+  source_ref: planner.acceptance.route-construction
+  strength: minor
+  target_ref: planner.acceptance.given-when-then-structure
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: telemetry signals are derived from the then/when sections
+  source_ref: planner.acceptance.signal-telemetry-naming
+  strength: important
+  target_ref: planner.acceptance.given-when-then-structure
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: acceptance telemetry signals and wagon telemetry URNs share naming
+  source_ref: planner.acceptance.signal-telemetry-naming
+  strength: minor
+  target_ref: planner.wagon.telemetry-filesystem
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the acceptance URN embeds the UPPERCASE harness code from the vocabulary
+  source_ref: planner.acceptance.urn-generation
+  strength: important
+  target_ref: planner.acceptance.harness-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: well-formedness includes the required abstract Gherkin fields
+  source_ref: planner.acceptance.well-formed
+  strength: important
+  target_ref: planner.acceptance.abstract-fields-required
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a well-formed acceptance presupposes the Given/When/Then structure
+  source_ref: planner.acceptance.well-formed
+  strength: critical
+  target_ref: planner.acceptance.given-when-then-structure
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a verifiable outcome includes its telemetry signal
+  source_ref: planner.acceptance.well-formed
+  strength: important
+  target_ref: planner.acceptance.signal-telemetry-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: well-formedness and harness-type declaration are two required facets of the same acceptance
+  source_ref: planner.acceptance.well-formed
+  strength: important
+  target_ref: planner.acceptance.harness
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the per-type creation workflow is keyed on the six types
+  source_ref: planner.appendix.llm-guidelines
+  strength: important
+  target_ref: planner.appendix.types
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the {type} filename segment must be one of the six appendix types
+  source_ref: planner.appendix.naming-pattern
+  strength: important
+  target_ref: planner.appendix.types
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: files in appendices/ are the named artifacts the pattern produces
+  source_ref: planner.appendix.storage
+  strength: minor
+  target_ref: planner.appendix.naming-pattern
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the structure node's naming term decomposes into the naming-pattern node
+  source_ref: planner.appendix.structure
+  strength: important
+  target_ref: planner.appendix.naming-pattern
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the structure node's storage term decomposes into the storage node
+  source_ref: planner.appendix.structure
+  strength: important
+  target_ref: planner.appendix.storage
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the structure node's taxonomy term decomposes into the types node
+  source_ref: planner.appendix.structure
+  strength: important
+  target_ref: planner.appendix.types
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: appendix structure and step sequencing are both plan-document structural rules
+  source_ref: planner.appendix.structure
+  strength: minor
+  target_ref: planner.steps.sequence
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: anti-patterns enumerate the malformed names the grammar excludes
+  source_ref: planner.artifact-naming.anti-patterns
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: blocks
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: anti-patterns are the negative companion to the validation rules
+  source_ref: planner.artifact-naming.anti-patterns
+  strength: minor
+  target_ref: planner.artifact-naming.validation-rules
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: cardinality is read from the aspect position in the pattern
+  source_ref: planner.artifact-naming.cardinality-from-aspect
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: colon usage is defined by the separator semantics
+  source_ref: planner.artifact-naming.colon-for-hierarchy
+  strength: important
+  target_ref: planner.artifact-naming.separator-semantics
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: name-to-path mapping splits the grammar segments
+  source_ref: planner.artifact-naming.contract-file-mapping
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the contract-file formula is the file half of the logical-physical mapping
+  source_ref: planner.artifact-naming.contract-file-mapping
+  strength: important
+  target_ref: planner.artifact-naming.logical-physical-mapping
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: depth limits qualify the colon/dot separators
+  source_ref: planner.artifact-naming.depth-guidelines
+  strength: minor
+  target_ref: planner.artifact-naming.separator-semantics
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: dot usage is defined by the separator semantics
+  source_ref: planner.artifact-naming.dot-for-variant
+  strength: important
+  target_ref: planner.artifact-naming.separator-semantics
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: physical-form resolution extends the base path algorithm
+  source_ref: planner.artifact-naming.logical-physical-mapping
+  strength: minor
+  target_ref: planner.artifact-naming.contract-file-mapping
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the three physical forms are chosen by aspect cardinality
+  source_ref: planner.artifact-naming.logical-physical-mapping
+  strength: important
+  target_ref: planner.artifact-naming.cardinality-from-aspect
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the mapping splits the name produced by the pattern
+  source_ref: planner.artifact-naming.logical-physical-mapping
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: migration retargets legacy names onto the current pattern
+  source_ref: planner.artifact-naming.migration-guide
+  strength: minor
+  target_ref: planner.artifact-naming.naming-pattern
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the pattern composes hierarchy (colon) and variant (dot) separators
+  source_ref: planner.artifact-naming.naming-pattern
+  strength: critical
+  target_ref: planner.artifact-naming.separator-semantics
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the required theme component is drawn from the theme taxonomy
+  source_ref: planner.artifact-naming.naming-pattern
+  strength: important
+  target_ref: planner.artifact-naming.theme-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a contract path can only mirror an identity that is a valid theme-first identity
+  source_ref: planner.artifact-naming.path-mirrors-identity
+  strength: important
+  target_ref: planner.artifact-naming.theme-first-identity
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: stable URN-based names follow the naming pattern grammar
+  source_ref: planner.artifact-naming.planner-artifacts-use-stable
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: correct plurals make the plural-aspect signal reliable
+  source_ref: planner.artifact-naming.pluralization
+  strength: important
+  target_ref: planner.artifact-naming.cardinality-from-aspect
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: pluralization of the aspect is how cardinality is expressed
+  source_ref: planner.artifact-naming.pluralization
+  strength: important
+  target_ref: planner.artifact-naming.cardinality-from-aspect
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: $id is the bare grammar-conformant name
+  source_ref: planner.artifact-naming.schema-identifier
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the $id and the URN reference share the artifact identity
+  source_ref: planner.artifact-naming.schema-identifier
+  strength: important
+  target_ref: planner.artifact-naming.urn-structure
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the theme-first identity rule resolves its allowed themes from the same canonical theme map
+  source_ref: planner.artifact-naming.theme-first-identity
+  strength: important
+  target_ref: planner.theme.must-be-canonical
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the URN exactly mirrors the artifact name
+  source_ref: planner.artifact-naming.urn-structure
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: validation enforces the naming pattern
+  source_ref: planner.artifact-naming.validation-rules
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the corpus drift report judges names against the same leading-verb lexicon the authoring gates use, so the two halves
+    cannot disagree about what a verb is
+  source_ref: planner.artifact-naming.verb-object-corpus-drift
+  strength: important
+  target_ref: planner.feature.verb-selection-by-artifact-type
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: identity mirrors physical contract file
+  source_ref: planner.artifact.definition
+  strength: important
+  target_ref: planner.artifact-naming.contract-file-mapping
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: identity follows theme hierarchy aspect variant
+  source_ref: planner.artifact.definition
+  strength: critical
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: schema-backed artifacts carry a schema identifier
+  source_ref: planner.artifact.definition
+  strength: important
+  target_ref: planner.artifact-naming.schema-identifier
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: colon is hierarchy dot is variant
+  source_ref: planner.artifact.definition
+  strength: important
+  target_ref: planner.artifact-naming.separator-semantics
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: top segment is a canonical theme
+  source_ref: planner.artifact.definition
+  strength: important
+  target_ref: planner.artifact-naming.theme-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: an artifact has a structured URN
+  source_ref: planner.artifact.definition
+  strength: critical
+  target_ref: planner.artifact-naming.urn-structure
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: names must pass the naming validation rules
+  source_ref: planner.artifact.definition
+  strength: important
+  target_ref: planner.artifact-naming.validation-rules
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: component names are derived from artifact resource names, so the artifact naming pattern is the input to component
+    derivation
+  source_ref: planner.component.artifact-derivation
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: a single business capability and the at-most-5-methods ceiling are two facets of keeping a component small and focused
+  source_ref: planner.component.business-focus
+  strength: minor
+  target_ref: planner.component.method-limit
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: exceeding 8 components signals the feature should be split
+  source_ref: planner.component.count-limit
+  strength: minor
+  target_ref: planner.feature.shape
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: components are derived from the feature's ioSeeds and WMBTs
+  source_ref: planner.component.derivation
+  strength: important
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: component events must be a subset of the feature's ioSeeds
+  source_ref: planner.component.io-alignment
+  strength: important
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: exactly-one-layer can only be checked once a layer has been assigned from the artifact type
+  source_ref: planner.component.layer-consistency
+  strength: important
+  target_ref: planner.component.layer-assignment
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a generated component's structure is keyed by its component URN
+  source_ref: planner.component.structure
+  strength: important
+  target_ref: planner.component.urn
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the {feature} URN segment must resolve to an owning feature
+  source_ref: planner.component.urn
+  strength: critical
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the {wagon} URN segment must resolve to a real wagon
+  source_ref: planner.component.urn
+  strength: critical
+  target_ref: planner.wagon.urn
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: contract coherence is checked over the produce/consume artifact shape it constrains (#1332)
+  source_ref: planner.contract.registry-coherence
+  strength: important
+  target_ref: planner.wagon.produce-consume-artifacts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'two halves of convention-node integrity: the orphan rule holds every node reachable from the relationship graph,
+    and this one holds the prose inside those nodes followable — a node can be perfectly connected and still send its reader
+    to a file that is not there'
+  source_ref: planner.convention.remedy-must-be-followable
+  strength: important
+  target_ref: planner.relationship.no-orphan-nodes
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the same bidirectional-coverage invariant at the train-wagon and wagon-feature levels
+  source_ref: planner.coverage.bidirectional-coverage-between-trains
+  strength: minor
+  target_ref: planner.coverage.bidirectional-coverage-between-wagons
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: wagon-feature coverage sits one level below train-wagon coverage
+  source_ref: planner.coverage.bidirectional-coverage-between-wagons
+  strength: important
+  target_ref: planner.coverage.bidirectional-coverage-between-trains
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: wagon-feature coverage presupposes well-formed features
+  source_ref: planner.coverage.bidirectional-coverage-between-wagons
+  strength: important
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: wagon-feature coverage reads the wagon features manifest
+  source_ref: planner.coverage.bidirectional-coverage-between-wagons
+  strength: important
+  target_ref: planner.wagon.features
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the graph aggregates the train-wagon coverage validator
+  source_ref: planner.coverage.coverage-graph
+  strength: minor
+  target_ref: planner.coverage.bidirectional-coverage-between-trains
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the graph aggregates the wagon-feature coverage validators
+  source_ref: planner.coverage.coverage-graph
+  strength: minor
+  target_ref: planner.coverage.bidirectional-coverage-between-wagons
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the graph aggregates the wmbt-feature coverage validator
+  source_ref: planner.coverage.coverage-graph
+  strength: minor
+  target_ref: planner.coverage.every-wmbt-must-be
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the graph aggregates the wmbt-acceptance coverage validator
+  source_ref: planner.coverage.coverage-graph
+  strength: minor
+  target_ref: planner.coverage.every-wmbt-must-have
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: wmbt-feature coverage sits below wagon-feature coverage
+  source_ref: planner.coverage.every-wmbt-must-be
+  strength: important
+  target_ref: planner.coverage.bidirectional-coverage-between-wagons
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the every-WMBT-referenced-by-a-feature check presupposes well-formed features
+  source_ref: planner.coverage.every-wmbt-must-be
+  strength: important
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: wmbt-acceptance coverage sits below wmbt-feature coverage
+  source_ref: planner.coverage.every-wmbt-must-have
+  strength: important
+  target_ref: planner.coverage.every-wmbt-must-be
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a WMBT's required acceptance only counts if acceptances are complete (G/W/T + verifiable outcome)
+  source_ref: planner.coverage.every-wmbt-must-have
+  strength: important
+  target_ref: planner.acceptance.complete
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a WMBT's required acceptance only counts if acceptances are well-formed (G/W/T + verifiable outcome)
+  source_ref: planner.coverage.every-wmbt-must-have
+  strength: important
+  target_ref: planner.acceptance.well-formed
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the per-WMBT acceptance check presupposes a well-shaped WMBT (id, statement, proving artifacts)
+  source_ref: planner.coverage.every-wmbt-must-have
+  strength: important
+  target_ref: planner.wmbt.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: allow-lists and status:draft exempt artifacts from the strict acceptance rule
+  source_ref: planner.coverage.exception-handling
+  strength: important
+  target_ref: planner.coverage.every-wmbt-must-have
+  type: relieves
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the given defaults seed each harness template's given block
+  source_ref: planner.criteria.defaults
+  strength: minor
+  target_ref: planner.criteria.harness-templates
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: a harness template given specializes the default given
+  source_ref: planner.criteria.harness-templates
+  strength: minor
+  target_ref: planner.criteria.defaults
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: lowercase harness keys align with the authoritative harness-code map
+  source_ref: planner.criteria.harness-templates
+  strength: minor
+  target_ref: planner.acceptance.harness
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: start_to_start
+  reason: criteria templates and the acceptance harness vocabulary share the harness set
+  source_ref: planner.criteria.harness-templates
+  strength: important
+  target_ref: planner.acceptance.harness-vocabulary
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: each harness template declares the layers it sequences
+  source_ref: planner.criteria.harness-templates
+  strength: minor
+  target_ref: planner.criteria.sequence-routing
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: measurable expected_outcome resolves via the dimension->metric map
+  source_ref: planner.criteria.metric-mapping
+  strength: important
+  target_ref: planner.criteria.shape
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: the metric is selected from the WMBT dimension + direction
+  source_ref: planner.criteria.metric-mapping
+  strength: important
+  target_ref: planner.wmbt.dimension-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: plane assignment from keywords feeds plane->sequence routing
+  source_ref: planner.criteria.plane-keywords
+  strength: important
+  target_ref: planner.criteria.sequence-routing
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: both route acceptances to a plane via keyword cues
+  source_ref: planner.criteria.plane-keywords
+  strength: minor
+  target_ref: planner.acceptance.plane-keywords
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the layer sequence is selected via the plane keywords
+  source_ref: planner.criteria.sequence-routing
+  strength: important
+  target_ref: planner.criteria.plane-keywords
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the routed sequence lands the harness when at the right layer
+  source_ref: planner.criteria.sequence-routing
+  strength: minor
+  target_ref: planner.criteria.harness-templates
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: every criteria entry inherits the default given scaffold
+  source_ref: planner.criteria.shape
+  strength: important
+  target_ref: planner.criteria.defaults
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the harness field selects a catalog template
+  source_ref: planner.criteria.shape
+  strength: important
+  target_ref: planner.criteria.harness-templates
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: criteria are the structured form of an acceptance
+  source_ref: planner.criteria.shape
+  strength: minor
+  target_ref: planner.acceptance.complete
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: criteria are the structured form of an acceptance
+  source_ref: planner.criteria.shape
+  strength: minor
+  target_ref: planner.acceptance.well-formed
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the criteria shape references the chosen harness
+  source_ref: planner.criteria.shape
+  strength: minor
+  target_ref: planner.criteria.harness-templates
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: the canonical steps are decoded into the journey
+  source_ref: planner.decomposition.canonical-steps
+  target_ref: planner.decomposition.train-journey
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: unresolved document-trouble must block deciding from a partial reading
+  source_ref: planner.decomposition.document-trouble-obligation
+  target_ref: planner.decomposition.keep-pivot-kill
+  type: blocks
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: reframe sources to user-facing jobs before writing the job statement
+  source_ref: planner.decomposition.domain-vs-technology
+  target_ref: planner.decomposition.jtbd-vs-odi-grammar
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: with both grammars in hand, candidates can be decided
+  source_ref: planner.decomposition.jtbd-vs-odi-grammar
+  target_ref: planner.decomposition.keep-pivot-kill
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: Ratify names the granularity rungs a decomposition never descended, so the keep/pivot/kill ladder is reported rather
+    than silently left dangling
+  source_ref: planner.decomposition.keep-pivot-kill
+  target_ref: planner.plan.granularity-completeness
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: keep/pivot/kill is applied across the canonical job steps
+  source_ref: planner.decomposition.keep-pivot-kill
+  target_ref: planner.decomposition.canonical-steps
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: scope the slice per invocation before framing the main job
+  source_ref: planner.decomposition.local-scope
+  target_ref: planner.decomposition.jtbd-vs-odi-grammar
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: operator prose is normalized into a keep/pivot/kill decision
+  source_ref: planner.decomposition.natural-language-normalization
+  target_ref: planner.decomposition.keep-pivot-kill
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: sibling/nominal trains are decoded after wagons and WMBTs are kept
+  source_ref: planner.decomposition.train-journey
+  target_ref: planner.decomposition.keep-pivot-kill
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: a wagon's rationale is recorded once the wagon is kept
+  source_ref: planner.decomposition.wagon-rationale
+  target_ref: planner.decomposition.keep-pivot-kill
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the artifact definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.artifact.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the feature definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.feature.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the interlocking definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.interlocking.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the theme definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.theme.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the train definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.train.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the wagon definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.wagon.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the anchor convention requires the wmbt definition anchor to exist
+  source_ref: planner.definition.anchor-required
+  strength: critical
+  target_ref: planner.wmbt.definition
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: seeds come from wagon produce/consume artifact names
+  source_ref: planner.feature.artifact-seeded-naming
+  strength: important
+  target_ref: planner.artifact-naming.planner-artifacts-use-stable
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: seeding a name needs the type-specific verb list
+  source_ref: planner.feature.artifact-seeded-naming
+  strength: important
+  target_ref: planner.feature.verb-selection-by-artifact-type
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a feature closes a feedback loop
+  source_ref: planner.feature.definition
+  strength: important
+  target_ref: planner.feature.feedback-loop-close-the-loop
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a feature stays within size hard-limits
+  source_ref: planner.feature.definition
+  strength: important
+  target_ref: planner.feature.hard-limits
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a feature declares urn status acceptance
+  source_ref: planner.feature.definition
+  strength: critical
+  target_ref: planner.feature.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a feature stays within the size-max rule
+  source_ref: planner.feature.definition
+  strength: important
+  target_ref: planner.feature.size-max-rule
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a feature belongs to exactly one wagon
+  source_ref: planner.feature.definition
+  strength: critical
+  target_ref: planner.feature.wagon-link
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: conditional
+  control: internal
+  foundation: finish_to_start
+  reason: the close-the-loop rule fires only when kind is feedback-loop
+  source_ref: planner.feature.feedback-loop-close-the-loop
+  strength: important
+  target_ref: planner.feature.feedback-loop-kind
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: close-the-loop lives in a SMOKE acceptance on the feature WMBTs
+  source_ref: planner.feature.feedback-loop-kind
+  strength: important
+  target_ref: planner.wmbt.must-have-smoke-acceptance
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: the inline marker suppresses the close-the-loop rule for docs-only features
+  source_ref: planner.feature.feedback-loop-suppression
+  strength: minor
+  target_ref: planner.feature.feedback-loop-close-the-loop
+  type: relieves
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the dated inline suppression marker is the sanctioned hatch that relieves the close-the-loop obligation until its
+    UNTIL date
+  source_ref: planner.feature.feedback-loop-suppression
+  strength: important
+  target_ref: planner.smoke.feedback-loop-close-the-loop
+  type: relieves
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: weights are keyed by the component types in the catalog
+  source_ref: planner.feature.footprint-scoring
+  strength: important
+  target_ref: planner.component.type-catalog
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: estimation cues feed footprint scoring
+  source_ref: planner.feature.footprint-scoring
+  strength: minor
+  target_ref: planner.feature.estimation
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: grouping operates over enumerated WMBTs
+  source_ref: planner.feature.grouping-strategy
+  strength: minor
+  target_ref: planner.wmbt.shape
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: grouping keeps a feature within its size budget
+  source_ref: planner.feature.grouping-strategy
+  strength: minor
+  target_ref: planner.feature.size-max-rule
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the feature name rule draws its leading-verb lexicon from the verb-selection table
+  source_ref: planner.feature.name-is-verb-object
+  strength: important
+  target_ref: planner.feature.verb-selection-by-artifact-type
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: shape aggregates the feedback-loop kind
+  source_ref: planner.feature.shape
+  strength: important
+  target_ref: planner.feature.feedback-loop-kind
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: shape aggregates the hard limits
+  source_ref: planner.feature.shape
+  strength: important
+  target_ref: planner.feature.hard-limits
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: shape aggregates the sizing rule
+  source_ref: planner.feature.shape
+  strength: important
+  target_ref: planner.feature.size-max-rule
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a well-shaped feature declares its urn
+  source_ref: planner.feature.shape
+  strength: important
+  target_ref: planner.feature.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the footprint size is one input to the max rule
+  source_ref: planner.feature.size-max-rule
+  strength: critical
+  target_ref: planner.feature.footprint-scoring
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: WMBT groups produce the WMBT-count size input
+  source_ref: planner.feature.size-max-rule
+  strength: important
+  target_ref: planner.feature.grouping-strategy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: sizing and hard limits both gate feature scope
+  source_ref: planner.feature.size-max-rule
+  strength: important
+  target_ref: planner.feature.hard-limits
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: the feature URN segment comes from artifact-seeded naming
+  source_ref: planner.feature.urn-naming
+  strength: minor
+  target_ref: planner.feature.artifact-seeded-naming
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: a feature URN embeds its parent wagon slug
+  source_ref: planner.feature.urn-naming
+  strength: important
+  target_ref: planner.wagon.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the URN feature segment is the artifact-seeded verb-object name
+  source_ref: planner.feature.urn-naming
+  strength: minor
+  target_ref: planner.feature.artifact-seeded-naming
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: validation enforces the hard limits
+  source_ref: planner.feature.validation-rules
+  strength: important
+  target_ref: planner.feature.hard-limits
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: validation enforces the max size rule
+  source_ref: planner.feature.validation-rules
+  strength: important
+  target_ref: planner.feature.size-max-rule
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: a feature is registered in its wagon _features.yaml
+  source_ref: planner.feature.wagon-link
+  strength: important
+  target_ref: planner.wagon.features
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: REST endpoint shapes are built from the interface naming patterns, so the mapping presupposes them
+  source_ref: planner.interface.api-mapping
+  strength: important
+  target_ref: planner.interface.naming-patterns
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: verb selection keys off the event/state/data/config naming classification
+  source_ref: planner.interface.artifact-transformation
+  strength: important
+  target_ref: planner.interface.naming-patterns
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the contract URN scheme is the interface-side application of the stable-naming grammar
+  source_ref: planner.interface.contract-urn
+  strength: important
+  target_ref: planner.artifact-naming.planner-artifacts-use-stable
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: orphan detection is defined via bidirectional-linkage resolution of the contract URN
+  source_ref: planner.interface.orphan-detection
+  strength: important
+  target_ref: planner.interface.contract-urn
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the producing wagon generates the artifact contract, which must carry a well-formed contract URN
+  source_ref: planner.interface.ownership-rules
+  strength: important
+  target_ref: planner.interface.contract-urn
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: FLAT/FACETED/COLLECTION layouts realise the colon/dot-to-path mapping
+  source_ref: planner.interface.structure-rules
+  strength: minor
+  target_ref: planner.artifact-naming.planner-artifacts-use-stable
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: the tests/ rule targets the leaf directories produced by the layouts
+  source_ref: planner.interface.tests-subdirectory
+  strength: minor
+  target_ref: planner.interface.structure-rules
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: composite dispatch keys are exceptional
+  source_ref: planner.interlocking.definition
+  strength: important
+  target_ref: planner.train.dispatch-composite-key-exceptional
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the dispatch map is a declared routing registry
+  source_ref: planner.interlocking.definition
+  strength: critical
+  target_ref: planner.train.dispatch-map-is-registry
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the registry mirrors entrypoint.surfaces, so the mirror is meaningful only where the entrypoint shape is enforced
+  source_ref: planner.interlocking.registry-mirrors-document
+  strength: important
+  target_ref: planner.train.interlocking-entrypoint-shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the registry can only be checked against its documents once both live at the declared interlocking home
+  source_ref: planner.interlocking.registry-mirrors-document
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: both are required, populated issue-body section rules enforced together
+  source_ref: planner.issue-body.graph-context-required
+  strength: minor
+  target_ref: planner.issue-body.dependency-entries-must-be-classified
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: the Confirm boundary both gates authoring and binds the plan to its tracking issue
+  source_ref: planner.plan.confirm-before-author
+  target_ref: planner.plan.confirm-binds-an-issue
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Confirm gates a train-bearing plan on interlocking sanity
+  source_ref: planner.plan.confirm-requires-interlocking-sanity
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: the session lifecycle's Ratify gate enforces confirm-before-author
+  source_ref: planner.plan.session-lifecycle
+  target_ref: planner.plan.confirm-before-author
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Compose's exit condition is a convention-shaped decomposition, which is what holding each hand-authored spec to
+    its artifact schema actually checks
+  source_ref: planner.plan.session-lifecycle
+  strength: critical
+  target_ref: planner.plan.spec-is-schema-valid
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a spec is validated against the schema of the artifact its kind authors, so the plan layer keeps the by-construction
+    promise the author layer already makes
+  source_ref: planner.plan.spec-is-schema-valid
+  strength: critical
+  target_ref: planner.wagon.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: the ladder report is advisory and rides on the same Ratify lock the spec schema gate fails closed on
+  source_ref: planner.plan.spec-is-schema-valid
+  target_ref: planner.plan.granularity-completeness
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: no-orphan-node graph completeness is a planning-artifact integrity rule alongside acceptance completeness
+  source_ref: planner.relationship.no-orphan-nodes
+  strength: minor
+  target_ref: planner.acceptance.complete
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: no-orphan-node graph completeness is a planning-artifact integrity rule alongside acceptance well-formedness
+  source_ref: planner.relationship.no-orphan-nodes
+  strength: minor
+  target_ref: planner.acceptance.well-formed
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'the SMOKE close-the-loop obligation only applies to a feature that declares kind: feedback-loop, so the kind rule
+    is its precondition'
+  source_ref: planner.smoke.feedback-loop-close-the-loop
+  strength: important
+  target_ref: planner.feature.feedback-loop-kind
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'both police SMOKE-phase authenticity: one forbids synthetic wiring, the other requires the consumer end be exercised,
+    and together they stop a SMOKE suite that is green without proving anything'
+  source_ref: planner.smoke.synthetic-fixture-bypass
+  strength: important
+  target_ref: planner.smoke.feedback-loop-close-the-loop
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: layer/sequence mapping is keyed by the nine step names
+  source_ref: planner.steps.architecture-routing
+  strength: important
+  target_ref: planner.steps.jtbd-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: both decorate the same nine steps from complementary axes
+  source_ref: planner.steps.architecture-routing
+  strength: minor
+  target_ref: planner.steps.linguistic-patterns
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the ordered 9-step taxonomy supplies the ordering the sequence rule asserts
+  source_ref: planner.steps.jtbd-taxonomy
+  strength: important
+  target_ref: planner.steps.sequence
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: patterns are defined per step name
+  source_ref: planner.steps.linguistic-patterns
+  strength: important
+  target_ref: planner.steps.jtbd-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: ordered step pre-conditions/outputs and the train artifact flow both sequence the plan
+  source_ref: planner.steps.sequence
+  strength: minor
+  target_ref: planner.train.artifact-flow
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: plan/test/code archetype alignment presupposes a canonical theme
+  source_ref: planner.theme.archetype-alignment
+  strength: minor
+  target_ref: planner.theme.must-be-canonical
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the commons/coach import boundary is only checkable once a theme resolves to canonical
+  source_ref: planner.theme.commons-coach-boundary
+  strength: important
+  target_ref: planner.theme.must-be-canonical
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: each theme aligns to one archetype
+  source_ref: planner.theme.definition
+  strength: important
+  target_ref: planner.theme.archetype-alignment
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a theme is one of the five canonical digits
+  source_ref: planner.theme.definition
+  strength: critical
+  target_ref: planner.theme.canonical-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: commons is consumable without importing coach
+  source_ref: planner.theme.definition
+  strength: important
+  target_ref: planner.theme.commons-coach-boundary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: non-canonical themes are rejected
+  source_ref: planner.theme.definition
+  strength: critical
+  target_ref: planner.theme.must-be-canonical
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: digit 0 commons is the mandatory locked floor
+  source_ref: planner.theme.definition
+  strength: critical
+  target_ref: planner.theme.theme-zero-mandatory
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the theme token namespaces the artifact URN
+  source_ref: planner.theme.definition
+  strength: important
+  target_ref: planner.theme.urn-namespace-matches
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the canonical set is defined by the taxonomy
+  source_ref: planner.theme.must-be-canonical
+  strength: critical
+  target_ref: planner.theme.canonical-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a canonical theme set must include the non-removable commons@0 floor
+  source_ref: planner.theme.must-be-canonical
+  strength: critical
+  target_ref: planner.theme.theme-zero-mandatory
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: digit 0 = commons is fixed by the taxonomy's theme_zero token
+  source_ref: planner.theme.theme-zero-mandatory
+  strength: critical
+  target_ref: planner.theme.canonical-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: matching a produced-URN theme-prefix to the wagon theme presupposes a canonical theme
+  source_ref: planner.theme.urn-namespace-matches
+  strength: important
+  target_ref: planner.theme.must-be-canonical
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the theme-prefix must be a canonical theme
+  source_ref: planner.theme.urn-namespace-matches
+  strength: important
+  target_ref: planner.theme.canonical-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: extends coverage to the Acceptance Authority boundary
+  source_ref: planner.train.acceptance-commit-failures-covered
+  strength: important
+  target_ref: planner.coverage.bidirectional-coverage-between-trains
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: train acceptances live in the spec file
+  source_ref: planner.train.acceptances
+  strength: minor
+  target_ref: planner.train.registry
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a train moves artifacts across wagons
+  source_ref: planner.train.definition
+  strength: important
+  target_ref: planner.train.artifact-flow
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: family behavior-or-delivery is part of train identity
+  source_ref: planner.train.definition
+  strength: important
+  target_ref: planner.train.family
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: family is fixed by the terminal contract
+  source_ref: planner.train.definition
+  strength: critical
+  target_ref: planner.train.family-matches-terminal-contract
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the journey starts from a declared initial input
+  source_ref: planner.train.definition
+  strength: important
+  target_ref: planner.train.initial-cargo-inputs-declared
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a train is strictly linear
+  source_ref: planner.train.definition
+  strength: critical
+  target_ref: planner.train.linearity
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: steps move artifacts between declared participants
+  source_ref: planner.train.definition
+  strength: important
+  target_ref: planner.train.participants
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a train tells ONE coherent journey
+  source_ref: planner.train.definition
+  strength: critical
+  target_ref: planner.train.scope
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a train is an ordered step sequence
+  source_ref: planner.train.definition
+  strength: important
+  target_ref: planner.train.sequence
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: the journey ends in exactly one terminal contract
+  source_ref: planner.train.definition
+  strength: critical
+  target_ref: planner.train.terminal-contract
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: finish_to_start
+  reason: train data-flow dependencies follow wagon produce/consume artifacts
+  source_ref: planner.train.dependencies
+  strength: minor
+  target_ref: planner.wagon.produce-consume-artifacts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: dependencies are declared in the spec
+  source_ref: planner.train.dependencies
+  strength: minor
+  target_ref: planner.train.registry
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: The composite-key exception is a constraint on entries within the dispatch registry.
+  source_ref: planner.train.dispatch-composite-key-exceptional
+  strength: important
+  target_ref: planner.train.dispatch-map-is-registry
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: Dispatch routes the produced-artifact divergence alongside the normal train artifact flow.
+  source_ref: planner.train.dispatch-map-is-registry
+  strength: important
+  target_ref: planner.train.artifact-flow
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: family is derived from the declared terminal contract
+  source_ref: planner.train.family
+  strength: important
+  target_ref: planner.train.terminal-contract
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: family is a train classification axis orthogonal to the variant category
+  source_ref: planner.train.family
+  strength: important
+  target_ref: planner.train.categories
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the consistency rule checks the family against the terminal contract
+  source_ref: planner.train.family-matches-terminal-contract
+  strength: important
+  target_ref: planner.train.terminal-contract
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: declared initial inputs seed Cargo before the wagon sequence
+  source_ref: planner.train.initial-cargo-inputs-declared
+  strength: important
+  target_ref: planner.train.sequence
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the no-cargo boundary applies to homed interlockings
+  source_ref: planner.train.interlocking-does-not-carry-cargo
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: entrypoint shape is declared on an interlocking in the canonical home
+  source_ref: planner.train.interlocking-entrypoint-shape
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: fragment and acceptance binding presupposes the homed interlocking
+  source_ref: planner.train.interlocking-fragment-acceptance-binding
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: guard coverage is proven against the route to train projection
+  source_ref: planner.train.interlocking-guard-coverage
+  strength: important
+  target_ref: planner.train.interlocking-projection-equivalence
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: guard grammar is declared on a homed interlocking
+  source_ref: planner.train.interlocking-guard-grammar
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: message payload typing is declared on a homed interlocking
+  source_ref: planner.train.interlocking-message-payload-typed
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a typed payload contract must resolve to a schema body
+  source_ref: planner.train.interlocking-payload-contract-body-required
+  strength: important
+  target_ref: planner.train.interlocking-message-payload-typed
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: binding an interlocking payload.contract to an authored/registered contract (#1314 item E) ties the route/interlocking
+    model to the contract layer — the declared identity must be a registered contract, resolved via the contract identity->file
+    mapping the contract layer maintains
+  source_ref: planner.train.interlocking-payload-contract-registered
+  strength: important
+  target_ref: planner.artifact-naming.contract-file-mapping
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: registry membership of a payload contract presupposes a typed payload
+  source_ref: planner.train.interlocking-payload-contract-registered
+  strength: important
+  target_ref: planner.train.interlocking-message-payload-typed
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: projection equivalence presupposes the homed interlocking
+  source_ref: planner.train.interlocking-projection-equivalence
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: route category agreement presupposes the homed interlocking
+  source_ref: planner.train.interlocking-route-category-matches-train-id
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: deterministic resolution presupposes the homed interlocking
+  source_ref: planner.train.interlocking-route-resolution-deterministic
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a structural residual is the explicit escape hatch for WMBT surfacing
+  source_ref: planner.train.interlocking-structural-residual-explicit
+  strength: important
+  target_ref: planner.train.interlocking-wmbt-surface-or-residual
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: WMBT surfacing presupposes the homed interlocking
+  source_ref: planner.train.interlocking-wmbt-surface-or-residual
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: linearity forbids loop/route elements in the sequence
+  source_ref: planner.train.linearity
+  strength: critical
+  target_ref: planner.train.sequence
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 0.9
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: production train execution carries the train's artifact flow
+  source_ref: planner.train.production-implementation
+  strength: minor
+  target_ref: planner.train.artifact-flow
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the subject-bucketed train registry can only key a typed train:<subject>:<slug> entry on a subject already registered
+    in plan/_subjects.yaml
+  source_ref: planner.train.registry
+  strength: important
+  target_ref: planner.subject.invariants
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: registry + spec paths derive from the train_id
+  source_ref: planner.train.registry
+  strength: important
+  target_ref: planner.train.naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: start_to_start
+  reason: the train registry is what train-wagon coverage validates against
+  source_ref: planner.train.registry
+  strength: important
+  target_ref: planner.coverage.bidirectional-coverage-between-trains
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the row path and the document path it is compared against both derive from the train_id, so a naming disagreement
+    would read as an incoherence
+  source_ref: planner.train.registry-coherence
+  strength: important
+  target_ref: planner.train.naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: existence coherence is checked over the two-file registry+spec pattern that node defines (#1942)
+  source_ref: planner.train.registry-coherence
+  strength: critical
+  target_ref: planner.train.registry
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: assessing the category space presupposes each route's declared category already agrees with its target train
+  source_ref: planner.train.route-category-assessment
+  strength: important
+  target_ref: planner.train.interlocking-route-category-matches-train-id
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: admission proves every train is classified; category assessment proves the route space that classifies them is itself
+    complete
+  source_ref: planner.train.route-category-assessment
+  strength: important
+  target_ref: planner.train.route-space-admission
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: admission counts routes across the registered interlockings, so it presupposes the homed+registered interlocking
+    set
+  source_ref: planner.train.route-space-admission
+  strength: important
+  target_ref: planner.train.interlocking-home
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a train sequences 3-7 wagons referenced by wagon URN
+  source_ref: planner.train.scope
+  strength: important
+  target_ref: planner.wagon.urn
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: a train's participants are wagons
+  source_ref: planner.train.scope
+  strength: important
+  target_ref: planner.wagon.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the one-journey scope is realized by the sequence
+  source_ref: planner.train.scope
+  strength: minor
+  target_ref: planner.train.sequence
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: each step carries a domain:resource artifact
+  source_ref: planner.train.sequence
+  strength: important
+  target_ref: planner.train.artifact-flow
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: each step transfers an artifact between participants
+  source_ref: planner.train.sequence
+  strength: important
+  target_ref: planner.train.participants
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: a train theme-digit must resolve to one of the five canonical themes
+  source_ref: planner.train.theme-alignment
+  strength: important
+  target_ref: planner.theme.must-be-canonical
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the primary theme is read from the first train-id digit
+  source_ref: planner.train.theme-alignment
+  strength: important
+  target_ref: planner.train.theme-ranges
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the train URN carried on a theme orchestrator must reference a train registered in the train registry (registry
+    entry + spec file)
+  source_ref: planner.train.theme-orchestrator-urn
+  strength: important
+  target_ref: planner.train.registry
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: each theme range spans the four categories
+  source_ref: planner.train.theme-ranges
+  strength: minor
+  target_ref: planner.train.categories
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: validation enforces spec-file existence
+  source_ref: planner.train.validation-rules
+  strength: important
+  target_ref: planner.train.registry
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: variations populate a theme's category/variation slots
+  source_ref: planner.train.variation-strategies
+  strength: minor
+  target_ref: planner.train.theme-ranges
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the telemetry URN grammar is what the filesystem mapping resolves
+  source_ref: planner.wagon.artifact-contracts
+  strength: important
+  target_ref: planner.wagon.telemetry-filesystem
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: contract URNs map to files via the artifact-naming mapping
+  source_ref: planner.wagon.artifact-contracts
+  strength: important
+  target_ref: planner.artifact-naming.contract-file-mapping
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: footprint measures intrinsic volume; complexity adds interconnection shape (orthogonal sizing axes)
+  source_ref: planner.wagon.complexity-model
+  strength: minor
+  target_ref: planner.feature.footprint-scoring
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the advisory coupling-complexity reporter executes the complexity model's fan_in x fan_out metric
+  source_ref: planner.wagon.coupling-complexity
+  strength: important
+  target_ref: planner.wagon.complexity-model
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: artifacts cross declared contract boundaries
+  source_ref: planner.wagon.definition
+  strength: important
+  target_ref: planner.wagon.artifact-contracts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: separability is judged by cross-wagon coupling
+  source_ref: planner.wagon.definition
+  strength: important
+  target_ref: planner.wagon.coupling-complexity
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a wagon groups the features that decompose it
+  source_ref: planner.wagon.definition
+  strength: minor
+  target_ref: planner.wagon.features
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: wagons must not form a produce-consume cycle
+  source_ref: planner.wagon.definition
+  strength: critical
+  target_ref: planner.wagon.no-consume-cycle
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a wagon consumes and produces declared artifacts
+  source_ref: planner.wagon.definition
+  strength: important
+  target_ref: planner.wagon.produce-consume-artifacts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a wagon has one coherent subject action goal
+  source_ref: planner.wagon.definition
+  strength: critical
+  target_ref: planner.wagon.semantic-coherence
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a wagon is a separable unit of work
+  source_ref: planner.wagon.definition
+  strength: critical
+  target_ref: planner.wagon.separability
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the features-manifest rule uses the urn-array features format
+  source_ref: planner.wagon.features-format
+  strength: important
+  target_ref: planner.wagon.features
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: kebab/snake conversion underpins the wagon URN + plan/<slug>/ layout
+  source_ref: planner.wagon.logical-vs-filesystem-naming
+  strength: important
+  target_ref: planner.wagon.urn
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the conversion functions implement the kebab/snake split
+  source_ref: planner.wagon.logical-vs-filesystem-naming
+  strength: important
+  target_ref: planner.wagon.slug-dirname-conversion
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the wagon name rule draws its leading-verb lexicon from the verb-selection table
+  source_ref: planner.wagon.name-is-verb-object
+  strength: important
+  target_ref: planner.feature.verb-selection-by-artifact-type
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  reason: the name rules gate the authoring path while the drift report covers the corpus already on disk; neither sees what
+    the other sees
+  source_ref: planner.wagon.name-is-verb-object
+  target_ref: planner.artifact-naming.verb-object-corpus-drift
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the strict no-consume-cycle invariant is the exact (acyclicity) case of the complexity model
+  source_ref: planner.wagon.no-consume-cycle
+  strength: important
+  target_ref: planner.wagon.complexity-model
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: produce/consume artifact names follow the naming pattern
+  source_ref: planner.wagon.produce-consume-artifacts
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: produce/consume entries carry contract + telemetry URNs
+  source_ref: planner.wagon.produce-consume-artifacts
+  strength: important
+  target_ref: planner.wagon.artifact-contracts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: produced artifacts' telemetry URNs materialize on the filesystem
+  source_ref: planner.wagon.produce-consume-artifacts
+  strength: minor
+  target_ref: planner.wagon.telemetry-filesystem
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: extraction produces the fields coherence checks validate
+  source_ref: planner.wagon.refinement-extraction
+  strength: important
+  target_ref: planner.wagon.semantic-coherence
+  type: enables
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: the wagon theme is selected from the canonical taxonomy
+  source_ref: planner.wagon.refinement-extraction
+  strength: important
+  target_ref: planner.theme.canonical-taxonomy
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: produce/consume extraction delegates to the artifact URN conventions
+  source_ref: planner.wagon.refinement-extraction
+  strength: important
+  target_ref: planner.wagon.artifact-contracts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: coherence validates the extracted refinement fields
+  source_ref: planner.wagon.semantic-coherence
+  strength: important
+  target_ref: planner.wagon.refinement-extraction
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: coherence checks produce-owned / consume-foreign / external-scope rules
+  source_ref: planner.wagon.semantic-coherence
+  strength: important
+  target_ref: planner.wagon.produce-consume-artifacts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: a wagon produced-URN theme must match its theme
+  source_ref: planner.wagon.semantic-coherence
+  strength: minor
+  target_ref: planner.theme.urn-namespace-matches
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: separability operationalizes the complexity model's cohesion-vs-coupling comparison on the WMBT graph
+  source_ref: planner.wagon.separability
+  strength: important
+  target_ref: planner.wagon.complexity-model
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: semantic coherence and graph separability are two views of whether a wagon is one job
+  source_ref: planner.wagon.separability
+  strength: minor
+  target_ref: planner.wagon.semantic-coherence
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: telemetry URNs follow the artifact-naming grammar
+  source_ref: planner.wagon.telemetry-filesystem
+  strength: important
+  target_ref: planner.artifact-naming.naming-pattern
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the telemetry filesystem maps the telemetry URN form
+  source_ref: planner.wagon.telemetry-filesystem
+  strength: important
+  target_ref: planner.wagon.artifact-contracts
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the plan/<slug>/ layout follows the logical-vs-filesystem split
+  source_ref: planner.wagon.urn
+  strength: important
+  target_ref: planner.wagon.logical-vs-filesystem-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the wagon urn rule presupposes the urn naming grammar
+  source_ref: planner.wagon.urn
+  strength: important
+  target_ref: planner.wagon.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: a wagon's stable URN is an instance of the stable-naming rule for planner artifacts
+  source_ref: planner.wagon.urn
+  strength: minor
+  target_ref: planner.artifact-naming.planner-artifacts-use-stable
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: external
+  foundation: start_to_start
+  reason: wagon and artifact names share the kebab grammar
+  source_ref: planner.wagon.urn-naming
+  strength: minor
+  target_ref: planner.artifact-naming.naming-pattern
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the slug derives from the wagon name
+  source_ref: planner.wagon.urn-naming
+  strength: minor
+  target_ref: planner.wagon.slug-dirname-conversion
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT picks one dimension
+  source_ref: planner.wmbt.definition
+  strength: important
+  target_ref: planner.wmbt.dimension-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT picks one direction
+  source_ref: planner.wmbt.definition
+  strength: important
+  target_ref: planner.wmbt.direction-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT picks one lens
+  source_ref: planner.wmbt.definition
+  strength: important
+  target_ref: planner.wmbt.lens-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT must carry a smoke acceptance
+  source_ref: planner.wmbt.definition
+  strength: critical
+  target_ref: planner.wmbt.must-have-smoke-acceptance
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT is scoped to one object of control
+  source_ref: planner.wmbt.definition
+  strength: critical
+  target_ref: planner.wmbt.object-of-control
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT declares id statement proving-artifacts
+  source_ref: planner.wmbt.definition
+  strength: critical
+  target_ref: planner.wmbt.shape
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: multi-axis WMBTs must split
+  source_ref: planner.wmbt.definition
+  strength: minor
+  target_ref: planner.wmbt.splitting-rules
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_finish
+  reason: a WMBT follows the statement template
+  source_ref: planner.wmbt.definition
+  strength: important
+  target_ref: planner.wmbt.statement-template
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: finish_to_start
+  reason: filename is the URN's step-coded sequence segment
+  source_ref: planner.wmbt.filename-pattern
+  strength: minor
+  target_ref: planner.wmbt.urn-naming
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the WMBT filename is step-coded
+  source_ref: planner.wmbt.filename-pattern
+  strength: important
+  target_ref: planner.wmbt.step-code-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: one dimension and one lens are chosen together per WMBT
+  source_ref: planner.wmbt.lens-selection
+  strength: important
+  target_ref: planner.wmbt.dimension-selection
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the smoke-acceptance rule applies once a WMBT is shaped
+  source_ref: planner.wmbt.must-have-smoke-acceptance
+  strength: important
+  target_ref: planner.wmbt.shape
+  type: follows
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a SMOKE acceptance is defined by carrying the SMOKE harness token, so it depends on the harness-type rule
+  source_ref: planner.wmbt.must-have-smoke-acceptance
+  strength: critical
+  target_ref: planner.acceptance.harness#harness_type
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: external
+  foundation: finish_to_start
+  reason: the SMOKE token is a harness code from the acceptance harness vocabulary
+  source_ref: planner.wmbt.must-have-smoke-acceptance
+  strength: critical
+  target_ref: planner.acceptance.harness-vocabulary#harness_code
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: each WMBT carries one lens_ref from the catalog
+  source_ref: planner.wmbt.shape
+  strength: important
+  target_ref: planner.wmbt.lens-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a well-shaped WMBT declares a composed statement
+  source_ref: planner.wmbt.shape
+  strength: important
+  target_ref: planner.wmbt.statement-template
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the WMBT id is the step-coded URN
+  source_ref: planner.wmbt.shape
+  strength: important
+  target_ref: planner.wmbt.urn-naming
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a statement mixing dimensions must be split
+  source_ref: planner.wmbt.splitting-rules
+  strength: important
+  target_ref: planner.wmbt.dimension-selection
+  type: blocks
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: the <=5 acceptance cap aligns across conventions
+  source_ref: planner.wmbt.splitting-rules
+  strength: minor
+  target_ref: planner.acceptance.max-per-wmbt
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: discretionary
+  control: internal
+  foundation: start_to_start
+  reason: a WMBT splits when its statement mixes dimensions
+  source_ref: planner.wmbt.splitting-rules
+  strength: minor
+  target_ref: planner.wmbt.dimension-selection
+  type: runs_alongside
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the statement template appends the context clarifier
+  source_ref: planner.wmbt.statement-template
+  strength: minor
+  target_ref: planner.wmbt.context-clarifier
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the statement template consumes the dimension
+  source_ref: planner.wmbt.statement-template
+  strength: important
+  target_ref: planner.wmbt.dimension-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the statement template consumes the direction
+  source_ref: planner.wmbt.statement-template
+  strength: important
+  target_ref: planner.wmbt.direction-selection
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the statement template consumes the object of control
+  source_ref: planner.wmbt.statement-template
+  strength: important
+  target_ref: planner.wmbt.object-of-control
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the WMBT URN embeds a step code
+  source_ref: planner.wmbt.urn-naming
+  strength: important
+  target_ref: planner.wmbt.step-code-vocabulary
+  type: requires
+  origin: atdd@36ce055a:src/atdd/coach/graph/relationships.yaml
+- source_ref: coder.bun.wagon-honours-its-contract
+  target_ref: coder.bun.interlocking-does-not-carry-cargo
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: The two halves of the artifact data plane. One keeps Cargo inside TrainRunner execution, the other requires the
+    wagon at the end of that execution to move the artifacts its plan document declares. Neither implies the other, and a
+    stack satisfying only one still lets the declared contract and the carried data disagree.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-pattern
+  target_ref: coder.bun.green-urn-marker
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: The six-segment shape can only be checked once a marker is present; absence is the marker rule's finding.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-wagon-feature
+  target_ref: coder.bun.green-urn-pattern
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Segment grammar applies only after the segment count is known good.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-name-matches
+  target_ref: coder.bun.green-urn-pattern
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Reads segment 3, which exists only once the shape validates.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-side
+  target_ref: coder.bun.green-urn-pattern
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Reads segment 4, which exists only once the shape validates.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-layer
+  target_ref: coder.bun.green-urn-pattern
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Reads segment 5, which exists only once the shape validates.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-header-tested-by
+  target_ref: coder.bun.green-urn-marker
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Two halves of the traceability loop: the URN says what the file IS, Tested-By what PROVES it.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-header-runtime
+  target_ref: coder.bun.green-header-purpose
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Both single-line header fields recovered from one parse of the same comment block.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-header-order
+  target_ref: coder.bun.green-header-tested-by
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Order governs the arrangement of the very fields the other header rules require.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-urn-layer
+  target_ref: coder.bun.design-hierarchy-import
+  type: enables
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: The layer segment this rule validates is what the layering rules read to judge an import.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.complexity-nesting
+  target_ref: coder.bun.complexity-cyclomatic
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Co-emitted per function from one extraction pass over the same brace-matched body.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.complexity-length
+  target_ref: coder.bun.complexity-cyclomatic
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Co-emitted per function from one extraction pass over the same brace-matched body.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.quality-comments
+  target_ref: coder.bun.quality-mi
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'The comment ratio is literally a term in the maintainability-index formula: one computation, two reported facts.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.quality-mi
+  target_ref: coder.bun.complexity-cyclomatic
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: MI judges the FILE, complexity its functions; a file can pass every function threshold and still be unmaintainable
+    by size.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.duplication-intra-layer
+  target_ref: coder.bun.dead-code-reachability
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Both read structure ACROSS files rather than within one, and both need the whole scan tree at once.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.dead-code-reachability
+  target_ref: coder.bun.composition-root
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Reachability is measured FROM the structural roots that composition-root confines wiring to.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.security-sql-injection
+  target_ref: coder.bun.security-missing-auth
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Authorisation decides WHO may act, parameterisation what their input can DO; a boundary needs both.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.security-hardcoded-secret
+  target_ref: coder.bun.security-missing-auth
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: A leaked credential defeats the authorisation check the sibling rule requires.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.logging-structured
+  target_ref: coder.bun.logging-console
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: One bans the wrong channel, the other requires context on the right one; either alone leaves logs unusable.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.error-response-code-format
+  target_ref: coder.bun.error-response-bare-string
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: A structured payload must exist before its error code can be constrained.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.logging-structured
+  target_ref: coder.bun.error-response-bare-string
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both govern what a failure leaves behind: one for the operator, one for the caller.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.commons-domain-no-outbound
+  target_ref: coder.bun.design-hierarchy-import
+  type: requires
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'A specialization: the general inward-only rule, narrowed to the commons domain tree.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.commons-application-no-integration
+  target_ref: coder.bun.design-hierarchy-import
+  type: requires
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'A specialization: the general inward-only rule, narrowed to the commons application tree.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.commons-domain-no-framework-import
+  target_ref: coder.bun.commons-domain-no-outbound
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Outbound bans project LAYERS; this additionally bans runtime machinery, so the domain runs with no server started.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.commons-cross-feature-imports-in
+  target_ref: coder.bun.design-hierarchy-import
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: The hierarchy governs VERTICAL edges between layers; this governs HORIZONTAL ones between sibling features.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.composition-consumer
+  target_ref: coder.bun.composition-root
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Two halves of one discipline: where wiring MAY happen, and that consumers must ACCEPT what they are given.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.dto-placement
+  target_ref: coder.bun.dto-purity
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Purity governs a DTO's shape, placement its home; a pure DTO in the wrong layer still couples the boundary.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.dto-mapper
+  target_ref: coder.bun.dto-placement
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: The mapper translates the type whose home this rule fixes; both keep the boundary in one place.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.layer-naming
+  target_ref: coder.bun.design-hierarchy-import
+  type: enables
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: The layering rules can only read a layer that the naming rule guarantees is declared.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.boundaries-http-client
+  target_ref: coder.bun.design-hierarchy-import
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Confines outbound transport to integration, which is the hierarchy's own home for it.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-single-lockfile
+  target_ref: coder.bun.runtime-server-is-bun-serve
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Both hold the stack decision itself: Bun''s server, Bun''s resolver.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-server-is-bun-serve
+  target_ref: coder.bun.composition-root
+  type: enables
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: server.ts is a composition root precisely BECAUSE Bun.serve is the assembly point of a full-stack Bun app.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-server-is-bun-serve
+  target_ref: coder.bun.boundaries-http-client
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: One governs the server you run, the other the client you call out with.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.green-header-order
+  target_ref: coder.bun.green-header-runtime
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: The canonical order this rule enforces is URN -> Tested-By -> Runtime -> Purpose; Runtime and Purpose are the second
+    half of the very sequence it governs, so they were never a separate concern.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.interlocking-resolution-model-exists
+  target_ref: coder.bun.interlocking-runner-exists
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: A structured resolution is what resolveTrain RETURNS, so there is nothing to structure until the route-control layer
+    exists. Runner first, then the shape of its verdict.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.interlocking-delegates-to-trainrunner
+  target_ref: coder.bun.interlocking-runner-exists
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Delegation is a property OF the runner; a tree with no InterlockingRunner has nothing that could fail to delegate.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.interlocking-does-not-carry-cargo
+  target_ref: coder.bun.interlocking-delegates-to-trainrunner
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'The two halves of one idea: route control must not become execution. One forbids running the wagons, the other
+    forbids touching the data plane they carry.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.station-master-interlocking-routing
+  target_ref: coder.bun.interlocking-runner-exists
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: server.ts can only route THROUGH an InterlockingRunner that exists; the Station Master obligation presupposes the
+    runtime one.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.interlocking-bilateral-binding
+  target_ref: coder.bun.station-master-interlocking-routing
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Bilateral binding closes declaration, runtime, station and trace against each other. Two of its five directions
+    are Station Master directions, so the station wiring must hold before closure can be asserted.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.interlocking-bilateral-binding
+  target_ref: coder.bun.composition-root
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both govern server.ts as the composition root: one that collaborators are only instantiated there, the other that
+    the JOURNEY_MAP it holds agrees with the declared route space.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-typecheck-enforced
+  target_ref: coder.bun.interlocking-resolution-model-exists
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Complementary halves of one guarantee about the resolution model. The shape rule proves an InterlockingResolution
+    declaring the eight fields EXISTS; only a typechecker proves what resolveTrain actually returns conforms to it, and Bun
+    runs .ts without checking.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-typecheck-enforced
+  target_ref: coder.bun.runtime-single-lockfile
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both are Bun runtime decisions read from package.json and its neighbours: one that a single resolver owns the dependency
+    graph, the other that the types in it are actually checked.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.bun.runtime-executes-the-declaration
+  target_ref: coder.bun.interlocking-bilateral-binding
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Bilateral binding closes a TEXT-level correspondence — literals in the runtime also appear in the plan. This asks
+    the harder question underneath it: whether the runtime ever READS the plan, or merely restates it.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.bun/relationships.yaml
+- source_ref: coder.htmx.verb-endpoint-is-routed
+  target_ref: coder.htmx.verb-mutation-signals-progress
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Two obligations on the same state-changing affordance. One requires it to tell the operator something is happening;
+    this one requires it to reach a route the Station Master admits. A mutation can satisfy either alone and still be a button
+    that signals progress while posting into nothing.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: coder.htmx.verb-destructive-confirms
+  target_ref: coder.htmx.verb-mutation-signals-progress
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Both govern a mutating control: one guards INTENT before the request, the other FEEDBACK during it.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: coder.htmx.swap-oob-carries-id
+  target_ref: coder.htmx.swap-no-inline-handler
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both concern what survives a swap: an oob element needs an id to land, an inline handler dies when its node is
+    replaced.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: coder.htmx.fragment-escapes-interpolation
+  target_ref: coder.htmx.verb-endpoint-same-origin
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Both govern what reaches the live DOM: one the ORIGIN the markup came from, the other the DATA inside it.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: coder.htmx.swap-no-inline-handler
+  target_ref: coder.htmx.verb-destructive-confirms
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Both replace imperative JavaScript with a declarative hx- attribute the swap lifecycle can see.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: coder.htmx.verb-endpoint-same-origin
+  target_ref: coder.htmx.verb-mutation-signals-progress
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Both read the same hx- verb attributes: one judges WHERE the request goes, the other what the user sees while it
+    is in flight.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.coder.htmx/relationships.yaml
+- source_ref: planner.docs.identity-required
+  target_ref: planner.docs.asciidoc-only
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: A doc-id lives in an AsciiDoc attribute. A markdown document has nowhere to declare one, so format uniformity is
+    the precondition for identity.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.doc-id-unique
+  target_ref: planner.docs.identity-required
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Uniqueness compares ids that were actually declared; a document with no doc-id is reported by identity-required
+    and never counted as a collision here.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.graph-target-resolves
+  target_ref: planner.docs.doc-id-unique
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Resolution needs exactly one target per id. Under a duplicate, :supersedes: cannot say which document it means,
+    so uniqueness must hold before an edge can be said to resolve.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.graph-target-resolves
+  target_ref: planner.docs.identity-required
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'The declared-id set is built from :doc-id: attributes BEFORE any edge is resolved. This edge is the no-fabrication
+    discipline expressed as an ordering: without the set first, the resolver would have to invent what it resolves against.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.adr-registry-derived
+  target_ref: planner.docs.graph-target-resolves
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'The registry is a projection of :decides: edges, so it is only as trustworthy as edge resolution. An ADR deciding
+    an undeclared node is reported by the resolver, never listed in the registry.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.reference-integrity
+  target_ref: planner.docs.asciidoc-only
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: asciidoctor renders the authored corpus. A markdown file under docs/ is not an input the renderer can resolve references
+    through, so the format rule bounds what reference-integrity can even see.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.undeclared-change
+  target_ref: planner.docs.artifact-path-shape
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'The two halves of the declaration check: one asks whether a declared path is SHAPED like documentation, the other
+    whether a documentation change was declared at all. Together they close the loop core opens; neither alone does.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: planner.docs.area-index-required
+  target_ref: planner.docs.asciidoc-only
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both are canonical-tree shape rules read from the same scan of docs/: one governs what an area contains, the other
+    what format its files are in.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.planner.docs/relationships.yaml
+- source_ref: tester.bun.acceptance-resolves-to-declared
+  target_ref: tester.bun.acceptance-binding-declared
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: One requires the binding to EXIST, the other requires it to be TRUE. There is nothing to resolve until a header
+    is present, so presence is settled first; together they close the gap where a test named an acceptance that was never
+    declared and every rule stayed silent.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.acceptance-binding-declared
+  target_ref: tester.bun.test-carries-urn-identity
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Identity first, then what it proves; a binding with no URN has nothing to bind.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.test-phase-declared
+  target_ref: tester.bun.test-carries-urn-identity
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: The phase is read from the same header block and is meaningless without the URN.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.routing-runtime-family
+  target_ref: tester.bun.test-carries-urn-identity
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Another optional header field validated from the same parse.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.acceptance-covers-tag-well-formed
+  target_ref: tester.bun.acceptance-binding-declared
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'The two-level binding model: the header binds the FILE, a @covers tag binds one CASE.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.red-fails-first
+  target_ref: tester.bun.red-behavioral-assertion
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: One requires a guaranteed-fail marker, the other that the assertions are behavioural; a RED test needs both.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.red-behavioral-assertion
+  target_ref: tester.bun.test-phase-declared
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Only evaluable once a phase is declared; an undeclared test is exempt from the whole phase surface.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.smoke-no-collaborator-substitution
+  target_ref: tester.bun.smoke-observable-assertion
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: 'Both keep SMOKE honest: real collaborators, and an assertion on what an operator could witness.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.security-input
+  target_ref: tester.bun.security-auth
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Authorisation and input validation are the two halves of one boundary; a happy-path test of either is a silent green
+    gap.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.telemetry-emit
+  target_ref: tester.bun.smoke-observable-assertion
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Both demand an assertion on an external EFFECT rather than on a returned value.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.test-no-self-skip
+  target_ref: tester.bun.red-fails-first
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'They share a vocabulary and must not contradict: `.fails`/`.failing` is an accepted RED marker, so it is deliberately
+    not treated as a self-skip.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.test-isolation-no-live-state
+  target_ref: tester.bun.smoke-no-collaborator-substitution
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: Both govern what a test is allowed to touch outside itself.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.test-imports-bun-test
+  target_ref: tester.bun.routing-runtime-family
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: One checks the DECLARED runner, the other the IMPORTED harness; they must agree or the gate credits a runner that
+    never ran the test.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.smoke-observable-assertion
+  target_ref: tester.bun.test-phase-declared
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: Only evaluable once a phase is declared, exactly as red-behavioral-assertion is; an undeclared test escapes the
+    SMOKE surface entirely.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.security-auth
+  target_ref: tester.bun.telemetry-emit
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'One shape, three kinds: a test whose URN declares its kind must carry the assertion that kind implies, or it is
+    a silent green gap.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.interlocking-production-runner-used
+  target_ref: tester.bun.interlocking-route-coverage
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Coverage counts a route as proven only if the covering test drove the real runners. A route covered by a test that
+    mocks the route-control path is a DESCRIPTIVE green, so production-runner-used is what makes route-coverage mean anything.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.interlocking-smoke-coverage-for-station-master
+  target_ref: tester.bun.interlocking-route-coverage
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Two coverage obligations over the same declaration: one per admissible ROUTE, one per exposed Station Master ACTION.
+    The criticality signal for the second is the core entrypoint.exposed field, never a heuristic.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.interlocking-trace-binds-declared-route
+  target_ref: tester.bun.interlocking-route-coverage
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: A covering test proves a route ran; only the bound trace proves WHICH route ran. Without the binding fields the
+    run could resolve the wrong route, category or guard and the coverage test would still pass.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.interlocking-route-coverage
+  target_ref: tester.bun.acceptance-binding-declared
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: discretionary
+  control: internal
+  strength: minor
+  confidence: 1.0
+  reason: 'Both bind the suite back to a planner declaration: one to the acceptance criterion a test covers, the other to
+    the guarded route it exercises.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.bun.interlocking-train-sequence-is-exercised
+  target_ref: tester.bun.interlocking-route-coverage
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: critical
+  confidence: 1.0
+  reason: Route coverage proves WHICH train a route selects; this proves WHAT it ran. A train whose wagon sequence is wrong
+    is selected correctly and executes the wrong thing, so selection coverage must hold before execution coverage means anything.
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.bun/relationships.yaml
+- source_ref: tester.htmx.swap-oob-asserts-destination-id
+  target_ref: tester.htmx.fragment-asserts-returned-markup
+  type: requires
+  foundation: finish_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Asserting the destination id is a specific case of asserting the fragment at all: a test that never reaches the
+    body cannot reach the id inside it.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.htmx/relationships.yaml
+- source_ref: tester.htmx.verb-endpoint-coverage
+  target_ref: tester.htmx.fragment-asserts-returned-markup
+  type: runs_alongside
+  foundation: start_to_start
+  constraint: mandatory
+  control: internal
+  strength: important
+  confidence: 1.0
+  reason: 'Two halves of one guarantee: coverage says every declared endpoint HAS a test, fragment-asserts-markup says that
+    test looks at what the endpoint actually returns.'
+  origin: atdd-extensions@3aa141e:official/atdd.extension.tester.htmx/relationships.yaml
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: decoding the nominal and sibling trains supplies what a journey composes across interlockings
+  source_ref: planner.decomposition.train-journey
+  strength: important
+  target_ref: planner.journey.definition
+  type: enables
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: continuation closure validates the journey topology the definition describes
+  source_ref: planner.journey.continuation-closure
+  strength: critical
+  target_ref: planner.journey.definition
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: 'an interlocking is judged composed against what a journey is: its entrypoint and its continuations'
+  source_ref: planner.journey.interlocking-composed
+  strength: critical
+  target_ref: planner.journey.definition
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'two halves of journey closure: continuation closure checks the journeys a plan declares, composition checks that
+    no interlocking is left outside every journey, which closure alone passes vacuously'
+  source_ref: planner.journey.interlocking-composed
+  strength: critical
+  target_ref: planner.journey.continuation-closure
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: JourneyRunner executes the continuation topology the plan declares; without a declared journey there is nothing
+    for it to compose
+  source_ref: coder.bun.journey-runner-boundary
+  strength: critical
+  target_ref: planner.journey.definition
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: JourneyRunner is the continuation layer above InterlockingRunner and delegates each routing decision to it
+  source_ref: coder.bun.journey-runner-boundary
+  strength: critical
+  target_ref: coder.bun.interlocking-runner-exists
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: an exposed journey is reached through JourneyRunner, so the runner boundary must hold before routing to it
+  source_ref: coder.bun.station-master-journey-routing
+  strength: critical
+  target_ref: coder.bun.journey-runner-boundary
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'the two Station Master routing obligations: exposed journeys through JOURNEY_MAP, exposed interlockings through
+    their own mapping'
+  source_ref: coder.bun.station-master-journey-routing
+  strength: important
+  target_ref: coder.bun.station-master-interlocking-routing
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the journey view is rendered from the journey topology the plan declares
+  source_ref: planner.docs.journey-view-current
+  strength: critical
+  target_ref: planner.journey.definition
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: the generated page is a document like any other and must carry its doc-id and status
+  source_ref: planner.docs.journey-view-current
+  strength: important
+  target_ref: planner.docs.identity-required
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'both keep the rendered documentation truthful: one that references resolve, the other that the drawn journeys are
+    the planned ones'
+  source_ref: planner.docs.journey-view-current
+  strength: important
+  target_ref: planner.docs.reference-integrity
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a testing witness can only resolve once one is declared
+  source_ref: traceability.source.tested-by-resolves
+  strength: critical
+  target_ref: traceability.source.tested-by-present
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: the same Tested-By header, read by the closure check and by the coder header rule
+  source_ref: traceability.source.tested-by-present
+  strength: important
+  target_ref: coder.bun.green-header-tested-by
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: a test's binding must be declared before it can be resolved against the plan
+  source_ref: traceability.test.binding-resolves
+  strength: critical
+  target_ref: tester.bun.acceptance-binding-declared
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'the two directions of plan-test closure: every acceptance has a test, and every test names an acceptance that exists'
+  source_ref: traceability.plan.executable-acceptance-has-test
+  strength: critical
+  target_ref: traceability.test.binding-resolves
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: source-to-test and test-to-plan links chain into plan to test to implementation closure
+  source_ref: traceability.source.tested-by-resolves
+  strength: important
+  target_ref: traceability.test.binding-resolves
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.hierarchy-import, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-dependency-flow
+  strength: important
+  target_ref: coder.design.hierarchy-import
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.hierarchy-import, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-wagons-import
+  strength: important
+  target_ref: coder.design.hierarchy-import
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.foundations, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-tokens-pure
+  strength: important
+  target_ref: coder.design.foundations
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.token-color, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-token-color
+  strength: important
+  target_ref: coder.design.token-color
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.token-hardcoded, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-token-hardcoded
+  strength: important
+  target_ref: coder.design.token-hardcoded
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.primitives, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-primitives
+  strength: important
+  target_ref: coder.design.primitives
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.orphan-ui, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-connected
+  strength: important
+  target_ref: coder.design.orphan-ui
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: Bun realization of the core obligation coder.design.orphan-export, checked over .tsx, .jsx, .html and .css
+  source_ref: coder.bun.design-orphan-export
+  strength: important
+  target_ref: coder.design.orphan-export
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'two halves of coder.design.hierarchy-import: imports flow down the layers, and never out into app code'
+  source_ref: coder.bun.design-dependency-flow
+  strength: critical
+  target_ref: coder.bun.design-wagons-import
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: finish_to_start
+  reason: colors can only be referenced from tokens once the tokens layer holds pure values
+  source_ref: coder.bun.design-token-color
+  strength: important
+  target_ref: coder.bun.design-tokens-pure
+  type: requires
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'colors, and spacing, radii and durations: together, every visual value outside the tokens layer comes from tokens'
+  source_ref: coder.bun.design-token-color
+  strength: important
+  target_ref: coder.bun.design-token-hardcoded
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: a rendering component must use the design system, and render its controls through primitives
+  source_ref: coder.bun.design-connected
+  strength: important
+  target_ref: coder.bun.design-primitives
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'
+- confidence: 1.0
+  constraint: mandatory
+  control: internal
+  foundation: start_to_start
+  reason: 'code layering and design-system layering: both require dependencies to point in one direction'
+  source_ref: coder.bun.design-dependency-flow
+  strength: important
+  target_ref: coder.bun.design-hierarchy-import
+  type: runs_alongside
+  origin: '@afokapu/atdd-bun'

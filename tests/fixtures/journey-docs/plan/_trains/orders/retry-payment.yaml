@@ -1,0 +1,16 @@
+train_id: train:orders:retry-payment
+title: Retry a declined payment
+description: Retry a declined payment.
+themes: [orders]
+participants: [user:buyer, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Ask the buyer for another payment method
+    from: wagon:checkout
+    to: user:buyer
+    artifact: orders:decline
+  - step: 2
+    intent: Provide a new payment method
+    from: user:buyer
+    to: wagon:checkout
+    artifact: orders:payment-method

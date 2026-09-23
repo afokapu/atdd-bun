@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="atdd-diagram" width="360" height="247" viewBox="0 0 360 247" role="img" aria-labelledby="t-seq-orders-take-payment d-seq-orders-take-payment">
+<title id="t-seq-orders-take-payment">Take payment</title><desc id="d-seq-orders-take-payment">1. checkout to payment-gateway, orders:charge: Request the charge from the payment gateway 2. payment-gateway to checkout, orders:charge-result: Report whether the charge succeeded 3. checkout to checkout, orders:paid: Record the order as paid</desc>
+<defs><marker id="seq-orders-take-payment-wagon" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-ink-3, #64748b)"/></marker><marker id="seq-orders-take-payment-person" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-person, #b45309)"/></marker><marker id="seq-orders-take-payment-system" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-system, #7c3aed)"/></marker></defs>
+<line x1="100" y1="54" x2="100" y2="241" style="stroke: var(--atdd-line, #cbd5e1); stroke-width: 1.4; stroke-dasharray: 3 4"/>
+<rect x="41" y="10" width="118" height="44" rx="8" style="fill: var(--atdd-paper, #ffffff); stroke: var(--atdd-wagon, #2563eb); stroke-width: 1.8"/>
+<text x="100" y="32" text-anchor="middle" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 10.5px; font-weight: 600; fill: var(--atdd-ink, #1f2937)">checkout</text>
+<text x="100" y="47" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 8px; letter-spacing: .1em; fill: var(--atdd-ink-3, #64748b)">WAGON</text>
+<line x1="232" y1="54" x2="232" y2="241" style="stroke: var(--atdd-line, #cbd5e1); stroke-width: 1.4; stroke-dasharray: 3 4"/>
+<rect x="173" y="10" width="118" height="44" rx="8" style="fill: var(--atdd-paper, #ffffff); stroke: var(--atdd-system, #7c3aed); stroke-width: 1.8"/>
+<text x="232" y="32" text-anchor="middle" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 10.5px; font-weight: 600; fill: var(--atdd-ink, #1f2937)">payment-gateway</text>
+<text x="232" y="47" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 8px; letter-spacing: .1em; fill: var(--atdd-ink-3, #64748b)">SYSTEM</text>
+<text x="20" y="111" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9.5px; fill: var(--atdd-ink-3, #64748b)">1</text>
+<text x="96" y="84" text-anchor="start" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 11px; fill: var(--atdd-ink-2, #475569)">Request the charge from the payment gateway</text>
+<text x="96" y="97" text-anchor="start" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9px; fill: var(--atdd-accent, #0f766e)">orders:charge</text>
+<circle cx="100" cy="107" r="3" style="fill: var(--atdd-system, #7c3aed)"/>
+<line x1="103" y1="107" x2="227" y2="107" style="stroke: var(--atdd-system, #7c3aed); stroke-width: 1.7" marker-end="url(#seq-orders-take-payment-system)"/>
+<text x="20" y="160" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9.5px; fill: var(--atdd-ink-3, #64748b)">2</text>
+<text x="96" y="133" text-anchor="start" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 11px; fill: var(--atdd-ink-2, #475569)">Report whether the charge succeeded</text>
+<text x="96" y="146" text-anchor="start" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9px; fill: var(--atdd-accent, #0f766e)">orders:charge-result</text>
+<circle cx="232" cy="156" r="3" style="fill: var(--atdd-system, #7c3aed)"/>
+<line x1="229" y1="156" x2="105" y2="156" style="stroke: var(--atdd-system, #7c3aed); stroke-width: 1.7" marker-end="url(#seq-orders-take-payment-system)"/>
+<text x="20" y="209" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9.5px; fill: var(--atdd-ink-3, #64748b)">3</text>
+<text x="96" y="182" text-anchor="start" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 11px; fill: var(--atdd-ink-2, #475569)">Record the order as paid</text>
+<text x="96" y="195" text-anchor="start" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9px; fill: var(--atdd-accent, #0f766e)">orders:paid</text>
+<circle cx="100" cy="205" r="3" style="fill: var(--atdd-ink-3, #64748b)"/>
+<path d="M 100 205 h 32 v 18 h -26" style="fill: none; stroke: var(--atdd-ink-3, #64748b); stroke-width: 1.7" marker-end="url(#seq-orders-take-payment-wagon)"/>
+</svg>

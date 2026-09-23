@@ -1,0 +1,11 @@
+train_id: train:orders:unrouted-refund
+title: Refund an order
+description: Refund an order.
+themes: [orders]
+participants: [user:buyer, wagon:checkout]
+sequence:
+  - step: 1
+    intent: Ask for a refund
+    from: user:buyer
+    to: wagon:checkout
+    artifact: orders:refund-request

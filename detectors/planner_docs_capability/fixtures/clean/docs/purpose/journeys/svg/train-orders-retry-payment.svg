@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="atdd-diagram" width="360" height="180" viewBox="0 0 360 180" role="img" aria-labelledby="t-seq-orders-retry-payment d-seq-orders-retry-payment">
+<title id="t-seq-orders-retry-payment">Retry a declined payment</title><desc id="d-seq-orders-retry-payment">1. checkout to buyer, orders:decline: Ask the buyer for another payment method 2. buyer to checkout, orders:payment-method: Provide a new payment method</desc>
+<defs><marker id="seq-orders-retry-payment-wagon" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-ink-3, #64748b)"/></marker><marker id="seq-orders-retry-payment-person" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-person, #b45309)"/></marker><marker id="seq-orders-retry-payment-system" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--atdd-system, #7c3aed)"/></marker></defs>
+<line x1="100" y1="54" x2="100" y2="174" style="stroke: var(--atdd-line, #cbd5e1); stroke-width: 1.4; stroke-dasharray: 3 4"/>
+<rect x="41" y="10" width="118" height="44" rx="8" style="fill: var(--atdd-paper, #ffffff); stroke: var(--atdd-wagon, #2563eb); stroke-width: 1.8"/>
+<text x="100" y="32" text-anchor="middle" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 10.5px; font-weight: 600; fill: var(--atdd-ink, #1f2937)">checkout</text>
+<text x="100" y="47" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 8px; letter-spacing: .1em; fill: var(--atdd-ink-3, #64748b)">WAGON</text>
+<line x1="232" y1="54" x2="232" y2="174" style="stroke: var(--atdd-line, #cbd5e1); stroke-width: 1.4; stroke-dasharray: 3 4"/>
+<rect x="173" y="10" width="118" height="44" rx="8" style="fill: var(--atdd-paper, #ffffff); stroke: var(--atdd-person, #b45309); stroke-width: 1.8"/>
+<text x="232" y="32" text-anchor="middle" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 10.5px; font-weight: 600; fill: var(--atdd-ink, #1f2937)">buyer</text>
+<text x="232" y="47" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 8px; letter-spacing: .1em; fill: var(--atdd-ink-3, #64748b)">PERSON</text>
+<text x="20" y="111" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9.5px; fill: var(--atdd-ink-3, #64748b)">1</text>
+<text x="96" y="84" text-anchor="start" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 11px; fill: var(--atdd-ink-2, #475569)">Ask the buyer for another payment method</text>
+<text x="96" y="97" text-anchor="start" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9px; fill: var(--atdd-accent, #0f766e)">orders:decline</text>
+<circle cx="100" cy="107" r="3" style="fill: var(--atdd-person, #b45309)"/>
+<line x1="103" y1="107" x2="227" y2="107" style="stroke: var(--atdd-person, #b45309); stroke-width: 1.7" marker-end="url(#seq-orders-retry-payment-person)"/>
+<text x="20" y="160" text-anchor="middle" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9.5px; fill: var(--atdd-ink-3, #64748b)">2</text>
+<text x="96" y="133" text-anchor="start" style="font-family: var(--atdd-sans, system-ui, sans-serif); font-size: 11px; fill: var(--atdd-ink-2, #475569)">Provide a new payment method</text>
+<text x="96" y="146" text-anchor="start" style="font-family: var(--atdd-mono, ui-monospace, monospace); font-size: 9px; fill: var(--atdd-accent, #0f766e)">orders:payment-method</text>
+<circle cx="232" cy="156" r="3" style="fill: var(--atdd-person, #b45309)"/>
+<line x1="229" y1="156" x2="105" y2="156" style="stroke: var(--atdd-person, #b45309); stroke-width: 1.7" marker-end="url(#seq-orders-retry-payment-person)"/>
+</svg>

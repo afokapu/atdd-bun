@@ -67,7 +67,7 @@ test("the dirty corpus triggers every declared convention rule", async () => {
   const conventionContents = await Promise.all((await Promise.all([filesBelow(conventions), filesBelow(plannerNodes)])).flat().map((path) => readFile(path, "utf8")));
   for (const implementation of implementationsFor(["all"])) {
     const fixtureNames = implementation === "planner_docs_capability"
-      ? ["dirty_markdown", "dirty_identity", "dirty_duplicate_id", "dirty_unresolved_edge", "dirty_missing_index", "dirty_adr_registry"]
+      ? ["dirty_markdown", "dirty_identity", "dirty_duplicate_id", "dirty_unresolved_edge", "dirty_missing_index", "dirty_adr_registry", "dirty_journey_view"]
       : ["dirty"];
     const groups = await Promise.all(fixtureNames.map(async (name) => runImplementation(implementation, { scanRoots: [join(detectors, implementation, "fixtures", name)], excludes: ["node_modules", ".git", ".atdd"] })));
     const observed = new Set(groups.flat().map((violation) => violation.rule_id));

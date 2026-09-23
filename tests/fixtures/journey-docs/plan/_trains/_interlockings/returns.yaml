@@ -1,0 +1,33 @@
+schema_version: 1.0.0
+interlocking_id: interlocking:returns
+title: Returns decision
+theme: orders
+status: checked
+source:
+  path: plan/_trains/_interlockings/returns.yaml
+  content_digest: fixture
+entrypoint:
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+route_resolution:
+  strategy: fail_on_multiple_match
+lifelines:
+  - ref: wagon:checkout
+messages: []
+fragments:
+  - id: fragment:returns
+    kind: alt
+    guards:
+      - id: guard:archive
+        expression: order.cancelled
+routes:
+  - route_id: archive
+    category: nominal
+    priority: 1
+    guard_ref: guard:archive
+    train_id: train:orders:archive-order
+    train_path: plan/_trains/orders/archive-order.yaml
+    projection:
+      expected_sequence_digest: fixture

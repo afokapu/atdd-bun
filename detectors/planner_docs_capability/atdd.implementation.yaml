@@ -21,6 +21,7 @@ realizes_convention:
   - planner.docs.artifact-path-shape
   - planner.docs.undeclared-change
   - planner.docs.reference-integrity
+  - planner.docs.journey-view-current
 
 # The filesystem report emits the six corpus-observable rules. The Bun capability
 # API additionally evaluates declaration-only rules and reference integrity.
@@ -31,6 +32,7 @@ emits_rule_ids:
   - planner.docs.graph-target-resolves  # disposition: advisory (edge names an undeclared id)
   - planner.docs.area-index-required    # disposition: advisory (area exists, no index.adoc)
   - planner.docs.adr-registry-derived   # disposition: advisory (registry drifted from :decides:)
+  - planner.docs.journey-view-current  # disposition: strict (generated journey view differs from plan/)
 
 # TWO SURFACES, ONE DETECTOR.
 #

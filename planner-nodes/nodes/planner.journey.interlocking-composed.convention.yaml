@@ -1,0 +1,43 @@
+schema_version: 1.0.0
+rule_id: planner.journey.interlocking-composed
+kind: constraint
+status: active
+name: Every interlocking is composed into a journey
+statement: >-
+  A plan that declares interlockings must declare at least one journey, and every interlocking must be
+  reached by a journey: either as a journey's entrypoint interlocking or as the destination of a
+  continuation reachable from that entrypoint. An interlocking no journey reaches is a routing decision
+  with no stated trigger and no stated place in the product flow.
+rationale: >-
+  planner.journey.continuation-closure validates the journeys a plan declares, so a plan that declares
+  none, or leaves some interlockings outside every journey, passes it vacuously. The journey is where
+  the plan says what starts a routing decision and what happens after its train completes; without
+  this rule a decomposition can stop at interlockings and look complete while the end-to-end flow was
+  never decided.
+terms:
+  - term_id: composed_interlocking
+    text: >-
+      an interlocking that is the entrypoint of at least one journey, or the destination of a
+      continuation reachable from a journey's entrypoint.
+  - term_id: vacuous_topology
+    text: >-
+      a plan with interlockings and no journey. Every interlocking is reported, because none of them is
+      composed.
+implementation:
+  type: validator
+  ref: planner.static.validators.bun::journeyCompositionFindings
+metadata:
+  severity: 4
+  disposition: strict
+  introduced_in: 0.4.0
+validation:
+  family: closure
+  template: graph_route_space_closure
+  variant: planner_journey_composition
+  phase: CONFIRM
+  enforcement: confirm-blocking
+  subject_kind: interlocking
+  failure_evidence:
+    - interlocking_id
+    - journey_count
+    - reason

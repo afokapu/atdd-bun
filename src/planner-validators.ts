@@ -246,6 +246,34 @@ function journeyContinuationFindings(graph: Awaited<ReturnType<typeof validatePl
   return findings;
 }
 
+/** Every interlocking is reached by a journey: as an entrypoint or through a continuation reachable from one. */
+function journeyCompositionFindings(graph: Awaited<ReturnType<typeof validatePlan>>): PlanFinding[] {
+  const interlockings = graph.artifacts.filter(item => item.kind === "interlocking"), journeys = graph.artifacts.filter(item => item.kind === "journey");
+  const reached = new Set<string>();
+  for (const journey of journeys) {
+    const entrypoint = journey.data.entrypoint && typeof journey.data.entrypoint === "object" ? journey.data.entrypoint as Record<string, unknown> : {};
+    const edges = records(journey.data.continuations).map(continuation => {
+      const from = continuation.from && typeof continuation.from === "object" ? continuation.from as Record<string, unknown> : {};
+      const to = continuation.to && typeof continuation.to === "object" ? continuation.to as Record<string, unknown> : {};
+      return { from: text(from.interlocking_id), to: text(to.interlocking_id) };
+    });
+    const queue = [text(entrypoint.interlocking_id)].filter(Boolean), seen = new Set<string>();
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (seen.has(id)) continue;
+      seen.add(id); reached.add(id);
+      for (const edge of edges) if (edge.from === id && edge.to) queue.push(edge.to);
+    }
+  }
+  return interlockings.filter(interlocking => !reached.has(interlocking.id)).map(interlocking => finding(
+    "planner.journey.interlocking-composed",
+    interlocking.file,
+    journeys.length
+      ? `${interlocking.id} is reached by none of the ${journeys.length} journey(s): no journey enters at it and no reachable continuation leads to it`
+      : `${interlocking.id} is not composed into any journey: the plan declares ${interlockings.length} interlocking(s) and no journey under plan/_journeys/`,
+  ));
+}
+
 /** Bun realization of the planner validators that depend only on committed plan
  * artifacts. Runtime/session/GitHub validators deliberately stay outside this package. */
 export async function validateStaticPlannerConventions(root = process.cwd()): Promise<PlanFinding[]> {
@@ -283,6 +311,7 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
   findings.push(...await themeRegistryFindings(root, graph, registry));
   findings.push(...await trainRegistryFindings(root));
   findings.push(...journeyContinuationFindings(graph));
+  findings.push(...journeyCompositionFindings(graph));
 
   return findings;
 }
