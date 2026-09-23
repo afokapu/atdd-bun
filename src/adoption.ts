@@ -24,11 +24,17 @@ export type AdoptionMode = "greenfield" | "brownfield";
 export type Adoption = { mode: AdoptionMode; base: string };
 export const defaultAdoption: Adoption = { mode: "greenfield", base: "origin/HEAD" };
 
-/** The adoption declared in atdd-bun.yaml. An unknown mode is treated as greenfield: the strict reading. */
+/** A base that moves with the change itself (HEAD, @, FETCH_HEAD, …) would measure a change against itself
+ * and leave an empty slice, so it is never a valid base. */
+export const selfRelativeRef = (ref: string) => /^(?:@|(?:[A-Z_]*_)?HEAD)(?:$|[~^@{])/.test(ref.trim());
+
+/** The adoption declared in atdd-bun.yaml. An unknown mode, or a brownfield base that is relative to the
+ * change itself, is read as greenfield: the strict reading. */
 export function adoptionOf(config: unknown): Adoption {
   const value = config && typeof config === "object" ? (config as { adoption?: unknown }).adoption : undefined;
   const record = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-  return { mode: record.mode === "brownfield" ? "brownfield" : "greenfield", base: typeof record.base === "string" && record.base ? record.base : defaultAdoption.base };
+  const base = typeof record.base === "string" && record.base ? record.base : defaultAdoption.base;
+  return { mode: record.mode === "brownfield" && !selfRelativeRef(base) ? "brownfield" : "greenfield", base };
 }
 
 export async function adoptionPolicy(root: string): Promise<Adoption> {
@@ -42,7 +48,7 @@ const git = async (root: string, args: string[]) => { const child = Bun.spawn({ 
  * push to the base branch itself has nothing to merge into, so it is judged against its parent. */
 export async function baseCommit(root: string, ref?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<string | null> {
   const target = ref ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : defaultAdoption.base);
-  if ((await git(root, ["rev-parse", "--verify", "--quiet", `${target}^{commit}`])).code) return null;
+  if (selfRelativeRef(target) || (await git(root, ["rev-parse", "--verify", "--quiet", `${target}^{commit}`])).code) return null;
   let against = (await git(root, ["merge-base", "HEAD", target])).out;
   if (push && against && against === (await git(root, ["rev-parse", "HEAD"])).out) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
   return against || null;

@@ -121,6 +121,29 @@ test("an unknown or malformed adoption mode is read as greenfield, which blocks 
   expect(partition("/r", "greenfield", [finding], { files: new Set(), identities: new Set() }).blocking).toEqual([finding]);
 });
 
+test("a base relative to the change itself is invalid: the adoption reads as greenfield", async () => {
+  for (const base of ["HEAD", "HEAD~1", "@", "@{u}", "FETCH_HEAD", "ORIG_HEAD"]) expect(adoptionOf({ adoption: { mode: "brownfield", base } }).mode, base).toBe("greenfield");
+  for (const base of ["main", "origin/main", "origin/HEAD"]) expect(adoptionOf({ adoption: { mode: "brownfield", base } }).mode, base).toBe("brownfield");
+  const root = await legacyRepo("adoption:\n  mode: brownfield\n  base: HEAD\n");
+  try {
+    await addSlice(root); await writeFile(join(root, "src/wagons/orders/features/place/domain/stray.ts"), STRAY);
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "stray");
+    const pushed = await runHook("pre-push", root, [], `refs/heads/work ${await git(root, "rev-parse", "HEAD")} refs/heads/work ${"0".repeat(40)}\n`);
+    expect(pushed.ok).toBeFalse();
+    expect(pushed.message).toContain("stray.ts");
+    expect((await gate({ root, base: "HEAD" })).outside).toBe(0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
+test("a new branch pushed at its base has no distinguishable slice, so pre-push audits everything", async () => {
+  const root = await legacyRepo();
+  try {
+    const pushed = await runHook("pre-push", root, [], `refs/heads/work ${await git(root, "rev-parse", "HEAD")} refs/heads/work ${"0".repeat(40)}\n`);
+    expect(pushed.ok).toBeFalse();
+    expect(pushed.message).toContain("base not found, full audit");
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
 test("deleting a feature's only source brings that feature's own obligations into the slice", async () => {
   const root = await legacyRepo();
   try {
