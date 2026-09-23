@@ -43,6 +43,29 @@ test("pre-commit uses the canonical planner schema gate for staged plan artifact
   } finally { await cleanup(root); }
 }, 20_000);
 
+test("declarative registries are exempt from the micro-commit size caps but still validated and removal-approved", async () => {
+  const root = await repo(); try {
+    const registry = (entries: number) => ["contracts:", ...Array.from({ length: entries }, (_, i) => `  - id: bad${i}\n    path: nope\n    theme: t\n    producers: []`)].join("\n") + "\n";
+    await mkdir(join(root, "contracts"), { recursive: true });
+    await writeFile(join(root, "contracts/_contracts.yaml"), registry(150)); await git(root, ["add", "contracts/_contracts.yaml"]);
+    const large = await runHook("pre-commit", root);
+    expect(large.ok).toBeFalse(); expect(large.message).not.toContain("exceed"); expect(large.message).toContain("planner.contract.registry-coherence");
+    await writeFile(join(root, "atdd-bun.yaml"), "require_traceability: false\n"); await git(root, ["add", "atdd-bun.yaml"]);
+    expect((await runHook("pre-commit", root)).message).toContain("planner.contract.registry-coherence");
+    await writeFile(join(root, "big.ts"), Array.from({ length: 400 }, (_, i) => `export const v${i} = ${i};`).join("\n") + "\n"); await git(root, ["add", "big.ts"]);
+    // 400 code lines + 1 atdd-bun.yaml line; the 601 staged registry lines are not counted.
+    expect((await runHook("pre-commit", root)).message).toContain("staged changed lines 401 exceed 350");
+    await git(root, ["commit", "-qm", "seed registry", "--no-verify"]);
+    const message = join(root, "message"); await writeFile(message, "rewrite\n");
+    await writeFile(join(root, "contracts/_contracts.yaml"), registry(150).replaceAll("path: nope", "path: nope2")); await git(root, ["add", "-A"]);
+    expect((await runHook("commit-msg", root, [message])).ok).toBeTrue();
+    await git(root, ["reset", "-q", "--hard"]); await rm(join(root, "contracts/_contracts.yaml")); await git(root, ["add", "-A"]);
+    const removal = await runHook("commit-msg", root, [message]);
+    expect(removal.ok).toBeFalse(); expect(removal.message).toContain("registry removal of 601 net lines");
+    await writeFile(message, "remove registry\n[mass-delete-approved]\n"); expect((await runHook("commit-msg", root, [message])).ok).toBeTrue();
+  } finally { await cleanup(root); }
+}, 30_000);
+
 test("pre-push fails closed on a protected destination and post-commit remains advisory without network or ATDD", async () => {
   const root = await repo(); try { await installHooks(root); const head = (await git(root, ["rev-parse", "HEAD"])).out.trim(); expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse(); expect((await runHook("post-commit", root)).ok).toBeTrue(); const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8"); expect(dispatcher).not.toContain("http"); expect(dispatcher).not.toContain("bunx"); expect(dispatcher).not.toContain("atdd "); }
   finally { await cleanup(root); }

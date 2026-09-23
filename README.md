@@ -162,6 +162,32 @@ bun run atdd-bun hooks uninstall
 Hooks can be bypassed by Git and therefore are never the merge gate. The CI
 workflow and GitHub branch ruleset are the authority for merging.
 
+### Declarative registries
+
+Micro-commit limits (`max_staged_files`, `max_staged_changed_lines`, default
+350) exist to keep imperative code changes small. They do not apply to
+declarative registries, which can legitimately be hundreds or thousands of lines
+and must not be split into invalid intermediate states. Registries are matched by
+`registry_paths` (default `plan/_*.yaml`, `plan/_*.yml`, `contracts/_*.yaml`,
+`contracts/_*.yml`).
+
+A staged registry is exempt from the size caps only. It is still:
+
+- validated by the `planner` and `traceability` profiles on every commit that
+  touches it, even when `require_traceability` is `false`;
+- subject to removal approval: a net removal above `max_registry_removed_lines`
+  (default 350) needs `[mass-delete-approved]` in the commit message. Rewriting
+  or reordering entries in place is not a removal.
+
+```yaml
+# atdd-bun.yaml
+registry_paths: ["plan/_*.yaml", "contracts/_*.yaml", "telemetry/_*.yaml"]
+max_registry_removed_lines: 200
+```
+
+Duplicate, stale, and ownership checks come from the planner rules, and
+independent review comes from the CI workflow and branch ruleset.
+
 ## Agent skill: the lifecycle in the agent's context
 
 `agent init` gives every coding agent the same short ATDD skill:
