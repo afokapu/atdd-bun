@@ -138,8 +138,10 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   const root = resolve(config.root ?? process.cwd());
   const scanRoots = (config.scanRoots?.length ? config.scanRoots : [root]).map((path) => resolve(root, path));
   const excludes = ["node_modules", ".git", ".atdd", ...(config.excludes ?? [])];
-  // `all` means every profile the operator activated; explicitly named profiles run as asked.
-  const requested = config.profiles ?? ["all"], selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...await enabledProfiles(root)])] : requested;
+  // `all` means every profile the operator activated; explicitly named profiles run as asked. The operator's list
+  // is validated on every run, so a misspelled atdd-bun.yaml fails whichever profile is requested.
+  const requested = config.profiles ?? ["all"], enabled = await enabledProfiles(root);
+  const selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...enabled])] : requested;
   const results = await Promise.all(
     implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
   );

@@ -36,6 +36,7 @@ test("an unknown profile name or an empty list is an error, never a silent run o
   for (const config of ["profiles: [traceabilty]\n", "profiles: []\n", "profiles: traceability\n"]) {
     const root = await repo({ ...TRACE, "atdd-bun.yaml": config });
     await expect(enforce({ root }), config).rejects.toThrow("atdd-bun.yaml profiles");
+    await expect(enforce({ root, profiles: ["coder"] }), `${config} (explicit profile)`).rejects.toThrow("atdd-bun.yaml profiles");
   }
   const root = await repo({ ...TRACE, "atdd-bun.yaml": "profiles: [nope]\n" });
   const child = Bun.spawn({ cmd: [process.execPath, resolve(import.meta.dir, "../src/cli.ts"), "all"], cwd: root, stdout: "pipe", stderr: "pipe" });
