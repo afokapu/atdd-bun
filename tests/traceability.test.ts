@@ -24,6 +24,12 @@ test("every binding header must resolve, not only the first", async () => {
   expect(await findings(root)).toEqual(["traceability.test.binding-resolves test/bad.test.ts", "traceability.test.binding-resolves test/two.test.ts"]);
 });
 
+test("an acceptance without a test is reported where it is declared", async () => {
+  const root = await repo({ "plan/orders/E001.yaml": WMBT });
+  const [finding] = await runImplementation("atdd_traceability_closure", { scanRoots: [root], excludes: [] });
+  expect([finding.rule_id, finding.file, finding.line]).toEqual(["traceability.plan.executable-acceptance-has-test", join(root, "plan/orders/E001.yaml"), 4]);
+});
+
 test("a Tested-By entry counts only under a Tested-By header, and every entry is judged", async () => {
   const root = await repo({
     "plan/orders/E001.yaml": WMBT, "test/one.test.ts": BOUND,

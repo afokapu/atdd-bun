@@ -14,6 +14,7 @@ const testName = /(?:^test_.*|.*(?:\.test|\.spec|_test))\.(?:[cm]?[jt]sx?)$/;
 const violations = [];
 const plans = { acc: new Set(), wmbt: new Set(), train: new Set() };
 const tests = new Map();
+const declaredAt = new Map();
 const sources = [];
 let planDisplay = "plan/";
 
@@ -45,6 +46,8 @@ for (const root of roots) {
         wmbt: /\bwmbt:[A-Za-z0-9_.:-]+/g,
         train: /\btrain:[A-Za-z0-9_.:-]+/g,
       })) for (const match of content.matchAll(re)) plans[kind].add(match[0]);
+      // Where each acceptance is DECLARED (its `urn:` line), so a missing test is reported on the artifact to fix.
+      for (const match of content.matchAll(/^[ \t-]*urn:[ \t]*["']?(acc:[A-Za-z0-9_.:-]+)/gm)) if (!declaredAt.has(match[1])) declaredAt.set(match[1], { path, line: lineOf(content, match[0]) });
       return;
     }
     if (!sourceExtensions.has(name.slice(name.lastIndexOf(".")))) return;
@@ -75,7 +78,8 @@ for (const test of tests.values()) for (const binding of test.bindings) {
 }
 const boundAcceptances = new Set([...tests.values()].flatMap((test) => test.bindings.map((binding) => binding.id)).filter((id) => id.startsWith("acc:")));
 for (const acceptance of plans.acc) {
-  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", planDisplay, 1, `${acceptance} has no Bun test binding`, acceptance);
+  const at = declaredAt.get(acceptance);
+  if (!boundAcceptances.has(acceptance)) add("traceability.plan.executable-acceptance-has-test", at?.path ?? planDisplay, at?.line ?? 1, `${acceptance} has no Bun test binding`, acceptance);
 }
 for (const source of sources) {
   if (!source.testedBy.some((entry) => entry.startsWith("test:"))) {
