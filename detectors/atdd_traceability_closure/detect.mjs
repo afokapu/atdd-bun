@@ -103,14 +103,10 @@ for (const item of [...lifecycle.features, ...lifecycle.trains]) if (item.invali
 if (lifecycle.declared) for (const acceptance of lifecycle.acceptances) if (acceptance.owners.length > 1) {
   add("traceability.lifecycle.acceptance-single-owner", acceptance.file, lineOf(text(acceptance.file), acceptance.acceptance), `${acceptance.acceptance} (${acceptance.wmbt}) is owned by ${acceptance.owners.join(", ")}; exactly one feature must own it`, acceptance.acceptance);
 }
-// Implementation cannot hide behind planned: once component source claims a feature, the feature is
-// executable. This is also the downgrade rule: moving a feature back to planned fails while its source exists.
+// A planned feature may already carry partial source: status never exempts it, because every component's
+// Tested-By above stays strict whatever the feature's status. An implemented feature needs some source.
 const featureOf = (component) => { const [, wagon, slug] = component.split(":"); return `feature:${wagon}:${slug}`; };
 const claimed = new Set(sources.map((source) => featureOf(source.component)));
-for (const source of sources) {
-  const feature = lifecycle.features.find((f) => f.urn === featureOf(source.component));
-  if (feature?.status === "planned") add("traceability.lifecycle.planned-feature-has-no-source", source.path, lineOf(source.head, source.component), `${source.component} implements ${feature.urn}, which is planned; a feature with source is tested or implemented`, source.component);
-}
 for (const feature of lifecycle.features) if (feature.status === "implemented" && !claimed.has(feature.urn)) {
   const at = statusLine(feature.file);
   add("traceability.lifecycle.implemented-feature-has-source", feature.file, at.line, `${feature.urn} is implemented but no source declares \`// URN: component:${feature.wagon}:${feature.slug}:...\``, at.source);

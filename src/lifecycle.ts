@@ -12,9 +12,10 @@ import { loadPlan, type PlanArtifact } from "./planner-kernel";
  * this model loosens nothing that was not explicitly declared planned. Structural validation (schemas,
  * planner, topology) never looks at status: a malformed planned artifact still fails.
  *
- * Downgrade rule, stateless so hooks and CI agree without git history: `planned` is allowed only while no
- * component source claims the feature. Once source exists the feature must be tested or implemented, so a
- * move back to planned can never hide implemented behaviour.
+ * Implementation never hides behind planned: a planned feature may already carry partial source, but every
+ * component's Tested-By must still resolve, and every existing test binding must still resolve, whatever the
+ * status. So a downgrade to planned (stateless, the same in hooks and CI) conceals nothing that exists: it only
+ * defers acceptances that have no test yet, and those stay visible as planned debt in `atdd-bun lifecycle`.
  */
 export const STATUSES = ["planned", "tested", "implemented"] as const;
 export type Status = typeof STATUSES[number];

@@ -59,12 +59,17 @@ test("activating a feature without every acceptance bound fails closure", async 
   expect(await traceability(root)).toEqual([]);
 });
 
-test("a regression to planned fails while component source claims the feature", async () => {
-  const root = await repo({
-    "plan/orders/a.yaml": feature("a", "planned", ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001"),
+test("a planned feature may carry partial source with a valid Tested-By; malformed or unresolved Tested-By still fails", async () => {
+  // One of two acceptances is tested and the source for it exists: partial progress inside planned scope.
+  const files = {
+    "plan/orders/a.yaml": feature("a", "planned", ["wmbt:orders:E001"]), "plan/orders/E001.yaml": wmbt("E001", "001", "002"),
     "test/one.test.ts": bound("acc:orders:E001-UNIT-001"), "src/thing.ts": source("a", ["test:orders:x:E001-UNIT-001"]),
-  });
-  expect(await traceability(root)).toEqual(["traceability.lifecycle.planned-feature-has-no-source src/thing.ts"]);
+  };
+  expect(await traceability(await repo(files))).toEqual([]);
+  // A Tested-By header with no well-formed `- test:` entry, and one naming a test that does not exist.
+  const malformed = "// URN: component:orders:a:Malformed:backend:domain\n// Tested-By:\n// - tst:orders:x:E001-UNIT-001\nexport const m = 1;\n";
+  const root = await repo({ ...files, "src/malformed.ts": malformed, "src/ghost.ts": source("a", ["test:orders:x:E001-UNIT-002"]) });
+  expect(await traceability(root)).toEqual(["traceability.source.tested-by-present src/malformed.ts", "traceability.source.tested-by-resolves src/ghost.ts"]);
 });
 
 test("an implemented feature needs component source; a tested one does not yet", async () => {

@@ -17,7 +17,6 @@ test("the traceability profile is a standalone plan -> test -> source gate", asy
     "traceability.source.tested-by-resolves",
     "traceability.lifecycle.status-valid",
     "traceability.lifecycle.acceptance-single-owner",
-    "traceability.lifecycle.planned-feature-has-no-source",
     "traceability.lifecycle.implemented-feature-has-source",
     "traceability.train.executable-train-has-test",
   ]));

@@ -335,7 +335,6 @@ nodes:
   - tester.htmx.visual-harness
   - traceability.lifecycle.acceptance-single-owner
   - traceability.lifecycle.implemented-feature-has-source
-  - traceability.lifecycle.planned-feature-has-no-source
   - traceability.lifecycle.status-valid
   - traceability.plan.executable-acceptance-has-test
   - traceability.source.tested-by-present
@@ -5041,20 +5040,10 @@ edges:
     constraint: mandatory
     control: internal
     foundation: start_to_start
-    reason: "both keep implementation strict: source is never exempt, and a feature with source is executable"
-    source_ref: traceability.lifecycle.planned-feature-has-no-source
-    strength: important
-    target_ref: traceability.source.tested-by-present
-    type: runs_alongside
-    origin: "@afokapu/atdd-bun"
-  - confidence: 1
-    constraint: mandatory
-    control: internal
-    foundation: start_to_start
-    reason: "the two ends of the source evidence rule: planned means no source, implemented means some"
+    reason: "both read component source headers: an implemented feature needs source, and every source needs a resolving Tested-By"
     source_ref: traceability.lifecycle.implemented-feature-has-source
     strength: important
-    target_ref: traceability.lifecycle.planned-feature-has-no-source
+    target_ref: traceability.source.tested-by-present
     type: runs_alongside
     origin: "@afokapu/atdd-bun"
   - confidence: 1
