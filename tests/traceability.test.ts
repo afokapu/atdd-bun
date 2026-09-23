@@ -23,3 +23,13 @@ test("every binding header must resolve, not only the first", async () => {
   });
   expect(await findings(root)).toEqual(["traceability.test.binding-resolves test/bad.test.ts", "traceability.test.binding-resolves test/two.test.ts"]);
 });
+
+test("a Tested-By entry counts only under a Tested-By header, and every entry is judged", async () => {
+  const root = await repo({
+    "plan/orders/E001.yaml": WMBT, "test/one.test.ts": BOUND,
+    "src/stray.ts": "// URN: component:orders:a:Stray:backend:domain\n// - test:orders:x:E001-UNIT-001\nexport const s = 1;\n",
+    "src/mixed.ts": "// URN: component:orders:a:Mixed:backend:domain\n// Tested-By:\n// - test:orders:x:E001-UNIT-001\n// - not-a-test\nexport const m = 1;\n",
+    "src/good.ts": "// URN: component:orders:a:Good:backend:domain\n// Tested-By:\n// - test:orders:x:E001-UNIT-001\nexport const g = 1;\n",
+  });
+  expect(await findings(root)).toEqual(["traceability.source.tested-by-present src/stray.ts", "traceability.source.tested-by-resolves src/mixed.ts"]);
+});
