@@ -48,7 +48,7 @@ for (const root of roots) {
         train: /\btrain:[A-Za-z0-9_.:-]+/g,
       })) for (const match of content.matchAll(re)) plans[kind].add(match[0]);
       // Where each acceptance is DECLARED (its `urn:` line), so a missing test is reported on the artifact to fix.
-      for (const match of content.matchAll(/^[ \t-]*urn:[ \t]*["']?(acc:[A-Za-z0-9_.:-]+)/gm)) if (!declaredAt.has(match[1])) declaredAt.set(match[1], { path, line: lineOf(content, match[0]) });
+      for (const match of content.matchAll(/\burn:[ \t]*["']?(acc:[A-Za-z0-9_.:-]+)/g)) if (!declaredAt.has(match[1])) declaredAt.set(match[1], { path, line: lineOf(content, match[0]) });
       return;
     }
     if (!sourceExtensions.has(name.slice(name.lastIndexOf(".")))) return;
@@ -68,8 +68,8 @@ for (const root of roots) {
     if (!component) return;
     // Only list entries directly under a `// Tested-By:` header count, and EVERY one of them is judged: a
     // malformed `- not-a-test` after a valid entry fails too. A stray list item elsewhere declares nothing.
-    const lines = head.split("\n"), header = lines.findIndex((line) => /^\s*\/\/\s*Tested-By:\s*$/.test(line)), testedBy = [];
-    if (header !== -1) for (const line of lines.slice(header + 1)) { const entry = line.match(/^\s*\/\/\s*-\s*(\S*)/); if (!entry) break; testedBy.push(entry[1] || "<empty>"); }
+    const lines = head.split("\n"), testedBy = [];
+    lines.forEach((line, header) => { if (!/^\s*\/\/\s*Tested-By:\s*$/.test(line)) return; for (const next of lines.slice(header + 1)) { const entry = next.match(/^\s*\/\/\s*-\s*(\S*)/); if (!entry) break; testedBy.push(entry[1] || "<empty>"); } });
     sources.push({ path, head, component: component[1], testedBy });
   });
 }
