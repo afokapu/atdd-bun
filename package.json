@@ -24,7 +24,8 @@
     "PLANNER_PORT.md",
     "HOOK_AUDIT.md",
     "templates",
-    "integrity.json"
+    "integrity.json",
+    "relationships.yaml"
   ],
   "scripts": {
     "test": "bun test",

@@ -1,0 +1,4 @@
+interlocking_id: interlocking:uncomposed
+routes:
+  - route_id: nominal
+    train_id: train:journey:a

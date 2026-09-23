@@ -65,7 +65,7 @@ image::svg/path-buy-nominal.svg[Buy a product nominal path,opts=inline]
 
 | 2
 | Checkout decision → nominal ⇒ Payment decision → declined
-| loops to interlocking:payment
+| declined
 
 | 3
 | Checkout decision → empty-cart

@@ -179,6 +179,11 @@ theme them by defining `--atdd-ink`, `--atdd-paper`, `--atdd-wagon`,
 `--atdd-error`, `--atdd-exception`, and the like. The output carries no
 timestamp and no package version, so it changes only when the plan does.
 
+The planner requires the journey level itself: `planner.journey.interlocking-composed`
+fails when a plan declares interlockings and no journey, or when an interlocking
+is neither a journey's entrypoint nor reached by one of its continuations.
+`planner.journey.continuation-closure` then checks each declared journey closes.
+
 **Required.** In a repository with `docs/` whose plan has journeys or
 interlockings, the `docs` profile's `planner.docs.journey-view-current` rule
 fails when any generated file is missing, stale, hand-edited, or extra. The
@@ -429,6 +434,17 @@ bun run atdd-bun release check
 It creates no tag, makes no network request, and does not publish anything.
 The separate optional release workflow is where a repository may create a tag or
 publish using its own credentials and registry configuration.
+
+## Convention relationships
+
+`relationships.yaml` relates every convention the package ships (`planner-nodes/`
+and `conventions/`) to at least one other, as
+`planner.relationship.no-orphan-nodes` requires. Edges that touch a shipped
+convention are imported from the upstream ATDD graphs with their `origin`; the
+package adds its own for the conventions it introduces. A test fails when any
+shipped convention has no edge, when the node list drifts from the shipped
+conventions, or when an edge breaks `relationship.schema.json`, so a new
+convention cannot land without its relationships.
 
 ## Verification of this package
 

@@ -21,7 +21,7 @@ async function repo() {
 test("a journey is walked across its interlockings: every path, its end, and the nominal one", async () => {
   const m = await model(), journey = m.journeys[0];
   const paths = journeyPaths(journey, m).map(p => `${p.legs.map(l => `${l.interlocking.split(":")[1]}/${l.route.id}`).join(" > ")} = ${p.end.kind === "terminal" ? p.end.outcome : p.end.kind}`);
-  expect(paths).toEqual(["checkout/nominal > payment/charged > fulfilment/ship = shipped", "checkout/nominal > payment/declined = loop", "checkout/empty-cart = rejected"]);
+  expect(paths).toEqual(["checkout/nominal > payment/charged > fulfilment/ship = shipped", "checkout/nominal > payment/declined = declined", "checkout/empty-cart = rejected"]);
   expect(nominalPath(journey, m)!.legs.map(l => l.route.id)).toEqual(["nominal", "charged", "ship"]);
 });
 

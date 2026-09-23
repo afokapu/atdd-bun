@@ -200,3 +200,47 @@ terminals:
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("every interlocking must be composed into a journey, and a plan with none declares at least one", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-bun-composed-"));
+  const composed = async () => (await validateStaticPlannerConventions(root)).filter(f => f.rule_id === "planner.journey.interlocking-composed").map(f => f.evidence);
+  try {
+    for (const name of ["a", "b", "c"]) {
+      await write(root, `plan/_trains/${name}.yaml`, train(`train:test:${name}`, `test:${name}-complete`));
+      await write(root, `plan/_trains/_interlockings/${name}.yaml`, interlocking(`interlocking:${name}`, "go", `train:test:${name}`));
+    }
+    const none = await composed();
+    expect(none).toHaveLength(3);
+    expect(none[0]).toContain("the plan declares 3 interlocking(s) and no journey");
+
+    await write(root, "plan/_journeys/example.yaml", `schema_version: 1.0.0
+journey_id: journey:example
+title: Example journey
+status: checked
+entrypoint:
+  interlocking_id: interlocking:a
+continuations:
+  - from: { interlocking_id: interlocking:a, route_id: go }
+    artifact: test:a-complete
+    to: { interlocking_id: interlocking:b }
+terminals:
+  - from: { interlocking_id: interlocking:b, route_id: go }
+    outcome: completed
+`);
+    expect(await composed()).toEqual(["interlocking:c is reached by none of the 1 journey(s): no journey enters at it and no reachable continuation leads to it"]);
+
+    await write(root, "plan/_journeys/other.yaml", `schema_version: 1.0.0
+journey_id: journey:other
+title: Other journey
+status: checked
+entrypoint:
+  interlocking_id: interlocking:c
+terminals:
+  - from: { interlocking_id: interlocking:c, route_id: go }
+    outcome: completed
+`);
+    expect(await composed()).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

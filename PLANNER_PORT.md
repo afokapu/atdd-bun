@@ -5,7 +5,7 @@ to port ATDD's full planner yet.
 
 ## Portable planner kernel
 
-The package ships 195 canonical convention nodes in `planner-nodes/` and
+The package ships 196 canonical convention nodes in `planner-nodes/` and
 21 schemas in `planner-schemas/`. It does not ship Python validator files:
 they are executable Python/pytest code, not portable package assets. Port each
 selected validator into Bun/TypeScript before enabling it in a `planner` profile.
