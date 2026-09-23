@@ -23,19 +23,6 @@ terms:
     `route-coverage` proves an admissible route is exercised; `trace-binds-declared-route` proves
     the run is attributable to its declared route. Both are statements about SELECTION. A train
     whose sequence is wrong is selected correctly and runs the wrong thing.
-- term_id: disposition_rationale
-  text: >-
-    advisory because no consumer or fixture satisfies it yet, and because the check is staged
-    rather than gated. The measurement below was TAKEN, not recalled.
-  values:
-    measured_2026_09_07: >-
-      On a data-driven consumer whose TrainRunner genuinely reads the train definition, replacing
-      a train's entire wagon sequence in the plan left the consumer's own e2e suite at 4 passed.
-      The runtime obeyed the new plan; no test looked.
-    measurement_target: the python consumer built for the end-to-end experiment; no Bun consumer surveyed yet
-    escalate_when: >-
-      Consumer suites assert executed sequences and the check has been wired into
-      the bun_interlocking_coverage family gate. Enabling it is a GATE change; the detector is staged.
 content:
   summary: >-
     The tester half of `coder.train.runtime-executes-the-declaration (python; the Bun coder half is not yet authored)`. That rule makes the runtime
@@ -67,7 +54,8 @@ metadata:
   aliases:
   - BUN-TESTER-TRAIN-SEQUENCE-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
   core_design_refs:
   - afokapu/atdd#1248

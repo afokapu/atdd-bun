@@ -7,22 +7,27 @@ node_corpus:
     Every node is shipped as canonical planner reference material. A node is not
     represented as enforced merely because it is present in this corpus.
 
-# A provider implementation must name every canonical rule it realizes. `coverage`
+# A provider implementation must name every canonical rule it realizes. `disposition` is
+# this package's enforcement, always strict: atdd-bun fails on every finding, whatever the
+# canonical node's own metadata says (the nodes are shipped verbatim). `coverage`
 # describes the Bun predicate actually exercised, not an assertion that the entire
 # prose convention has been ported.
 canonical_bun_enforcement:
   - rule_id: planner.train.naming
+    disposition: strict
     origin: schema-validator
     coverage: complete
     predicates:
       - train definitions and interlocking route targets use train:<subject>:<slug>
   - rule_id: planner.train.registry-coherence
+    disposition: strict
     origin: core-validator-port
     coverage: complete
     predicates:
       - every registry path resolves to a train document
       - every non-sidecar train document is registered
   - rule_id: planner.journey.continuation-closure
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
@@ -32,12 +37,14 @@ canonical_bun_enforcement:
       - continuation destinations resolve to interlockings
       - disconnected continuation or terminal sources are rejected
   - rule_id: planner.journey.interlocking-composed
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
       - a plan that declares interlockings declares at least one journey
       - every interlocking is a journey entrypoint or the destination of a continuation reachable from one
   - rule_id: planner.wagon.no-consume-cycle
+    disposition: strict
     origin: core-validator-port
     coverage: partial
     predicates:
@@ -45,6 +52,7 @@ canonical_bun_enforcement:
     unported:
       - multi-wagon strongly-connected-component detection
   - rule_id: planner.contract.registry-coherence
+    disposition: strict
     origin: core-validator-port
     coverage: complete
     predicates:
@@ -55,27 +63,32 @@ canonical_bun_enforcement:
       - registry identity theme matches its identity namespace
       - registry paths resolve to contract documents
   - rule_id: planner.theme.must-be-canonical
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
       - every declared theme belongs to plan/_themes.yaml
       - the package supplies no taxonomy besides reserved index 0
   - rule_id: planner.theme.theme-zero-mandatory
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
       - plan/_themes.yaml index 0 is commons
   - rule_id: planner.theme.urn-namespace-matches
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
       - a themed wagon's produced identities begin with that theme
   - rule_id: planner.artifact-naming.theme-first-identity
+    disposition: strict
     origin: bun-custom-validator
     coverage: complete
     predicates:
       - artifact identity themes are declared in plan/_themes.yaml
   - rule_id: planner.wagon.urn
+    disposition: strict
     origin: bun-custom-validator
     coverage: partial
     predicates:
@@ -83,6 +96,7 @@ canonical_bun_enforcement:
     unported:
       - documented directory and file layout
   - rule_id: planner.wagon.urn-naming
+    disposition: strict
     origin: bun-custom-validator
     coverage: partial
     predicates:
@@ -90,6 +104,7 @@ canonical_bun_enforcement:
     unported:
       - verb-object preference
   - rule_id: planner.wagon.produce-consume-artifacts
+    disposition: strict
     origin: bun-custom-validator
     coverage: partial
     predicates:
@@ -97,6 +112,7 @@ canonical_bun_enforcement:
     unported:
       - complete required-field and URN-shape validation
   - rule_id: planner.wagon.features
+    disposition: strict
     origin: bun-custom-validator
     coverage: partial
     predicates:
@@ -104,6 +120,7 @@ canonical_bun_enforcement:
     unported:
       - complete feature-manifest coverage
   - rule_id: planner.wagon.telemetry-filesystem
+    disposition: strict
     origin: bun-custom-validator
     coverage: partial
     predicates:

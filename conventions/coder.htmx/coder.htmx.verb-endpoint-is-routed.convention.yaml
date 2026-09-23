@@ -35,7 +35,7 @@ content:
 
     STATIC PATHS ONLY. An endpoint built by interpolation (`/orders/${id}/void`) cannot be compared
     to a server route by text, and guessing would report on correct code. Those are skipped, exactly
-    as the Vite family treats an unresolvable trainId as advisory rather than inventing a verdict.
+    as the Vite family leaves an unresolvable trainId unjudged rather than inventing a verdict.
 
     The Station Master is found by the JOURNEY_MAP it DECLARES, never by filename. Matching is on
     the whole path or its distinctive terminal segment: matching any segment was the first attempt
@@ -57,7 +57,7 @@ content:
   exceptions:
     - "`hx-get` endpoints are NOT reported; fetching a fragment is presentation, not a journey."
     - An endpoint written with interpolation is skipped rather than guessed at, preserving the
-      advisory treatment this hub gives statically unresolvable bindings.
+      hub's decision to leave statically unresolvable bindings unjudged.
 metadata:
   aliases:
     - HTMX-VERB-ENDPOINT-ROUTED-001

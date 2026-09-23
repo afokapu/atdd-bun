@@ -30,23 +30,6 @@ terms:
     a declared `route_id` that appears nowhere in a runtime which does not load the declaration.
     A data-driven runtime serves every declared route by construction and mentions none of them as
     literals, so this is only ever evaluated against a transcribing runtime.
-- term_id: disposition_rationale
-  text: >-
-    advisory because NO consumer satisfies it today, including this package's own fixtures until
-    the commit that introduced this node. The measurement below was TAKEN, not recalled.
-  values:
-    measured_2026_09_07: >-
-      A Bun consumer was built from scratch in this stack's idiom to establish the read
-      vocabulary, because the python heuristic (yaml.safe_load / read_text) matches NOTHING a
-      compliant Bun runtime does — porting it blind would have reported every Bun consumer as
-      plan-blind. Verified: the compliant consumer is silent, a transcribing one fires naming the
-      literals it restated, and a query-loading one that reads nothing and states nothing stays
-      silent.
-    measurement_target: a Bun consumer repo built for the experiment
-    escalate_when: >-
-      Consumer runtimes load their declarations and the check has been wired into
-      gates/interlocking-binding.gate.yaml. Enabling it is a GATE change; the detector is staged
-      (`scan_execution`) and deliberately not called from `scan_root`.
 content:
   summary: >-
     The obligation that makes "the train YAML is the source of truth" true of the RUNTIME and not
@@ -94,7 +77,8 @@ metadata:
   aliases:
   - BUN-RUNTIME-EXECUTES-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
   core_design_refs:
   - afokapu/atdd#1248

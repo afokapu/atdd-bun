@@ -35,15 +35,13 @@ content:
   exceptions:
   - Functions with fewer than 3 code lines are not scored.
   - Test files and vendored/build directories are outside the scan.
-  - Pre-existing counts are held flat by a ratchet baseline, not by lowering the threshold.
 metadata:
   aliases:
   # COMPLEXITY-CYCLOMATIC-TS-001 is the SHARED core alias, also carried by the agnostic node and by
   # its python-pytest realization. One obligation, two detectors, two runtimes.
   - COMPLEXITY-CYCLOMATIC-TS-001
   severity: 3
-  # `strict`, matching the python-pytest sibling exactly. A repo adopting this on an
-  # existing codebase records a ratchet baseline rather than lowering the threshold.
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
   disposition: strict
   introduced_in: 0.1.0
 implementation:

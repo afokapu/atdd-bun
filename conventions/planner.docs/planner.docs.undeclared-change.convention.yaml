@@ -17,17 +17,6 @@ terms:
   text: >-
     a changed path equals the `path` of some declared artifact, or the `from` of an `archive`
     artifact. Coverage is exact-path, not prefix or glob.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '0 declarations exist, so every `docs/**` change in the repository today is undeclared and this rule would fire on all of them. That is the reason it ships advisory rather than strict: escalating before the declaration exists would block every commit touching documentation.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: '(requires the core declaration, companion §3, which is not yet implemented)'
-    escalate_when: 'Declarations are being recorded at RATIFY and a full pass over recent merges reports zero undeclared `docs/**` changes.'
 content:
   summary: >-
     The enforceable inverse. Detecting that a change SHOULD HAVE BEEN declared is semantic and not
@@ -73,7 +62,8 @@ metadata:
   aliases:
   - DOCS-DECLARATION-002
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

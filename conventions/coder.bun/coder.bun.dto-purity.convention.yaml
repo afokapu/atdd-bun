@@ -33,7 +33,8 @@ metadata:
   # Core obligation: coder.dto.purity
   - BUN-DTO-PURITY-001
   severity: 3
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

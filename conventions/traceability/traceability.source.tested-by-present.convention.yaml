@@ -1,2 +1,7 @@
 rule_id: traceability.source.tested-by-present
 statement: Each identified implementation component declares a testing witness.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure

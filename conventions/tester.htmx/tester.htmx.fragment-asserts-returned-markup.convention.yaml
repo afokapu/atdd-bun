@@ -40,12 +40,8 @@ metadata:
   # contract from the payload into the markup. Stack-native, not inherited.
   - BUN-FRAGMENT-ASSERTS-MARKUP-001
   severity: 3
-  # Core's tester nodes are largely `documentation-only`, which core's
-  # coverage_report treats as never-fails-the-build. That is right for retrofitting
-  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
-  # that will not be adopted. Gating dispositions here; a repo adopting on an
-  # existing suite records a ratchet baseline instead.
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

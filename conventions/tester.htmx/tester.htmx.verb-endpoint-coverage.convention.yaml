@@ -47,7 +47,8 @@ metadata:
   # ADDED for this stack: core has no node for hypermedia endpoint coverage.
   - BUN-ENDPOINT-COVERAGE-001
   severity: 2
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

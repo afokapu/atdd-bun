@@ -26,19 +26,14 @@ content:
     Let the SMOKE test exercise the real collaborator against real infrastructure, and move the substituted version into a UNIT-phase test where the substitution is honest and expected.
   exceptions:
   - Only SMOKE-phase files are scanned; UNIT tests may substitute freely.
-  - Disposition matches core's `suppress-and-clean`: a ratchet holds existing cases flat.
 metadata:
   aliases:
   # Bun realization of the core obligation `tester.smoke.no-collaborator-substitution`. Core carries no
   # shared alias for it, so the lineage is stated here and in the statement.
   - BUN-SMOKE-NO-COLLABORATOR-SUBSTITUTION-001
   severity: 4
-  # Core's tester nodes are largely `documentation-only`, which core's
-  # coverage_report treats as never-fails-the-build. That is right for retrofitting
-  # and wrong for a new stack: a coverage-binding rule that cannot fail is a rule
-  # that will not be adopted. Gating dispositions here; a repo adopting on an
-  # existing suite records a ratchet baseline instead.
-  disposition: suppress-and-clean
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

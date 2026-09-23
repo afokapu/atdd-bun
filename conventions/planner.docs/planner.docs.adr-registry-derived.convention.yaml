@@ -32,17 +32,6 @@ terms:
   text: >-
     `index.adoc` in the decisions directory, whose entries are computed from the set of ADR files and
     their `:decides:` targets. It contains references to the decisions, never the decisions themselves.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: 'The decisions directory does not exist and there are 0 ADR files. Spec 2 §6 names the first two: ADR-20260906-001 (shared control root) and ADR-20260906-002 (the documentation system itself, authored as current documentation — the proof the system works).'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: 'ls -d docs/architecture/decisions 2>&1 ; find . -name ''adr-*.adoc'' | wc -l'
-    escalate_when: '`docs/architecture/decisions/` exists and its index.adoc matches the derived projection exactly on a full scan.'
 content:
   summary: >-
     A hand-maintained list of decisions drifts from the decisions — precisely the failure class ATDD
@@ -76,7 +65,8 @@ metadata:
   aliases:
   - DOCS-ADR-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

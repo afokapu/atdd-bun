@@ -18,17 +18,6 @@ terms:
     `index.adoc` — the area's entry point and the node the rendered site navigates to. For
     `docs/architecture/decisions/` it is additionally a DERIVED registry, governed by
     `planner.docs.adr-registry-derived`.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '`docs/` exists and holds 71 markdown files; none of purpose/, architecture/, delivery/ or archive/ exists, and there is no index.adoc anywhere. 0 of 6 canonical areas are present, so the rule currently reports nothing and will begin reporting as the tree is created.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: 'ls -d docs docs/purpose docs/architecture docs/delivery docs/archive 2>&1'
-    escalate_when: 'The canonical tree exists in the consuming repository and every existing authored area carries an index.adoc.'
 content:
   summary: >-
     An area without an index is an area the rendered site cannot navigate into and a reader cannot
@@ -60,7 +49,8 @@ metadata:
   aliases:
   - DOCS-TREE-001
   severity: 3
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

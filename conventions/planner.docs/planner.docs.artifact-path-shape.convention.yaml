@@ -17,17 +17,6 @@ terms:
   text: >-
     one entry of `artifacts:` — an `action` (`create`, `modify`, `archive`), a `path`, and for
     `archive` a `from` naming the document being retired.
-- term_id: disposition_rationale
-  text: >-
-    advisory while the consuming corpus is brought into compatibility. The measurement below was
-    TAKEN on 2026-09-06, not recalled — #1782 found this convention's own recorded measurement
-    already stale, so the date lives in the key and the command is recorded beside the result.
-    Re-take it at the escalation checkpoint; never escalate on the number here.
-  values:
-    measured_2026_09_06: '0 declarations exist to check. The `documentation:` block lands with the core unit (companion spec, work item B) and this rule has an empty input until it does. Advisory is the only honest disposition for a rule whose subject does not exist yet.'
-    measurement_target: 'afokapu/atdd @ main (/Users/alecfokapu/Github/atdd/main)'
-    measurement_command: '(the declaration is core''s, companion §3, and is not yet implemented)'
-    escalate_when: 'Documentation declarations are being recorded at RATIFY in the consuming repository and a full pass over recent plans reports zero malformed artifact paths.'
 content:
   summary: >-
     The declaration is a promise about paths. This rule checks the promise is well formed BEFORE the
@@ -75,7 +64,8 @@ metadata:
   aliases:
   - DOCS-DECLARATION-001
   severity: 2
-  disposition: advisory
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
   introduced_in: 0.1.0
 implementation:
   type: validator

@@ -1,2 +1,7 @@
 rule_id: traceability.plan.executable-acceptance-has-test
 statement: Every declared acceptance is bound by at least one Bun test.
+metadata:
+  disposition: strict
+implementation:
+  type: validator
+  ref: atdd_traceability_closure
