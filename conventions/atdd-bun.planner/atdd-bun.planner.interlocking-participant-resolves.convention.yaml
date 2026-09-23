@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.planner.interlocking-participant-resolves
+kind: rule
+status: active
+name: Interlocking participants resolve
+statement: Every participant and lifeline an interlocking lists is either an external actor (`user:…`, `system:…`)
+  or a typed reference to an artifact the plan declares. Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+content:
+  summary: Interlocking participants resolve.
+  normative_text: A routing decision between participants the plan does not declare cannot be traced to anything
+    that implements it.
+  fix_hint: Declare the participant, or correct the lifeline.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-PLANNER-INTERLOCKING-PARTICIPANT-RESOLVES
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: planner_plan_integrity

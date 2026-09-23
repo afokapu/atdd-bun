@@ -1,0 +1,5 @@
+urn: wmbt:orders:E001
+statement: Place an order.
+acceptances:
+  - identity:
+      purpose: An acceptance with no acc identity.

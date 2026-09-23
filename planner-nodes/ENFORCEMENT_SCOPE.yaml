@@ -117,8 +117,18 @@ canonical_bun_enforcement:
     coverage: partial
     predicates:
       - duplicate feature references are reported
+      - a wagon with WMBTs declares a feature decomposition (atdd_topology)
+      - every feature a wagon lists is declared by a feature document (atdd_topology)
+      - every WMBT belongs to exactly one feature (atdd_topology)
     unported:
       - complete feature-manifest coverage
+  - rule_id: planner.feature.wagon-link
+    disposition: strict
+    origin: bun-custom-validator
+    coverage: partial
+    predicates:
+      - every feature is listed by exactly one wagon and belongs to it
+      - source and test URNs name a declared feature
   - rule_id: planner.wagon.telemetry-filesystem
     disposition: strict
     origin: bun-custom-validator
@@ -130,7 +140,7 @@ canonical_bun_enforcement:
 
 reference_only:
   selection: "every canonical planner node not named in canonical_bun_enforcement"
-  count: 181
+  count: 180
 
 package_integrity_guard:
   implementation_id: planner.plan-integrity.bun

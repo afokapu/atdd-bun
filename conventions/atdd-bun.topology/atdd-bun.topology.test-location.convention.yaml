@@ -1,0 +1,34 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.topology.test-location
+kind: rule
+status: active
+name: Feature tests live beneath their feature and bind a declared acceptance
+statement: 'When the plan models at least one wagon, feature or WMBT, every test beneath `<test_root>` carries `URN:
+  test:{wagon}:{feature}:{acceptance}`, lives beneath `<test_root>/<wagon>/features/<feature>/{unit,contract,integration}/`,
+  and binds `Acceptance: acc:{wagon}:{acceptance}` declared by a WMBT that the test''s own feature lists. Package
+  rule, strict.'
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+- term_id: topology_settings
+  text: the `topology:` keys `plan_root`, `source_root`, `test_root`, `e2e_root` in `atdd-bun.yaml` (defaults `plan`,
+    `src/wagons`, `tests/wagons`, `e2e`).
+content:
+  summary: Feature tests live beneath their feature and bind a declared acceptance.
+  normative_text: A test proves an acceptance only when it names one that exists; its path says which feature and
+    which kind of test it is.
+  fix_hint: Add the test URN and Acceptance header, and move the test beneath its feature under unit/, contract/
+    or integration/.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-TOPOLOGY-TEST-LOCATION
+  severity: 3
+  disposition: strict
+  introduced_in: 0.6.0
+implementation:
+  type: validator
+  ref: atdd_topology

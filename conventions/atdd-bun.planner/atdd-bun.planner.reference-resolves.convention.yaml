@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.planner.reference-resolves
+kind: rule
+status: active
+name: Typed plan references resolve
+statement: Every typed reference an artifact makes (`wagon:`, `feature:`, `wmbt:`, `train:`, `interlocking:`, `journey:`)
+  names an artifact the plan declares. `contract:` references are resolved by the contract registry rules instead.
+  Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+content:
+  summary: Typed plan references resolve.
+  normative_text: A reference to nothing is a relationship the plan claims and cannot show.
+  fix_hint: Declare the referenced artifact, or correct the reference.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-PLANNER-REFERENCE-RESOLVES
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: planner_plan_integrity

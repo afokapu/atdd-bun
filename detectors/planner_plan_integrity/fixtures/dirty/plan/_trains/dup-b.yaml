@@ -1,0 +1,6 @@
+train_id: train:orders:duplicate
+title: Second declaration
+description: The duplicate identity.
+themes: [orders]
+participants: []
+sequence: []

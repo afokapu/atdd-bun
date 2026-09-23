@@ -1,0 +1,29 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.topology.feature-test-coverage
+kind: rule
+status: active
+name: A feature with WMBTs has a test bound to one of its acceptances
+statement: A feature that owns WMBTs has at least one test bound to one of its acceptances. Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+- term_id: topology_settings
+  text: the `topology:` keys `plan_root`, `source_root`, `test_root`, `e2e_root` in `atdd-bun.yaml` (defaults `plan`,
+    `src/wagons`, `tests/wagons`, `e2e`).
+content:
+  summary: A feature with WMBTs has a test bound to one of its acceptances.
+  normative_text: Behaviour declared and never tested is a silent gap.
+  fix_hint: Add a test beneath the feature bound to one of its acceptances.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-TOPOLOGY-FEATURE-TEST-COVERAGE
+  severity: 3
+  disposition: strict
+  introduced_in: 0.6.0
+implementation:
+  type: validator
+  ref: atdd_topology

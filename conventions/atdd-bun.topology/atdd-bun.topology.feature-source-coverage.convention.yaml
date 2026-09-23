@@ -1,0 +1,30 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.topology.feature-source-coverage
+kind: rule
+status: active
+name: A feature with WMBTs has source
+statement: A feature that owns WMBTs has at least one source component beneath `<source_root>/<wagon>/features/<feature>/`.
+  Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+- term_id: topology_settings
+  text: the `topology:` keys `plan_root`, `source_root`, `test_root`, `e2e_root` in `atdd-bun.yaml` (defaults `plan`,
+    `src/wagons`, `tests/wagons`, `e2e`).
+content:
+  summary: A feature with WMBTs has source.
+  normative_text: A feature with behaviour to deliver and no implementation is a gap the plan already names.
+  fix_hint: Implement the feature beneath its directory, or move the WMBTs to the feature that delivers them.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-TOPOLOGY-FEATURE-SOURCE-COVERAGE
+  severity: 3
+  disposition: strict
+  introduced_in: 0.6.0
+implementation:
+  type: validator
+  ref: atdd_topology

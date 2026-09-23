@@ -1,0 +1,33 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.topology.source-location
+kind: rule
+status: active
+name: Feature source lives beneath its feature and carries a component URN
+statement: 'When the plan models at least one wagon, feature or WMBT, every source file beneath `<source_root>`
+  carries `URN: component:{wagon}:{feature}:{name}:{frontend|backend}:{domain|application|integration|presentation}`
+  and lives beneath `<source_root>/<wagon>/features/<feature>/`, for a feature the plan declares. Package rule,
+  strict.'
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+- term_id: topology_settings
+  text: the `topology:` keys `plan_root`, `source_root`, `test_root`, `e2e_root` in `atdd-bun.yaml` (defaults `plan`,
+    `src/wagons`, `tests/wagons`, `e2e`).
+content:
+  summary: Feature source lives beneath its feature and carries a component URN.
+  normative_text: Source is traced to the feature that owns it by its URN and found by its path. Either missing,
+    the feature cannot be shown to have an implementation.
+  fix_hint: Add the component URN header and move the file beneath its feature's directory.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-TOPOLOGY-SOURCE-LOCATION
+  severity: 3
+  disposition: strict
+  introduced_in: 0.6.0
+implementation:
+  type: validator
+  ref: atdd_topology

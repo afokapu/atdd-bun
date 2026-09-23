@@ -1,0 +1,27 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.planner.parse
+kind: rule
+status: active
+name: Plan artifacts parse
+statement: Every `.yaml`, `.yml` or `.json` file under `plan/` parses. Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+content:
+  summary: Plan artifacts parse.
+  normative_text: An artifact that does not parse is invisible to every other rule, so its defects hide behind one
+    error.
+  fix_hint: Fix the syntax the finding reports.
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-PLANNER-PARSE
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: planner_plan_integrity

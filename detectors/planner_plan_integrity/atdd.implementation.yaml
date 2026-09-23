@@ -9,6 +9,7 @@ contract_version: "1.0.0"
 # fail closed before convention validators can answer.
 emits_rule_ids:
   - atdd-bun.planner.parse
+  - atdd-bun.planner.identity-required
   - atdd-bun.planner.identity-unique
   - atdd-bun.planner.reference-resolves
   - atdd-bun.planner.train-wagon-resolves

@@ -34,6 +34,13 @@ emits_rule_ids:
   - planner.docs.adr-registry-derived   # disposition: advisory (registry drifted from :decides:)
   - planner.docs.journey-view-current  # disposition: strict (generated journey view differs from plan/)
 
+# Rules the capability API (checkDocumentation) emits and the filesystem report cannot: they need a
+# declaration, a change set, or a render. tests/docs-capability.test.ts triggers each one.
+api_emits_rule_ids:
+  - planner.docs.artifact-path-shape
+  - planner.docs.undeclared-change
+  - planner.docs.reference-integrity
+
 # TWO SURFACES, ONE DETECTOR.
 #
 #   entrypoint  the CAPABILITY seam. Core calls

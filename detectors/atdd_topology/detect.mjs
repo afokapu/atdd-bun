@@ -21,7 +21,7 @@ function add(rule_id, root, path, evidence, line = 1, source_line = "") { violat
 function walk(dir, predicate, found = []) {
   let entries; try { entries = readdirSync(dir, { withFileTypes: true }); } catch { return found; }
   for (const entry of entries) {
-    if (["node_modules", ".git", ".atdd", "dist", "build", ".next"].includes(entry.name)) continue;
+    if (["node_modules", ".git", ".atdd", "dist", "build", ".next", "_generated"].includes(entry.name)) continue;
     const path = join(dir, entry.name);
     if (entry.isDirectory()) walk(path, predicate, found); else if (predicate(path)) found.push(path);
   }
@@ -47,6 +47,10 @@ for (const root of roots) {
   const wmbts = docs.filter(doc => text(doc.data, "urn").startsWith("wmbt:")).map(doc => { const [, wagon, code] = text(doc.data, "urn").split(":"); return { ...doc, wagon, code, urn: text(doc.data, "urn") }; });
   const featureByUrn = new Map(features.map(feature => [feature.urn, feature])), memberships = new Map(), wmbtOwners = new Map(), sourceByFeature = new Map(), testByFeature = new Map();
   const acceptances = new Set(wmbts.flatMap(wmbt => list(wmbt.data, "acceptances").map(acceptance => text(acceptance?.identity, "urn")).filter(Boolean)));
+  // The feature(s) that own each acceptance, through the WMBTs they list: a test is credited only to its owner.
+  const acceptanceOwners = new Map();
+  for (const feature of features) for (const wmbtUrn of list(feature.data, "wmbts").map(String)) for (const wmbt of wmbts.filter(w => w.urn === wmbtUrn))
+    for (const acceptance of list(wmbt.data, "acceptances").map(a => text(a?.identity, "urn")).filter(Boolean)) acceptanceOwners.set(acceptance, [...(acceptanceOwners.get(acceptance) || []), `${feature.wagon}:${feature.slug}`]);
   const trains = new Set(docs.map(doc => text(doc.data, "train_id")).filter(Boolean));
 
   for (const wagon of wagons) {
@@ -95,6 +99,7 @@ for (const root of roots) {
     const binding = `acc:${wagon}:${acceptance}`;
     if (h.acceptance.value !== binding) add("atdd-bun.topology.test-location", root, path, `${h.urn.value} must bind Acceptance: ${binding}`, h.acceptance.line, h.acceptance.raw);
     else if (!acceptances.has(binding)) add("atdd-bun.topology.test-location", root, path, `${binding} is not declared by a WMBT in ${cfg.plan_root}/`, h.acceptance.line, h.acceptance.raw);
+    else if (acceptanceOwners.has(binding) && !acceptanceOwners.get(binding).includes(`${wagon}:${feature}`)) add("atdd-bun.topology.test-location", root, path, `${binding} belongs to feature:${acceptanceOwners.get(binding).join(", feature:")}, not feature:${wagon}:${feature}; a test lives beneath the feature whose acceptance it proves`, h.acceptance.line, h.acceptance.raw);
     else testByFeature.set(`${wagon}:${feature}`, [...(testByFeature.get(`${wagon}:${feature}`) || []), path]);
   }
   for (const feature of features) if (list(feature.data, "wmbts").length) {
@@ -111,8 +116,13 @@ for (const root of roots) {
   for (const path of walk(e2eRoot, path => /\.e2e\.[cm]?[jt]sx?$/.test(path))) {
     const content = read(path), h = header(path);
     if (!/from\s+["']@playwright\/test["']/.test(content) || !/(^|[^.\w])test(\.(describe|only|skip|fixme|fail|slow|step))?\s*\(/m.test(content)) continue;
-    if (h.train.value) browserTrains.add(h.train.value);
-    if (h.journey.value) browserJourneys.add(h.journey.value);
+    // A browser spec carries its journey identity as a test URN, not an Acceptance (tester.htmx forbids
+    // Acceptance on journey specs). It substitutes only when that URN is a valid E2E or SMOKE proof for the
+    // very train or journey it is bound to.
+    // The proof is the `// URN:` header, whole: a URN-shaped string elsewhere in the file (a decoy constant) proves nothing.
+    const proves = (subject) => h.urn.value.startsWith(`test:${subject}:`) && /^(E2E|SMOKE)-\d{3}-[a-z0-9][a-z0-9-]*$/.test(h.urn.value.slice(`test:${subject}:`.length));
+    if (h.train.value && proves(h.train.value)) browserTrains.add(h.train.value);
+    if (h.journey.value && proves(h.journey.value)) browserJourneys.add(h.journey.value);
   }
   const interlockingRoutes = new Set();
   const interlockings = new Map(docs.filter(doc => text(doc.data, "interlocking_id").startsWith("interlocking:")).map(doc => [text(doc.data, "interlocking_id"), doc]));
@@ -153,6 +163,7 @@ for (const root of roots) {
     else if (entry && typeof entry === "object" && entry.exposed === true && existsSync(path)) {
       const h = header(path), match = testUrn.exec(h.urn.value);
       if (!match || !declaredFeatures.has(`${match[1]}:${match[2]}`)) add("atdd-bun.topology.e2e-location", root, path, "journey E2E test requires a test:{wagon}:{feature}:{acceptance} URN naming a declared feature", h.urn.line, h.urn.raw);
+      else if (h.acceptance.value !== `acc:${match[1]}:${match[3]}` || !acceptances.has(h.acceptance.value)) add("atdd-bun.topology.e2e-location", root, path, `journey E2E test requires Acceptance: acc:${match[1]}:${match[3]}, declared by a WMBT in ${cfg.plan_root}/`, h.acceptance.line, h.acceptance.raw);
       if (!trains.has(h.train.value) || !journeyTrains.has(h.train.value)) add("atdd-bun.topology.e2e-location", root, path, `journey E2E Train: must resolve to a reachable selected train; found ${h.train.value || "<missing>"}`, h.train.line, h.train.raw);
     }
   }

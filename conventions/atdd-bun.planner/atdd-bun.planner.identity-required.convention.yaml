@@ -1,0 +1,28 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.planner.identity-required
+kind: rule
+status: active
+name: Plan artifacts carry their identity
+statement: Every plan artifact whose kind the planner recognizes carries its canonical identity (`train_id`, `interlocking_id`,
+  `journey_id`, or `urn`). Package rule, strict.
+terms:
+- term_id: package_rule
+  text: 'a rule of this package''s own gates (`atdd-bun.*`), realized by a package guard rather than a canonical
+    planner node. It is held to the same per-rule checks as every convention: a convention, strict, a failing fixture,
+    relationship edges.'
+content:
+  summary: Plan artifacts carry their identity.
+  normative_text: An artifact without an identity cannot be referenced, bound, or traced; every rule that resolves
+    references silently skips it.
+  fix_hint: 'Add the identity field for the artifact kind, for example `interlocking_id: interlocking:checkout`.'
+  exceptions:
+  - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
+metadata:
+  aliases:
+  - ATDD-BUN-PLANNER-IDENTITY-REQUIRED
+  severity: 3
+  disposition: strict
+  introduced_in: 0.1.0
+implementation:
+  type: validator
+  ref: planner_plan_integrity

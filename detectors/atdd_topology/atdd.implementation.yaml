@@ -10,4 +10,7 @@ emits_rule_ids:
 - atdd-bun.topology.e2e-location
 - atdd-bun.topology.feature-source-coverage
 - atdd-bun.topology.feature-test-coverage
+realizes_convention:
+  - planner.wagon.features
+  - planner.feature.wagon-link
 entrypoint: detect.mjs
