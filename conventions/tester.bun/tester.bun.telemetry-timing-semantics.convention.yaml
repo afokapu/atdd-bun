@@ -26,9 +26,10 @@ content:
   normative_text: |
     Timing semantics live on the tracking-plan item's timing list. For each declared semantic, at
     least one test bound to the item by a Telemetry: header must reference the corresponding
-    behaviour. This deliberately does not prove ordering statically — it cannot, and pretending
-    otherwise would be false precision. Items that declare no timing are not judged, which is how
-    diagnostic logs and internal spans stay out of scope.
+    behaviour — in code or in a test title; comments do not satisfy, and neither does prose in
+    the tracking plan. This deliberately does not prove ordering statically — it cannot, and
+    pretending otherwise would be false precision. Items that declare no timing are not judged,
+    which is how diagnostic logs and internal spans stay out of scope.
   fix_hint: |
     Declare on the item, exercise in the bound test:
 

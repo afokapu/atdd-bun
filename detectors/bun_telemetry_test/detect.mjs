@@ -20,20 +20,31 @@ const checks = readdirSync(join(here, "checks"))
   .sort();
 const td = mkdtempSync(join(tmpdir(), "atdd-bun-fam-"));
 const out = [];
+let crashed = false;
 for (const c of checks) {
   const rep = join(td, c + ".json");
+  let exitedCleanly = true;
   try {
     execFileSync(process.execPath, [join(here, "checks", c)], {
       env: { ...process.env, ATDD_VIOLATIONS_REPORT: rep },
       stdio: ["ignore", "ignore", "inherit"],
     });
   } catch {
-    /* a member may exit non-zero; still try to read its report */
+    exitedCleanly = false; /* a member may exit non-zero after writing its report */
   }
+  let read = false;
   try {
     out.push(...JSON.parse(readFileSync(rep, "utf8")).violations);
+    read = true;
   } catch {}
+  // A member that crashed WITHOUT a report is a detector bug, and swallowing it here is a silent
+  // pass — the exact failure that once hid a broken regex behind zero findings. Fail loudly.
+  if (!exitedCleanly && !read) {
+    process.stderr.write(`family bun_telemetry_test: member ${c} crashed without a violation report\n`);
+    crashed = true;
+  }
 }
+if (crashed) process.exit(2); // a crashed member is a detector bug: fail loudly, not silently
 writeFileSync(reportPath, JSON.stringify({ violations: out }, null, 2), "utf8");
 process.stderr.write("family bun_telemetry_test: " + out.length + " violation(s)\n");
 process.exit(0);

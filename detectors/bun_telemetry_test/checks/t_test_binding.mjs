@@ -7,8 +7,9 @@ import { readRoots, parseJsonEnv, emit } from "../../../lib/scan.mjs";
 import { registry, walkTests, parseTestHeader, readText } from "../_shared.mjs";
 
 // A telemetry test proves an acceptance's required item, and says so in its header:
-// the Telemetry: URN must resolve into the tracking plan, and the Acceptance: it
-// carries must be the acceptance whose decision requires that very item.
+// the Telemetry: URN must resolve into the tracking plan, and at least ONE of the test's
+// Acceptance: bindings must be an acceptance whose decision requires that item — a spec
+// file legitimately covers many acceptances, and any of them may be the requiring one.
 const RULE = "tester.bun.telemetry-test-binding";
 const DEFAULT_EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
 
@@ -31,18 +32,21 @@ if (adopted) {
           violations.push({ rule_id: RULE, file, ...at, evidence: `${reference.value} does not resolve to a tracking-plan item under telemetry/` });
           continue;
         }
-        if (!header.acceptance) {
+        if (!header.acceptances.length) {
           violations.push({ rule_id: RULE, file, ...at, evidence: `binds telemetry but no Acceptance: a telemetry test proves an acceptance's required item` });
           continue;
         }
-        const acceptance = header.acceptance.value;
-        const decision = decisions.get(acceptance);
-        if (!decision) {
-          violations.push({ rule_id: RULE, file, line: header.acceptance.no, col: 1, source_line: header.acceptance.raw, evidence: `${acceptance} is not a declared acceptance in the plan` });
+        const names = header.acceptances.map((binding) => binding.value);
+        const declared = header.acceptances.filter((binding) => decisions.has(binding.value));
+        if (!declared.length) {
+          violations.push({ rule_id: RULE, file, line: header.acceptances[0].no, col: 1, source_line: header.acceptances[0].raw, evidence: `${names.join(", ")} — none is a declared acceptance in the plan` });
           continue;
         }
-        if (decision.disposition !== "required" || !decision.urns.includes(reference.value)) {
-          violations.push({ rule_id: RULE, file, ...at, evidence: `${acceptance} does not require ${reference.value}; bind a test to an acceptance whose telemetry decision lists the item` });
+        if (!declared.some((binding) => {
+          const decision = decisions.get(binding.value);
+          return decision.disposition === "required" && decision.urns.includes(reference.value);
+        })) {
+          violations.push({ rule_id: RULE, file, ...at, evidence: `${names.join(", ")} — none requires ${reference.value}; bind a test to an acceptance whose telemetry decision lists the item` });
         }
       }
     }

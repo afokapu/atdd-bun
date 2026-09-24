@@ -38,6 +38,9 @@ async function walk(root: string): Promise<string[]> {
   const entries = await readdir(root, { withFileTypes: true });
   return (await Promise.all(entries.map(async entry => {
     const path = join(root, entry.name);
+    // `_generated` trees are derived material, never authored plan items — same exclusion the
+    // plan kernel applies under plan/.
+    if (entry.isDirectory() && entry.name === "_generated") return [];
     return entry.isDirectory() ? walk(path) : entry.isFile() && entry.name.endsWith(".json") ? [path] : [];
   }))).flat().sort();
 }

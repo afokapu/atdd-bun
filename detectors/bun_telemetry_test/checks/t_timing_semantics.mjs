@@ -3,15 +3,16 @@
 //
 // CONTRACT (v1.1): reads ATDD_SCAN_ROOTS / ATDD_SCAN_EXCLUDES, writes RAW violations
 // to ATDD_VIOLATIONS_REPORT, exits 0 regardless of count.
-import { readRoots, parseJsonEnv, emit } from "../../../lib/scan.mjs";
+import { readRoots, parseJsonEnv, emit, maskComments } from "../../../lib/scan.mjs";
 import { registry, walkTests, parseTestHeader, readText } from "../_shared.mjs";
 
 // Critical timing semantics are DECLARED on the tracking-plan item (timing:) and
 // exercised by the tests bound to it: post-commit, absent-after-rollback,
 // correlation-across-async. This is deliberately plan-driven: the check cannot
 // prove ordering statically, so it requires the plan to say when ordering matters
-// and the bound tests to reference the behaviour. Diagnostic logs and internal
-// spans that declare no timing are not judged.
+// and the bound tests to reference the behaviour — in code or a test title, never
+// in a comment. Diagnostic logs and internal spans that declare no timing are not
+// judged.
 const RULE = "tester.bun.telemetry-timing-semantics";
 const DEFAULT_EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
 const SEMANTIC_PROBES = {
@@ -30,7 +31,7 @@ if (adopted) {
       const text = readText(file);
       if (!text) continue;
       for (const reference of parseTestHeader(text).telemetry) {
-        testsByItem.set(reference.value, [...(testsByItem.get(reference.value) ?? []), text]);
+        testsByItem.set(reference.value, [...(testsByItem.get(reference.value) ?? []), maskComments(text)]);
       }
     }
   }

@@ -61,7 +61,7 @@ test("a test bound to an acceptance whose decision does not list the item is a f
   });
   try {
     const findings = await run(dir);
-    expect(findings.some(f => f.startsWith("tester.bun.telemetry-test-binding") && f.includes("does not require"))).toBeTrue();
+    expect(findings.some(f => f.startsWith("tester.bun.telemetry-test-binding") && f.includes("none requires"))).toBeTrue();
   } finally { await cleanUp(dir); }
 });
 

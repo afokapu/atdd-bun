@@ -6,3 +6,5 @@ acceptances:
       disposition: required
       events:
         - telemetry:event:be:commons:response-invocation-accepted
+      metrics:
+        - telemetry:metric:be:commons:response-invocation-accepted:duration

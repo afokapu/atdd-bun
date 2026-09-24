@@ -23,9 +23,11 @@ content:
     decision does not list the item proves a relationship the plan never declared.
   normative_text: |
     Every Telemetry: header in a test file is judged on its own line: concrete-URN grammar,
-    registry resolution, presence of an Acceptance: binding, the acceptance's existence in the
-    plan, and the acceptance's decision actually requiring the bound item. A header inside a
-    string literal is not a header.
+    registry resolution, presence of Acceptance: bindings, the bindings' existence in the plan,
+    and at least ONE bound acceptance's decision actually requiring the bound item. A spec file
+    legitimately covers many acceptances (the two-level @covers model); the requiring one may be
+    any of them, so the judgement is over the whole set — none requiring is the finding. A
+    header inside a string literal is not a header.
   fix_hint: |
     Bind both ends of the proof:
 

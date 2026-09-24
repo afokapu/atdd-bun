@@ -3,7 +3,7 @@
 //
 // CONTRACT (v1.1): reads ATDD_SCAN_ROOTS / ATDD_SCAN_EXCLUDES, writes RAW violations
 // to ATDD_VIOLATIONS_REPORT, exits 0 regardless of count.
-import { walk, readRoots, readExcludes, readText, emit } from "../../../lib/scan.mjs";
+import { walk, readRoots, readExcludes, readText, emit, SOURCE_EXT } from "../../../lib/scan.mjs";
 import { registry } from "../registry.mjs";
 
 // The third edge of the traceability graph: every telemetry item an acceptance
@@ -20,7 +20,7 @@ if (adopted) {
   const bound = new Set();
   const excludes = readExcludes();
   for (const root of readRoots()) {
-    for (const file of walk(root, excludes, new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".mts"]))) {
+    for (const file of walk(root, excludes, SOURCE_EXT)) {
       const text = readText(file);
       if (!text) continue;
       for (const raw of text.split("\n")) {

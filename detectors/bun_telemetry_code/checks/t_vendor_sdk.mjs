@@ -12,7 +12,7 @@ import { registry } from "../registry.mjs";
 // directory. A layered file that is neither has no business importing a vendor SDK —
 // type-only imports included, because the coupling is real even when erased.
 const RULE = "coder.bun.telemetry-vendor-sdk";
-const VENDOR_SDK = /^(?:@opentelemetry\/|@sentry\/|@datadog\/|@posthog\/|@statsig\/|@braze\/|@heap\/|@rudderstack\/|dd-trace$|newrelic$|segment$|mixpanel$|amplitude$)/;
+const VENDOR_SDK = /^(?:@opentelemetry\/|@sentry\/|@datadog\/|@posthog\/|@statsig\/|@braze\/|@heap\/|@rudderstack\/|@segment\/|@amplitude\/|@mixpanel\/|dd-trace$|newrelic$|segment$|mixpanel$|amplitude$)/;
 const INFRASTRUCTURE = /[/\\]infrastructure[/\\]/;
 
 const { adopted } = await registry();

@@ -39,18 +39,20 @@ const TELEMETRY_HEADER = /^[ \t]*\/\/[ \t]*Telemetry:[ \t]*(\S+)[ \t]*$/;
 const URN_HEADER = /^[ \t]*\/\/[ \t]*URN:[ \t]*(\S+)[ \t]*$/;
 const ACCEPTANCE_HEADER = /^[ \t]*\/\/[ \t]*Acceptance:[ \t]*(\S+)[ \t]*$/;
 
-/** The header facts a telemetry test is judged on: its URN, its acceptance binding, and every
- * Telemetry: reference (with line numbers, judged one per line). String literals are stripped
- * first: a header inside a string is not a header. */
+/** The header facts a telemetry test is judged on: its URN, EVERY acceptance binding (a spec
+ * file legitimately covers many acceptances — the two-level @covers model), and every Telemetry:
+ * reference (with line numbers, judged one per line). String literals are stripped first: a
+ * header inside a string is not a header. */
 export function parseTestHeader(text) {
   const lines = text.split("\n");
-  const header = { urn: null, acceptance: null, telemetry: [] };
+  const header = { urn: null, acceptances: [], telemetry: [] };
   for (let no = 0; no < lines.length; no++) {
     const line = lines[no].replace(STRING_ON_LINE, '""');
     const asTelemetry = TELEMETRY_HEADER.exec(line);
     if (asTelemetry) { header.telemetry.push({ no: no + 1, value: asTelemetry[1], raw: lines[no].trim() }); continue; }
     if (!header.urn) { const m = URN_HEADER.exec(line); if (m) { header.urn = { no: no + 1, value: m[1], raw: lines[no].trim() }; continue; } }
-    if (!header.acceptance) { const m = ACCEPTANCE_HEADER.exec(line); if (m) header.acceptance = { no: no + 1, value: m[1], raw: lines[no].trim() }; }
+    const asAcceptance = ACCEPTANCE_HEADER.exec(line);
+    if (asAcceptance) header.acceptances.push({ no: no + 1, value: asAcceptance[1], raw: lines[no].trim() });
   }
   return header;
 }

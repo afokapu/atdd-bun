@@ -10,7 +10,8 @@ terms:
 - term_id: vendor_sdk
   text: >-
     an exporter or agent package: @opentelemetry/*, @sentry/*, @datadog/*, dd-trace, newrelic,
-    segment, mixpanel, amplitude, @posthog/*, @statsig/*, @braze/*, @heap/*, @rudderstack/*.
+    segment (bare or @segment/*), mixpanel (bare or @mixpanel/*), amplitude (bare or
+    @amplitude/*), @posthog/*, @statsig/*, @braze/*, @heap/*, @rudderstack/*.
 - term_id: adapter_location
   text: >-
     the integration layer, or an infrastructure/ directory — the outer ring where exporters are
