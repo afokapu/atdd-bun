@@ -54,6 +54,7 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | `traceability` | acceptance → Bun test → source closure: every acceptance tested, every binding and `Tested-By` resolving |
 | `topology` | feature decomposition and the plan, source, test and E2E locations |
 | `planner` | schemas for every plan artifact, graph integrity, the scoped planner rules |
+| `telemetry` | the telemetry tracking plan: item shape, path-mirrored identity and versioning under `telemetry/`, wagon ownership of logical artifacts, the per-acceptance telemetry decision, metric label cardinality, source `Telemetry:` references, raw-string and forbidden-property emission, the vendor-SDK boundary around the TelemetryPort, and telemetry tests that bind the acceptance and item, assert the exact identity on a captured sink, cover every required item, and exercise declared timing semantics |
 | `docs` | the documentation capability, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions |
 | `interlocking` | train/interlocking binding, infrastructure and route coverage |
@@ -90,6 +91,7 @@ topology:                                     # default layout; point it at exis
   source_root: src/wagons
   test_root: tests/wagons
   e2e_root: e2e
+  telemetry_root: telemetry                    # tracking-plan registry; inert until the tree or a decision exists
 frontend:
   viewports: [375, 768, 1280]
   breakpoints: [480, 768, 1024, 1280]

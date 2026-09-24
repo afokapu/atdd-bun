@@ -1,0 +1,58 @@
+schema_version: 1.1.0
+rule_id: planner.telemetry.acceptance-decision
+kind: rule
+status: active
+name: Every acceptance makes an explicit telemetry decision
+statement: >-
+  Every acceptance declares telemetry with disposition required (naming at least one concrete
+  telemetry URN that resolves to a tracking-plan entry) or disposition not-applicable (with a
+  rationale), and every tracking-plan item's acceptance references resolve to declared acceptances
+  (REQUIRED).
+terms:
+- term_id: decision
+  text: >-
+    the acceptance's telemetry block: disposition plus, for required, concrete item lists
+    (events, metrics, traces, logs), or, for not-applicable, a rationale of at least 20 characters.
+- term_id: required_item
+  text: >-
+    a concrete telemetry URN an acceptance demands be observed emitted. It must exist as a
+    tracking-plan item under the telemetry root.
+content:
+  summary: >-
+    The decision removes the false choice between "test every debug log" and "have no observability
+    requirement". Not-applicable is a considered answer, not the absence of one.
+  normative_text: |
+    Once the capability is adopted, silence is not a disposition. An acceptance either requires
+    telemetry — and then each URN it lists must be a well-formed concrete URN present in the
+    tracking plan, or the requirement is unplannable — or it declares not-applicable with a
+    rationale long enough to be an answer (20 characters minimum). In the other direction, a
+    tracking-plan item that names an acceptance nothing declares is a dangling traceability link.
+    Resolution is checked in both directions; the lists are not required to be mirror images,
+    because an item may serve acceptances beyond those that first required it.
+  fix_hint: |
+    Decide, on every acceptance:
+
+      telemetry:
+        disposition: required
+        events: [telemetry:event:be:commons:response-invocation-accepted]
+
+      telemetry:
+        disposition: not-applicable
+        rationale: No externally useful observable outcome beyond the tested return value.
+  exceptions:
+  - >-
+    Diagnostic logs and internal spans are not automatically telemetry obligations. The decision is
+    per acceptance; nothing here requires a dedicated test for every debug-oriented record.
+  - >-
+    Inert until adoption: with no telemetry root and no acceptance telemetry declaration, this rule
+    emits nothing (see planner.telemetry.tracking-plan-schema).
+metadata:
+  aliases:
+  - TELEMETRY-ACCEPTANCE-DECISION-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: planner_telemetry_plan

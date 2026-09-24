@@ -1,0 +1,16 @@
+{
+  "id": "telemetry:event:be:commons:response-invocation-accepted",
+  "version": "1.0.0",
+  "logical_artifact": "telemetry:commons:response-invocation-accepted",
+  "kind": "event",
+  "plane": "be",
+  "owner": "commons",
+  "purpose": "Records that a response invocation passed acceptance so ingress health can be audited.",
+  "acceptances": ["acc:commons:E001-UNIT-001"],
+  "properties": {
+    "response_id": { "type": "string", "classification": "internal", "cardinality": "high" },
+    "outcome": { "type": "string", "allowed_values": ["accepted"] }
+  },
+  "required": ["response_id", "outcome"],
+  "forbidden_properties": ["raw_payload", "secret", "prompt"]
+}

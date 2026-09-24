@@ -1,0 +1,14 @@
+{
+  "id": "telemetry:event:be:commons:orphan-artifact",
+  "version": "1.0.0",
+  "logical_artifact": "telemetry:commons:orphan-artifact",
+  "kind": "event",
+  "plane": "be",
+  "owner": "commons",
+  "purpose": "Records an outcome no wagon has declared ownership of, to exercise the ownership rule.",
+  "acceptances": ["acc:commons:E001-UNIT-001"],
+  "properties": {
+    "outcome": { "type": "string" }
+  },
+  "required": ["outcome"]
+}

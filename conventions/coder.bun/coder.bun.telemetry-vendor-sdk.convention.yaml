@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: coder.bun.telemetry-vendor-sdk
+kind: rule
+status: active
+name: Telemetry vendor SDKs stay in infrastructure adapters
+statement: >-
+  A layered source file outside the integration layer and infrastructure directories MUST NOT
+  import a telemetry vendor SDK (REQUIRED).
+terms:
+- term_id: vendor_sdk
+  text: >-
+    an exporter or agent package: @opentelemetry/*, @sentry/*, @datadog/*, dd-trace, newrelic,
+    segment (bare or @segment/*), mixpanel (bare or @mixpanel/*), amplitude (bare or
+    @amplitude/*), @posthog/*, @statsig/*, @braze/*, @heap/*, @rudderstack/*.
+- term_id: adapter_location
+  text: >-
+    the integration layer, or an infrastructure/ directory — the outer ring where exporters are
+    wired to the neutral TelemetryPort.
+content:
+  summary: >-
+    Core depends only on a TelemetryPort. The moment a domain module imports an exporter, every
+    wagon behind it inherits the vendor, and the plan's exporter-neutrality promise is gone.
+  normative_text: |
+    Files carrying a layer segment (domain, application, presentation, integration, assembly) may
+    import a vendor SDK only when the layer is integration or the path sits under infrastructure/.
+    Type-only imports count: the coupling is real even when erased. Unlayered entrypoints (a
+    composition root, a script) are outside this rule — they wire adapters, they do not become one.
+  fix_hint: |
+    Depend on the port; adapt at the edge:
+
+      // domain/accept-response.ts — no SDK, only the port parameter
+      export function acceptResponse(response, telemetry: TelemetryPort) { telemetry.emit(...); }
+
+      // infrastructure/otel-adapter.ts — the SDK lives here and only here
+      import { metrics } from "@opentelemetry/api";
+  exceptions:
+  - >-
+    The integration layer and infrastructure/ directories are exempt by design: that is where the
+    adapter belongs.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - CODER-TELEMETRY-VENDOR-SDK-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_code

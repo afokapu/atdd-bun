@@ -1,0 +1,51 @@
+schema_version: 1.1.0
+rule_id: coder.bun.telemetry-forbidden-properties
+kind: rule
+status: active
+name: Forbidden properties never reach an emit call
+statement: >-
+  The object literal passed to an emit-like call naming a declared tracking-plan item MUST NOT
+  carry a property the plan forbids on that item (REQUIRED).
+terms:
+- term_id: forbidden_property
+  text: >-
+    a name in the item's forbidden_properties list (raw payloads, secrets, prompts): what must
+    never leave the process on that item. The plan writes snake_case; code may write camelCase;
+    comparison is normalized.
+- term_id: properties_object
+  text: >-
+    the object literal following the first argument of the emit-like call, on the same statement.
+content:
+  summary: >-
+    The forbidden list is a privacy and cost promise. It is enforced where the data leaves: the
+    emit call itself, against the plan entry the call names.
+  normative_text: |
+    When an emit-like call's first argument is a declared concrete id, the properties object is
+    scanned and every top-level key normalized (separators stripped, case folded) against the
+    item's forbidden list. Shorthand properties carry no name of their own and are invisible to
+    this scan; nested objects are judged at their own level. Properties the plan merely does not
+    declare are not forbidden — undeclared-key drift is the generated contract's concern, not this
+    rule's.
+  fix_hint: |
+    Pass the identifier, not the thing it identifies:
+
+      telemetry.emit("telemetry:event:be:commons:response-invocation-accepted", {
+        response_id: response.id,   // the identifier: allowed, planned, high-cardinality-declared
+        // raw_payload: response.raw,  // forbidden by the plan: never attach it
+      });
+  exceptions:
+  - >-
+    Only calls naming a declared item are checked: an id the registry does not hold is the
+    raw-string rule's finding, and double-reporting it here would be noise.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - CODER-TELEMETRY-FORBIDDEN-PROPERTIES-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_code

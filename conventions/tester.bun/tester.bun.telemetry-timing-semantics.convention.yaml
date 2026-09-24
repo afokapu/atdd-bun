@@ -1,0 +1,53 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-timing-semantics
+kind: rule
+status: active
+name: Declared timing semantics are exercised by a bound test
+statement: >-
+  Every timing semantic a tracking-plan item declares (post-commit, absent-after-rollback,
+  correlation-across-async) is exercised by at least one telemetry test bound to that item
+  (REQUIRED).
+terms:
+- term_id: timing_semantic
+  text: >-
+    a declared critical ordering property of an emission: post-commit (only after the transaction
+    commits), absent-after-rollback (never when it rolls back), correlation-across-async
+    (correlation context continues across an async handoff).
+- term_id: exercised
+  text: >-
+    the bound test references the behaviour — commit, rollback, correlation/context — in what it
+    asserts or names. The check is plan-driven and lexical by design: it requires the plan to say
+    when ordering matters and the test to speak to it.
+content:
+  summary: >-
+    Transaction-time telemetry bugs (the event that fires before the commit it describes, the
+    rollback that still emits, the context lost across an await) are exactly the ones return-value
+    tests never catch. The plan declares when ordering matters; the bound tests must speak to it.
+  normative_text: |
+    Timing semantics live on the tracking-plan item's timing list. For each declared semantic, at
+    least one test bound to the item by a Telemetry: header must reference the corresponding
+    behaviour — in code or in a test title; comments do not satisfy, and neither does prose in
+    the tracking plan. This deliberately does not prove ordering statically — it cannot, and
+    pretending otherwise would be false precision. Items that declare no timing are not judged,
+    which is how diagnostic logs and internal spans stay out of scope.
+  fix_hint: |
+    Declare on the item, exercise in the bound test:
+
+      "timing": ["post-commit"]                                // the plan says ordering matters
+      test("emits the planned event once the invocation commits", () => { ... });   // the test speaks to it
+  exceptions:
+  - >-
+    No declared timing, no obligation: a diagnostic log with an empty timing list never triggers
+    this rule.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - TESTER-TELEMETRY-TIMING-SEMANTICS-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_test

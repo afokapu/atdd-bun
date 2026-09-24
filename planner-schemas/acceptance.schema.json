@@ -323,6 +323,57 @@
       }
     },
 
+    "telemetry": {
+      "type": "object",
+      "description": "The acceptance's explicit telemetry decision. `required` names the concrete telemetry items whose emission this acceptance must observe; `not-applicable` records why nothing beyond the tested return value is externally useful. This block supersedes the DESCRIPTIVE half of `signal` (metrics/traces/logs/events); it does not touch the EXECUTABLE bar `signal.metric` + `signal.threshold`, which is a gate, not telemetry.",
+      "$comment": "Introduced with the telemetry tracking-plan profile. Every acceptance in an adopting repository carries exactly one of the two dispositions — the false choice between 'test every debug log' and 'have no observability requirement' is what this block removes. Items listed here must resolve to tracking-plan files under telemetry/ (planner.telemetry.acceptance-decision).",
+      "required": ["disposition"],
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "type": "string",
+          "enum": ["required", "not-applicable"]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 20,
+          "description": "Required with disposition: not-applicable — why no observable outcome beyond the tested return value is externally useful."
+        },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/telemetry_event_urn"}
+        },
+        "metrics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/telemetry_metric_urn"}
+        },
+        "traces": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/telemetry_trace_urn"}
+        },
+        "logs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/definitions/telemetry_log_urn"}
+        }
+      },
+      "allOf": [
+        {
+          "$comment": "not-applicable forbids item lists: an acceptance cannot simultaneously require nothing and require something.",
+          "if": {"properties": {"disposition": {"const": "not-applicable"}}, "required": ["disposition"]},
+          "then": {"not": {"anyOf": [{"required": ["events"]}, {"required": ["metrics"]}, {"required": ["traces"]}, {"required": ["logs"]}]}}
+        },
+        {
+          "$comment": "required declares at least one concrete item; resolution against the tracking plan is a cross-artifact validator concern.",
+          "if": {"properties": {"disposition": {"const": "required"}}, "required": ["disposition"]},
+          "then": {"anyOf": [{"required": ["events"]}, {"required": ["metrics"]}, {"required": ["traces"]}, {"required": ["logs"]}]}
+        }
+      ]
+    },
+
     "metadata": {
       "type": "object",
       "required": ["wagon"],
@@ -389,8 +440,26 @@
             "author": {"type": "string"},
             "created": {"type": "string"}
           }
-        }
+        },
+        "telemetry": {"$ref": "#/properties/telemetry"}
       }
+    },
+    "telemetry_event_urn": {
+      "$comment": "Concrete telemetry URNs accepted in an acceptance's telemetry decision. Same grammar as telemetry-plan.schema.json's id, where path and ownership coherence are additionally checked.",
+      "type": "string",
+      "pattern": "^telemetry:event:(ui|ux|be|nw|db|st|tm|sc|au|fn|if):[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$"
+    },
+    "telemetry_trace_urn": {
+      "type": "string",
+      "pattern": "^telemetry:trace:(ui|ux|be|nw|db|st|tm|sc|au|fn|if):[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$"
+    },
+    "telemetry_log_urn": {
+      "type": "string",
+      "pattern": "^telemetry:log:(ui|ux|be|nw|db|st|tm|sc|au|fn|if):[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$"
+    },
+    "telemetry_metric_urn": {
+      "type": "string",
+      "pattern": "^telemetry:metric:(ui|ux|be|nw|db|st|tm|sc|au|fn|if):[a-z][a-z0-9-]*:[a-z][a-z0-9-]*:(latency|duration|throughput|error_rate|success_rate|count|size|age|staleness|freshness)$"
     }
   }
 }

@@ -45,6 +45,8 @@ test("the package ships every current Bun implementation", () => {
     "bun_interlocking_infrastructure",
     "bun_responsive_detector",
     "bun_security_hygiene_detector",
+    "bun_telemetry_code",
+    "bun_telemetry_test",
     "bun_tester_discipline_detector",
     "bun_ts_metrics_detector",
     "htmx_e2e_detector",
@@ -54,6 +56,7 @@ test("the package ships every current Bun implementation", () => {
     "planner_plan_integrity",
     "planner_schema_validation",
     "planner_static_validators",
+    "planner_telemetry_plan",
   ]);
 });
 

@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Telemetry Tracking-Plan Item Schema",
+  "description": "Validates one concrete telemetry tracking-plan file under telemetry/<theme>/<artifact>/{kind}.{plane}[.{measure}].json. Local shape only: path mirroring, kind/plane/measure coherence with the file name, wagon ownership resolution and acceptance linkage are cross-artifact validator concerns (src/telemetry-plan.ts).",
+  "$comment": "Shipped by the telemetry profile (planner_telemetry_plan). The capability is deliberately inert until a repository adopts it: no telemetry/ root and no acceptance telemetry declaration means no findings. `signal` in acceptance.schema.json keeps the executable bar (signal.metric + signal.threshold); the descriptive arrays it also carries are superseded by the acceptance `telemetry` block and by this registry, and are not renamed here — that migration is a separate, documented step.",
+  "type": "object",
+  "required": ["id", "version", "logical_artifact", "kind", "plane", "owner", "purpose", "acceptances", "properties"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^telemetry:(event|trace|metric|log):(ui|ux|be|nw|db|st|tm|sc|au|fn|if):[a-z][a-z0-9-]*:[a-z][a-z0-9-]*(?::(latency|duration|throughput|error_rate|success_rate|count|size|age|staleness|freshness))?$",
+      "description": "Concrete telemetry URN: telemetry:{kind}:{plane}:{theme}:{artifact}[:{measure}]. Must mirror the file's path and name; the validator checks that coherence."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)$",
+      "description": "SemVer core for this item's contract. Changing properties, required or forbidden_properties is a contract change and must bump it."
+    },
+    "logical_artifact": {
+      "type": "string",
+      "pattern": "^telemetry:[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$",
+      "description": "The stable architectural identity of the observable outcome: telemetry:{theme}:{artifact}. Not an exporter event. Must be owned by exactly one wagon's produce[] telemetry entry."
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["event", "trace", "metric", "log"]
+    },
+    "plane": {
+      "type": "string",
+      "enum": ["ui", "ux", "be", "nw", "db", "st", "tm", "sc", "au", "fn", "if"]
+    },
+    "measure": {
+      "type": "string",
+      "enum": ["latency", "duration", "throughput", "error_rate", "success_rate", "count", "size", "age", "staleness", "freshness"],
+      "description": "Required for metric items (and only metric items); must match the measure segment of the file name and of the id."
+    },
+    "instrument": {
+      "type": "string",
+      "enum": ["counter", "gauge", "histogram", "summary"],
+      "description": "Metric instrument type per the telemetry kind vocabulary."
+    },
+    "unit": {
+      "type": "string",
+      "description": "Unit of measure for metric items (ms, s, bytes, percent, count)."
+    },
+    "owner": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The wagon slug that owns the logical artifact. The validator checks it equals the wagon whose produce[] declares the logical artifact."
+    },
+    "purpose": {
+      "type": "string",
+      "minLength": 20,
+      "description": "The question this item answers. A tracking plan is read by people deciding what to alert and dashboard on; an item that cannot state its question is not planned."
+    },
+    "acceptances": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^acc:[A-Za-z0-9._:-]+$",
+        "description": "Acceptance URNs that require this item. Each must resolve to a declared acceptance in the plan."
+      }
+    },
+    "properties": {
+      "type": "object",
+      "description": "The fields this item may carry, by name. `required` names must all appear here.",
+      "additionalProperties": {
+        "$ref": "#/definitions/property"
+      }
+    },
+    "required": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Property names that must be present on every emission."
+    },
+    "forbidden_properties": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "description": "Property names that must never be attached to this item (raw payloads, secrets, prompts)."
+    },
+    "dimensions": {
+      "type": "array",
+      "description": "Metric labels. Every dimension declares cardinality; high cardinality is forbidden for metrics — use an event, log or trace property instead.",
+      "items": {
+        "type": "object",
+        "required": ["name", "cardinality"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "cardinality": {"type": "string", "enum": ["low", "medium", "high"]}
+        }
+      }
+    },
+    "timing": {
+      "type": "array",
+      "description": "Critical timing semantics a telemetry test bound to this item must exercise: post-commit (emitted only after the transaction commits), absent-after-rollback (never emitted when the transaction rolls back), correlation-across-async (correlation context continues across an async handoff). Declaring a semantic is what makes it testable; a test that cannot exercise it should not claim the item.",
+      "items": {"type": "string", "enum": ["post-commit", "absent-after-rollback", "correlation-across-async"]}
+    }
+  },
+  "definitions": {
+    "property": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "number", "boolean"]
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["internal", "external", "pii"],
+          "description": "Who may see the value. PII forces a justification nobody has to reconstruct later."
+        },
+        "cardinality": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Distinct-value volume. High cardinality is legal in event, log and trace properties where justified; never as a metric label."
+        },
+        "allowed_values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": ["string", "number", "boolean"]},
+          "description": "Closed vocabulary for this property."
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

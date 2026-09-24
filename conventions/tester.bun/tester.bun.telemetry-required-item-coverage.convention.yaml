@@ -1,0 +1,44 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-required-item-coverage
+kind: rule
+status: active
+name: Every required telemetry item has a telemetry test
+statement: >-
+  Every concrete telemetry item an acceptance requires is bound by at least one test file's
+  `// Telemetry:` header (REQUIRED).
+terms:
+- term_id: required_item
+  text: >-
+    a concrete telemetry URN listed by an acceptance whose telemetry disposition is required and
+    that exists in the tracking plan.
+content:
+  summary: >-
+    The evidence leg of the traceability tripod: planned, implemented, tested. The coder rule
+    binds the implementation; this binds the proof. A required item no test covers is a plan
+    nobody can rely on.
+  normative_text: |
+    Required items are collected from acceptance decisions; test bindings from every Telemetry:
+    header in test files. Their difference is reported at the tracking-plan item's own file.
+    Unresolvable required URNs belong to the acceptance-decision rule and are not double-reported.
+  fix_hint: |
+    Give the item its proof:
+
+      // tests/.../accept-response.telemetry.test.ts
+      // Acceptance: acc:commons:E001-UNIT-001
+      // Telemetry: telemetry:metric:be:commons:response-invocation-accepted:duration
+  exceptions:
+  - >-
+    Diagnostic logs and internal spans an acceptance does not require need no dedicated test —
+    only required items are covered by this closure.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - TESTER-TELEMETRY-REQUIRED-ITEM-COVERAGE-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_test

@@ -1,0 +1,24 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: validator
+implementation_id: coder.telemetry.impl
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# The code-side half of the telemetry profile: source references into the tracking
+# plan, raw-string and forbidden-property emission, and the vendor-SDK boundary
+# around the neutral TelemetryPort. Inert until the repository adopts the
+# capability (telemetry root present, or any acceptance declaring a decision).
+emits_rule_ids:
+  - coder.bun.telemetry-source-binding
+  - coder.bun.telemetry-raw-string-emit
+  - coder.bun.telemetry-vendor-sdk
+  - coder.bun.telemetry-forbidden-properties
+  - coder.bun.telemetry-implementation-binding
+realizes_convention:
+  - coder.bun.telemetry-source-binding
+  - coder.bun.telemetry-raw-string-emit
+  - coder.bun.telemetry-vendor-sdk
+  - coder.bun.telemetry-forbidden-properties
+  - coder.bun.telemetry-implementation-binding
+entrypoint: detect.mjs
+report: detect.mjs

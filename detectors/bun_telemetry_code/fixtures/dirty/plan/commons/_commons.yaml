@@ -1,0 +1,6 @@
+urn: wagon:commons
+wagon: commons
+produce:
+  - name: commons:response-invocation
+    contract: null
+    telemetry: telemetry:commons:response-invocation-accepted

@@ -1,0 +1,75 @@
+schema_version: 1.1.0
+rule_id: planner.telemetry.tracking-plan-schema
+kind: rule
+status: active
+name: Tracking-plan items are versioned, path-mirrored registry entries
+statement: >-
+  Every JSON file under the telemetry root is one concrete tracking-plan item at
+  `telemetry/<theme>/<artifact>/{event|trace|metric|log}.<plane>[.<measure>].json`, shape-valid
+  against telemetry-plan.schema.json, with its id and logical artifact mirroring its path, a SemVer
+  version, and no concrete id declared twice (REQUIRED).
+terms:
+- term_id: tracking_plan_item
+  text: >-
+    one JSON file in the telemetry tree declaring a concrete observation: id, version,
+    logical_artifact, kind, plane, owner, purpose, acceptances, properties, required, and
+    optionally forbidden_properties and (for metrics) dimensions.
+- term_id: concrete_item
+  text: >-
+    a telemetry URN with kind and plane: telemetry:{kind}:{plane}:{theme}:{artifact}[:{measure}].
+    Metric items carry a measure segment; event, trace and log items never do.
+- term_id: logical_artifact
+  text: >-
+    the stable architectural identity of an observable outcome, telemetry:{theme}:{artifact}. Not
+    an exporter event; the concrete items under it are.
+- term_id: telemetry_root
+  text: >-
+    the versioned tracking-plan source of truth, `telemetry/` by default, configurable as
+    topology.telemetry_root in atdd-bun.yaml.
+content:
+  summary: >-
+    The telemetry tree is a registry, not a suggestion. Each file is schema-validated, and the
+    file's place in the tree is the authority for its identity: a renamed file or a hand-edited id
+    cannot drift apart silently.
+  normative_text: |
+    Local shape is the JSON Schema's job (telemetry-plan.schema.json): required identity fields, URN
+    grammar, SemVer core version, property declarations with classification and cardinality, and
+    metric dimensions that declare cardinality. Everything the Schema cannot see is this rule's
+    cross-artifact half: the file name's kind, plane and measure must match the declared fields; the
+    id must equal telemetry:{kind}:{plane}:{theme}:{artifact}[:{measure}] derived from the path; the
+    logical artifact must equal telemetry:{theme}:{artifact} from the path; every name in `required`
+    must be declared in `properties`; and no two files may declare the same concrete id.
+  fix_hint: |
+    Name the file for what it is and let the identity follow the path:
+
+      telemetry/commons/response-invocation-accepted/event.be.json
+      {
+        "id": "telemetry:event:be:commons:response-invocation-accepted",
+        "version": "1.0.0",
+        "logical_artifact": "telemetry:commons:response-invocation-accepted",
+        "kind": "event", "plane": "be", "owner": "commons",
+        "purpose": "Records that a response invocation passed acceptance so ingress health can be audited.",
+        "acceptances": ["acc:commons:E001-UNIT-001"],
+        "properties": { "response_id": { "type": "string", "classification": "internal", "cardinality": "high" } },
+        "required": ["response_id"],
+        "forbidden_properties": ["raw_payload", "secret", "prompt"]
+      }
+  exceptions:
+  - >-
+    The capability is inert until adopted. With no telemetry root and no acceptance telemetry
+    declaration anywhere, this rule emits nothing: upgrading the package must not fail a repository
+    that has not opted in. Adoption is a positive act — creating the tree, or making the first
+    acceptance decision.
+  - >-
+    The tree holds only tracking-plan items. Free-form JSON (notes, indexes, generated bundles)
+    does not belong under the telemetry root; every .json file is judged as an item.
+metadata:
+  aliases:
+  - TELEMETRY-PLAN-SCHEMA-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: planner_telemetry_plan

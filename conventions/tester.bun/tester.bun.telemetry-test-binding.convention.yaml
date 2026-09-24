@@ -1,0 +1,52 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-test-binding
+kind: rule
+status: active
+name: Telemetry tests bind the acceptance and the item they prove
+statement: >-
+  A `// Telemetry:` reference in a test file is well-formed, resolves to a tracking-plan item, and
+  the test carries an `Acceptance:` binding to a declared acceptance whose telemetry decision
+  requires that item (REQUIRED).
+terms:
+- term_id: telemetry_test
+  text: >-
+    a test file with a Telemetry: header, a TELEMETRY/EVENT/METRIC URN kind segment, or
+    *.telemetry.test.* colocation.
+- term_id: bound_acceptance
+  text: >-
+    the acceptance named by the test's Acceptance: header. Its telemetry decision must list the
+    bound item — a test proves a requirement, not an acquaintance.
+content:
+  summary: >-
+    The @covers edge of the telemetry graph: acceptance → item → test. A telemetry test that binds
+    an item but no acceptance proves something nobody required; one that binds an acceptance whose
+    decision does not list the item proves a relationship the plan never declared.
+  normative_text: |
+    Every Telemetry: header in a test file is judged on its own line: concrete-URN grammar,
+    registry resolution, presence of Acceptance: bindings, the bindings' existence in the plan,
+    and at least ONE bound acceptance's decision actually requiring the bound item. A spec file
+    legitimately covers many acceptances (the two-level @covers model); the requiring one may be
+    any of them, so the judgement is over the whole set — none requiring is the finding. A
+    header inside a string literal is not a header.
+  fix_hint: |
+    Bind both ends of the proof:
+
+      // URN: test:commons:ingress:E001-UNIT-001
+      // Acceptance: acc:commons:E001-UNIT-001
+      // Telemetry: telemetry:event:be:commons:response-invocation-accepted
+  exceptions:
+  - >-
+    Tests identified as telemetry tests by URN segment or colocation alone (no Telemetry: header)
+    are judged by the captured-sink and identity rules, not this one.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - TESTER-TELEMETRY-TEST-BINDING-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_test
