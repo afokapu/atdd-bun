@@ -1,0 +1,18 @@
+{
+  "id": "telemetry:metric:be:commons:response-invocation-accepted:duration",
+  "version": "1.0.0",
+  "logical_artifact": "telemetry:commons:response-invocation-accepted",
+  "kind": "metric",
+  "plane": "be",
+  "measure": "duration",
+  "instrument": "histogram",
+  "unit": "ms",
+  "owner": "commons",
+  "purpose": "Bounds how long an accepted response invocation takes to complete end to end.",
+  "acceptances": ["acc:commons:E001-UNIT-001"],
+  "properties": {
+    "outcome": { "type": "string", "classification": "internal", "cardinality": "low" }
+  },
+  "required": ["outcome"],
+  "dimensions": [{ "name": "outcome", "cardinality": "low" }]
+}

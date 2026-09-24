@@ -1,0 +1,7 @@
+urn: wmbt:commons:E003
+acceptances:
+  - identity:
+      urn: acc:commons:E003-UNIT-001
+    telemetry:
+      disposition: not-applicable
+      rationale: too short

@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: planner.telemetry.metric-cardinality
+kind: rule
+status: active
+name: High-cardinality identifiers are forbidden as metric labels
+statement: >-
+  Metric tracking-plan items declare only low- or medium-cardinality dimensions, and no dimension
+  names a property declared cardinality high (REQUIRED).
+terms:
+- term_id: dimension
+  text: >-
+    a metric label: an entry of the metric item's dimensions list, with a name and a declared
+    cardinality (low, medium or high).
+- term_id: high_cardinality_identifier
+  text: >-
+    a property whose distinct-value volume is unbounded or near-unbounded (request ids, user ids,
+    session tokens). Legal in event, log and trace properties where the plan justifies it; never as
+    a metric label.
+content:
+  summary: >-
+    A high-cardinality metric label is a backend outage with a YAML file attached: every distinct
+    value becomes a new time series. The plan is where that mistake is cheapest to catch.
+  normative_text: |
+    Metric dimensions must declare cardinality, and high is rejected — both when the dimension
+    itself says high and when the dimension names a property the item declares cardinality high.
+    The identifier still belongs in the plan: carry it as an event, log or trace property, where
+    cardinality is the point rather than a liability.
+  fix_hint: |
+    Keep the identifier, change the signal:
+
+      # telemetry/commons/response-invocation-accepted/metric.be.duration.json
+      "dimensions": [{ "name": "outcome", "cardinality": "low" }]
+      # response_id moves to the sibling event's properties, declared cardinality high.
+  exceptions:
+  - >-
+    Event, log and trace properties may declare cardinality high where justified; this rule judges
+    metric dimensions only.
+metadata:
+  aliases:
+  - TELEMETRY-METRIC-CARDINALITY-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: planner_telemetry_plan

@@ -2,13 +2,14 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-export type Topology = { planRoot: string; sourceRoot: string; testRoot: string; e2eRoot: string };
+export type Topology = { planRoot: string; sourceRoot: string; testRoot: string; e2eRoot: string; telemetryRoot: string };
 
 export const defaultTopology: Topology = {
   planRoot: "plan",
   sourceRoot: "src/wagons",
   testRoot: "tests/wagons",
   e2eRoot: "e2e",
+  telemetryRoot: "telemetry",
 };
 
 const configuredKeys: Array<[keyof Topology, string]> = [
@@ -16,6 +17,7 @@ const configuredKeys: Array<[keyof Topology, string]> = [
   ["sourceRoot", "source_root"],
   ["testRoot", "test_root"],
   ["e2eRoot", "e2e_root"],
+  ["telemetryRoot", "telemetry_root"],
 ];
 
 function safeRelative(value: unknown): string | null {

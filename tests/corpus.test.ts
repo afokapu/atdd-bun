@@ -54,6 +54,7 @@ test("the package ships every current Bun implementation", () => {
     "planner_plan_integrity",
     "planner_schema_validation",
     "planner_static_validators",
+    "planner_telemetry_plan",
   ]);
 });
 

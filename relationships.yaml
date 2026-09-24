@@ -220,6 +220,10 @@ nodes:
   - planner.steps.linguistic-patterns
   - planner.steps.sequence
   - planner.subject.invariants
+  - planner.telemetry.acceptance-decision
+  - planner.telemetry.logical-ownership
+  - planner.telemetry.metric-cardinality
+  - planner.telemetry.tracking-plan-schema
   - planner.theme.definition
   - planner.theme.must-be-canonical
   - planner.theme.theme-zero-mandatory
@@ -5011,4 +5015,54 @@ edges:
     strength: critical
     target_ref: atdd-bun.planner.identity-required
     type: enables
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the tracking-plan tree is the versioned realization of the telemetry URN-to-filesystem mapping
+    source_ref: planner.telemetry.tracking-plan-schema
+    strength: important
+    target_ref: planner.wagon.telemetry-filesystem
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "a tracking-plan item's path mirrors its concrete telemetry identity"
+    source_ref: planner.telemetry.tracking-plan-schema
+    strength: important
+    target_ref: planner.artifact-naming.path-mirrors-identity
+    type: follows
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "wagon produce[] telemetry entries are the ownership declarations items resolve against"
+    source_ref: planner.telemetry.logical-ownership
+    strength: important
+    target_ref: planner.wagon.produce-consume-artifacts
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the disposition decision governs the telemetry URNs an acceptance may declare
+    source_ref: planner.telemetry.acceptance-decision
+    strength: important
+    target_ref: planner.acceptance.signal-telemetry-naming
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "metric measures and dimensions inherit the naming rule's cardinality discipline"
+    source_ref: planner.telemetry.metric-cardinality
+    strength: important
+    target_ref: planner.acceptance.signal-telemetry-naming
+    type: requires
     origin: "@afokapu/atdd-bun"

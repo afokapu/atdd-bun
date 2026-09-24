@@ -1,0 +1,22 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: validator
+implementation_id: planner.telemetry.impl
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# The telemetry tracking plan: the versioned telemetry/ registry, wagon ownership of logical
+# artifacts, and the explicit per-acceptance telemetry decision. Runs only under the telemetry
+# profile and is inert until the repository adopts the capability (telemetry root present, or
+# any acceptance declaring a telemetry decision).
+emits_rule_ids:
+  - planner.telemetry.tracking-plan-schema
+  - planner.telemetry.logical-ownership
+  - planner.telemetry.acceptance-decision
+  - planner.telemetry.metric-cardinality
+realizes_convention:
+  - planner.telemetry.tracking-plan-schema
+  - planner.telemetry.logical-ownership
+  - planner.telemetry.acceptance-decision
+  - planner.telemetry.metric-cardinality
+entrypoint: detect.mjs
+report: detect.mjs

@@ -5,6 +5,8 @@ export type { DocumentationCheck, DocumentationDeclaration, DocumentationRender,
 export { loadPlan, traceabilityPlan, validatePlan } from "./planner-kernel";
 export type { PlanArtifact, PlanFinding, PlanGraph, PlanKind } from "./planner-kernel";
 export { validateStaticPlannerConventions } from "./planner-validators";
+export { validateTelemetryPlan } from "./telemetry-plan";
+export type { TelemetryPlanItem } from "./telemetry-plan";
 export { PLANNER_SCHEMA_RULE_ID, validatePlannerSchemas } from "./planner-schema-validator";
 export { defaultHookPolicy, hookEvents, hooksStatus, installHooks, runHook, uninstallHooks } from "./hooks";
 export type { HookEvent, HookPolicy } from "./hooks";
