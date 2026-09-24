@@ -1,0 +1,8 @@
+urn: wmbt:commons:E001
+acceptances:
+  - identity:
+      urn: acc:commons:E001-UNIT-001
+    telemetry:
+      disposition: required
+      events:
+        - telemetry:event:be:commons:response-invocation-accepted

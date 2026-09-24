@@ -81,6 +81,10 @@ nodes:
   - coder.bun.security-sql-injection
   - coder.bun.station-master-interlocking-routing
   - coder.bun.station-master-journey-routing
+  - coder.bun.telemetry-forbidden-properties
+  - coder.bun.telemetry-raw-string-emit
+  - coder.bun.telemetry-source-binding
+  - coder.bun.telemetry-vendor-sdk
   - coder.bun.wagon-honours-its-contract
   - coder.htmx.fragment-escapes-interpolation
   - coder.htmx.swap-no-inline-handler
@@ -5064,5 +5068,45 @@ edges:
     source_ref: planner.telemetry.metric-cardinality
     strength: important
     target_ref: planner.acceptance.signal-telemetry-naming
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: "a source Telemetry: reference resolves against the tracking-plan registry"
+    source_ref: coder.bun.telemetry-source-binding
+    strength: important
+    target_ref: planner.telemetry.tracking-plan-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: only telemetry an acceptance has decided and the plan declares may be emitted by name
+    source_ref: coder.bun.telemetry-raw-string-emit
+    strength: important
+    target_ref: planner.telemetry.acceptance-decision
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: vendor SDKs stay in infrastructure adapters as framework imports stay out of domain
+    source_ref: coder.bun.telemetry-vendor-sdk
+    strength: important
+    target_ref: coder.bun.commons-domain-no-framework-import
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the forbidden-property list comes from the tracking-plan item
+    source_ref: coder.bun.telemetry-forbidden-properties
+    strength: important
+    target_ref: planner.telemetry.tracking-plan-schema
     type: requires
     origin: "@afokapu/atdd-bun"

@@ -20,12 +20,14 @@ const KINDS = ["event", "trace", "metric", "log"] as const;
 const PLANES = ["ui", "ux", "be", "nw", "db", "st", "tm", "sc", "au", "fn", "if"] as const;
 const MEASURES = ["latency", "duration", "throughput", "error_rate", "success_rate", "count", "size", "age", "staleness", "freshness"] as const;
 const SEGMENT = "[a-z][a-z0-9-]*";
-const CONCRETE_URN = new RegExp(`^telemetry:(?:${KINDS.join("|")}):(?:${PLANES.join("|")}):${SEGMENT}:${SEGMENT}(?::(?:${MEASURES.join("|")}))?$`);
+export const CONCRETE_URN = new RegExp(`^telemetry:(?:${KINDS.join("|")}):(?:${PLANES.join("|")}):${SEGMENT}:${SEGMENT}(?::(?:${MEASURES.join("|")}))?$`);
 const FILE_NAME = new RegExp(`^(event|trace|metric|log)\\.(${PLANES.join("|")})(?:\\.(${MEASURES.join("|")}))?\\.json$`);
 const SEGMENT_PATTERN = new RegExp(`^${SEGMENT}$`);
 const schemaFile = join(resolve(import.meta.dir, ".."), "planner-schemas", "telemetry-plan.schema.json");
 
 export type TelemetryPlanItem = { file: string; data: Record<string, unknown> };
+/** One file under the telemetry root: its place in the tree, its parsed body, or why it would not parse. */
+export type TelemetryFile = { file: string; segments: string[]; data: Record<string, unknown> | null; error?: string };
 
 const finding = (rule_id: string, file: string, evidence: string): PlanFinding => ({ rule_id, file, evidence });
 const text = (value: unknown): string => (typeof value === "string" ? value : "");
@@ -61,36 +63,49 @@ function telemetryOwners(wagons: Array<{ id: string; data: Record<string, unknow
   return owners;
 }
 
-export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanFinding[]> {
+/** Load the tracking plan: the adoption gate plus every file under the telemetry root, parsed or not.
+ * Shared by the plan-side validator and the code-side detector, so both judge the same registry. */
+export async function loadTelemetryFiles(root = process.cwd()): Promise<{ adopted: boolean; files: TelemetryFile[] }> {
   const absolute = resolve(root), topology = await topologyFor(absolute);
   const telemetryRoot = join(absolute, topology.telemetryRoot);
-  const graph = await loadPlan(absolute);
-  const acceptances = graph.artifacts.filter(artifact => artifact.kind === "acceptance");
+  const { artifacts } = await loadPlan(absolute);
   // Adoption is a positive act: create the telemetry root, or let any acceptance declare a telemetry
   // decision. Until then the capability is inert — an upgraded package must not fail an unadopting repo.
-  const adopted = existsSync(telemetryRoot) || acceptances.some(acceptance => acceptance.data.telemetry !== undefined);
+  const adopted = existsSync(telemetryRoot) || artifacts.some(artifact => artifact.kind === "acceptance" && artifact.data.telemetry !== undefined);
+  const files: TelemetryFile[] = [];
+  for (const path of await walk(telemetryRoot)) {
+    const file = relative(absolute, path).replaceAll("\\", "/");
+    const segments = relative(telemetryRoot, path).replaceAll("\\", "/").split("/");
+    try {
+      const data: unknown = JSON.parse(await readFile(path, "utf8"));
+      if (!data || typeof data !== "object" || Array.isArray(data)) { files.push({ file, segments, data: null, error: "tracking-plan item must be a JSON object" }); continue; }
+      files.push({ file, segments, data: data as Record<string, unknown> });
+    } catch (error) {
+      files.push({ file, segments, data: null, error: `could not parse tracking-plan item: ${String(error)}` });
+    }
+  }
+  return { adopted, files };
+}
+
+export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanFinding[]> {
+  const absolute = resolve(root), topology = await topologyFor(absolute);
+  const { adopted, files } = await loadTelemetryFiles(absolute);
   if (!adopted) return [];
 
   const findings: PlanFinding[] = [], validate = await itemValidator(), items: TelemetryPlanItem[] = [], byId = new Map<string, TelemetryPlanItem>();
 
-  for (const path of await walk(telemetryRoot)) {
-    const file = relative(absolute, path).replaceAll("\\", "/");
-    const segments = relative(telemetryRoot, path).replaceAll("\\", "/").split("/");
+  for (const entry of files) {
+    const { file, segments } = entry;
     const name = segments.at(-1) ?? "", match = FILE_NAME.exec(name);
     if (segments.length !== 3 || !match || !SEGMENT_PATTERN.test(segments[0]) || !SEGMENT_PATTERN.test(segments[1])) {
       findings.push(finding("planner.telemetry.tracking-plan-schema", file, `tracking-plan files live at ${topology.telemetryRoot}/<theme>/<artifact>/{event|trace|metric|log}.<plane>[.<measure>].json; found ${file}`));
       continue;
     }
-    let data: unknown;
-    try { data = JSON.parse(await readFile(path, "utf8")); } catch (error) {
-      findings.push(finding("planner.telemetry.tracking-plan-schema", file, `could not parse tracking-plan item: ${String(error)}`));
+    if (!entry.data) {
+      findings.push(finding("planner.telemetry.tracking-plan-schema", file, entry.error ?? "tracking-plan item must be a JSON object"));
       continue;
     }
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      findings.push(finding("planner.telemetry.tracking-plan-schema", file, "tracking-plan item must be a JSON object"));
-      continue;
-    }
-    const record = data as Record<string, unknown>;
+    const record = entry.data;
     if (!validate(record)) {
       for (const error of validate.errors ?? []) findings.push(finding(
         "planner.telemetry.tracking-plan-schema", file,
@@ -123,8 +138,11 @@ export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanF
     else if (id) byId.set(id, { file, data: record });
   }
 
+  const plan = await loadPlan(absolute);
+  const acceptances = plan.artifacts.filter(artifact => artifact.kind === "acceptance");
+
   // Every concrete item resolves to exactly one wagon-owned logical artifact, and owner names that wagon.
-  const owners = telemetryOwners(graph.artifacts.filter(artifact => artifact.kind === "wagon"));
+  const owners = telemetryOwners(plan.artifacts.filter(artifact => artifact.kind === "wagon"));
   for (const item of items) {
     const logical = text(item.data.logical_artifact);
     if (!logical) continue; // the schema finding already names it

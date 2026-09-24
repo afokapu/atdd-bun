@@ -1,0 +1,53 @@
+schema_version: 1.1.0
+rule_id: coder.bun.telemetry-raw-string-emit
+kind: rule
+status: active
+name: No undeclared raw-string telemetry names
+statement: >-
+  An emit-like call (emit, emitted, track, capture, record, logEvent, emitEvent, sendEvent) whose
+  first argument is a string literal naming an event MUST name an item declared in the tracking
+  plan (REQUIRED).
+terms:
+- term_id: emit_like_call
+  text: >-
+    a call to the emit vocabulary, as function or method, with a string literal first argument.
+    Calls with computed first arguments (variables, template literals, contract constants) are
+    invisible to this check by design.
+- term_id: event_shaped_string
+  text: >-
+    a string that looks like a telemetry event name: a telemetry: URN, snake_case, camelCase with
+    an internal case shift, or a Title Case analytics name. Single lowercase words (log levels,
+    keys) are not event names.
+content:
+  summary: >-
+    Undeclared event strings are how tracking plans rot: the string compiles, the dashboard never
+    fills, and nobody owns the difference. The registry is the list of names that may be emitted.
+  normative_text: |
+    When an emit-like call passes an event-shaped string, that string must be a declared concrete
+    telemetry id. A declared id passed as a raw string passes today; once generated contracts ship,
+    emitting even a declared id by string is the drift the contract exists to prevent, and this
+    rule tightens with it. This check does not attempt to prove transaction ordering or any other
+    runtime property — it is a name-resolution check.
+  fix_hint: |
+    Declare the item, then emit through the plan:
+
+      telemetry/commons/response-invocation-accepted/event.be.json   # declares the id
+      telemetry.emit("telemetry:event:be:commons:response-invocation-accepted", { ... });
+  exceptions:
+  - >-
+    Test files are excluded: assertion code legitimately names events it is proving.
+  - >-
+    Strings that are not event-shaped (log levels like "info", single-word keys) never trigger the
+    check; the emit vocabulary with a non-event string is some other concern.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - CODER-TELEMETRY-RAW-STRING-EMIT-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_code

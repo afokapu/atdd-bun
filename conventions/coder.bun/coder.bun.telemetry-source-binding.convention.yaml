@@ -1,0 +1,48 @@
+schema_version: 1.1.0
+rule_id: coder.bun.telemetry-source-binding
+kind: rule
+status: active
+name: Source Telemetry references resolve into the tracking plan
+statement: >-
+  A `// Telemetry:` reference in implementation source names a concrete telemetry URN that resolves
+  to a tracking-plan item under the telemetry root (REQUIRED).
+terms:
+- term_id: telemetry_reference
+  text: >-
+    a line comment of the form `// Telemetry: telemetry:{kind}:{plane}:{theme}:{artifact}[:{measure}]`
+    in a non-test source file, binding the file to the concrete item it emits.
+- term_id: tracking_plan_item
+  text: >-
+    a JSON registry entry under telemetry/<theme>/<artifact>/ whose id is the referenced URN.
+content:
+  summary: >-
+    The Telemetry: header is the source-to-telemetry traceability edge. Like Tested-By, it is a
+    promise the package can check: the URN must be well-formed and the registry must hold it.
+  normative_text: |
+    Implementation source that emits telemetry says so, by name, in a header comment. Two failures
+    are reported: a reference that is not a concrete telemetry URN (grammar), and a reference that
+    is grammatical but names no tracking-plan item (resolution). A header inside a string literal
+    is not a header. Test files are implementation's mirror, not implementation: they are excluded,
+    because a telemetry test legitimately names items while asserting them.
+  fix_hint: |
+    Bind the file to the item it emits, and keep the binding current when the plan renames:
+
+      // Telemetry: telemetry:event:be:commons:response-invocation-accepted
+      export function acceptResponse(response, telemetry) { ... }
+  exceptions:
+  - >-
+    The capability is inert until adopted (no telemetry root and no acceptance telemetry declaration
+    anywhere): an unadopting repository emits nothing, whichever profiles it runs.
+  - >-
+    The header is a line comment in source syntax (`//`). Block comments and markup attributes are
+    not parsed in this realization.
+metadata:
+  aliases:
+  - CODER-TELEMETRY-SOURCE-BINDING-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_code
