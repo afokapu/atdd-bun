@@ -1,0 +1,45 @@
+schema_version: 1.1.0
+rule_id: coder.bun.telemetry-implementation-binding
+kind: rule
+status: active
+name: Required telemetry is bound to its implementation
+statement: >-
+  Every concrete telemetry item an acceptance requires MUST be bound to at least one non-test
+  implementation source file by a `// Telemetry:` header (REQUIRED).
+terms:
+- term_id: required_item
+  text: >-
+    a concrete telemetry URN listed by an acceptance whose telemetry disposition is required.
+- term_id: implementation_binding
+  text: >-
+    a `// Telemetry:` header naming the item in non-test source — the source-to-telemetry edge
+    coder.bun.telemetry-source-binding resolves.
+content:
+  summary: >-
+    The third leg of the traceability tripod: planned, implemented, tested. This rule closes the
+    second leg — a required item no source claims is telemetry the plan believes in and the code
+    has never heard of.
+  normative_text: |
+    Required items are collected from acceptance decisions; implementation bindings from every
+    resolved Telemetry: header in non-test source. Their difference is reported at the tracking-plan
+    item's own file, because that is where the remedy starts: either bind the emitting source, or
+    stop requiring what nothing emits. An unresolvable required URN is the acceptance-decision
+    rule's finding and is not double-reported here.
+  fix_hint: |
+    Bind the emitting source, or drop the requirement:
+
+      // src/.../accept-response.ts
+      // Telemetry: telemetry:metric:be:commons:response-invocation-accepted:duration
+  exceptions:
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - CODER-TELEMETRY-IMPLEMENTATION-BINDING-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_code

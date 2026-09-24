@@ -8,41 +8,8 @@
 // argument is computed (a variable, a template literal, a contract constant) are
 // invisible to these checks by design: they are what the generated contracts use.
 
-/** Blank line comments and block comments with spaces, preserving every line and column
- * offset. Unlike lib/scan.mjs's maskLiteralsAndComments this KEEPS string literals: they are
- * the payload these checks inspect. */
-export function maskComments(text) {
-  const out = text.split("");
-  const blank = (from, to) => {
-    for (let k = from; k < to && k < text.length; k++) if (out[k] !== "\n") out[k] = " ";
-  };
-  let i = 0;
-  while (i < text.length) {
-    const ch = text[i], next = text[i + 1];
-    if (ch === "/" && next === "/") {
-      let j = i;
-      while (j < text.length && text[j] !== "\n") j++;
-      blank(i, j);
-      i = j;
-    } else if (ch === "/" && next === "*") {
-      let j = text.indexOf("*/", i + 2);
-      j = j === -1 ? text.length : j + 2;
-      blank(i, j);
-      i = j;
-    } else if (ch === '"' || ch === "'" || ch === "`") {
-      let j = i + 1;
-      while (j < text.length) {
-        if (text[j] === "\\") { j += 2; continue; }
-        if (text[j] === ch || text[j] === "\n") break;
-        j++;
-      }
-      i = text[j] === ch ? j + 1 : j;
-    } else {
-      i++;
-    }
-  }
-  return out.join("");
-}
+// Comment masking (strings kept) lives in lib/scan.mjs; re-exported for the member checks.
+export { maskComments } from "../../lib/scan.mjs";
 
 const EMIT_CALLEE = /(?<![A-Za-z0-9_$])(?:emit|emitted|track|capture|record|logEvent|emitEvent|sendEvent)(?=\s*\()/g;
 

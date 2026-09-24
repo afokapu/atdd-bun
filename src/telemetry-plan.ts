@@ -63,15 +63,35 @@ function telemetryOwners(wagons: Array<{ id: string; data: Record<string, unknow
   return owners;
 }
 
-/** Load the tracking plan: the adoption gate plus every file under the telemetry root, parsed or not.
- * Shared by the plan-side validator and the code-side detector, so both judge the same registry. */
-export async function loadTelemetryFiles(root = process.cwd()): Promise<{ adopted: boolean; files: TelemetryFile[] }> {
+/** The acceptance's telemetry decision: disposition plus the concrete URNs it lists, any shape. */
+export function telemetryDecisionOf(acceptance: { id: string; data: Record<string, unknown> }): { disposition: string; urns: string[] } {
+  const decision = acceptance.data.telemetry;
+  if (!decision || typeof decision !== "object" || Array.isArray(decision)) return { disposition: "", urns: [] };
+  const record = decision as Record<string, unknown>;
+  return {
+    disposition: text(record.disposition),
+    urns: ["events", "metrics", "traces", "logs"].flatMap(key => (Array.isArray(record[key]) ? record[key] : []).map(text)).filter(Boolean),
+  };
+}
+
+/** Load the tracking plan: the adoption gate, every file under the telemetry root (parsed or
+ * not), and every acceptance's telemetry decision. Shared by the plan-side validator and both
+ * code- and test-side detectors, so all of them judge the same registry. */
+export async function loadTelemetryFiles(root = process.cwd()): Promise<{ adopted: boolean; files: TelemetryFile[]; requiredIds: Set<string>; decisions: Map<string, { disposition: string; urns: string[]; file: string }> }> {
   const absolute = resolve(root), topology = await topologyFor(absolute);
   const telemetryRoot = join(absolute, topology.telemetryRoot);
-  const { artifacts } = await loadPlan(absolute);
+  const plan = await loadPlan(absolute);
+  const acceptances = plan.artifacts.filter(artifact => artifact.kind === "acceptance");
   // Adoption is a positive act: create the telemetry root, or let any acceptance declare a telemetry
   // decision. Until then the capability is inert — an upgraded package must not fail an unadopting repo.
-  const adopted = existsSync(telemetryRoot) || artifacts.some(artifact => artifact.kind === "acceptance" && artifact.data.telemetry !== undefined);
+  const adopted = existsSync(telemetryRoot) || acceptances.some(acceptance => acceptance.data.telemetry !== undefined);
+  const decisions = new Map<string, { disposition: string; urns: string[]; file: string }>();
+  const requiredIds = new Set<string>();
+  for (const acceptance of acceptances) {
+    const decision = telemetryDecisionOf(acceptance);
+    decisions.set(acceptance.id, { ...decision, file: acceptance.file });
+    if (decision.disposition === "required") for (const urn of decision.urns) requiredIds.add(urn);
+  }
   const files: TelemetryFile[] = [];
   for (const path of await walk(telemetryRoot)) {
     const file = relative(absolute, path).replaceAll("\\", "/");
@@ -84,7 +104,7 @@ export async function loadTelemetryFiles(root = process.cwd()): Promise<{ adopte
       files.push({ file, segments, data: null, error: `could not parse tracking-plan item: ${String(error)}` });
     }
   }
-  return { adopted, files };
+  return { adopted, files, requiredIds, decisions };
 }
 
 export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanFinding[]> {
@@ -157,14 +177,13 @@ export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanF
   const registryIds = new Set(items.map(item => text(item.data.id)).filter(Boolean));
   const acceptanceIds = new Set(acceptances.map(acceptance => acceptance.id));
   for (const acceptance of acceptances) {
-    const decision = acceptance.data.telemetry;
-    if (!decision || typeof decision !== "object" || Array.isArray(decision)) {
+    const block = acceptance.data.telemetry;
+    if (!block || typeof block !== "object" || Array.isArray(block)) {
       findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${acceptance.id} declares no telemetry decision; declare telemetry: { disposition: required, events: [...] } or telemetry: { disposition: not-applicable, rationale: ... }`));
       continue;
     }
-    const disposition = text((decision as Record<string, unknown>).disposition);
+    const { disposition, urns } = telemetryDecisionOf(acceptance);
     if (disposition === "required") {
-      const urns = ["events", "metrics", "traces", "logs"].flatMap(key => (Array.isArray((decision as Record<string, unknown>)[key]) ? (decision as Record<string, unknown>)[key] : []).map(text));
       if (!urns.length) findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${acceptance.id} is disposition: required but declares no telemetry items`));
       for (const urn of urns) {
         if (!urn) { findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${acceptance.id} declares an empty telemetry item`)); continue; }
@@ -172,7 +191,7 @@ export async function validateTelemetryPlan(root = process.cwd()): Promise<PlanF
         else if (!registryIds.has(urn)) findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${urn} has no tracking-plan entry under ${topology.telemetryRoot}/`));
       }
     } else if (disposition === "not-applicable") {
-      const rationale = text((decision as Record<string, unknown>).rationale).trim();
+      const rationale = text((block as Record<string, unknown>).rationale).trim();
       if (rationale.length < 20) findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${acceptance.id} is disposition: not-applicable without a rationale (at least 20 characters)`));
     } else {
       findings.push(finding("planner.telemetry.acceptance-decision", acceptance.file, `${acceptance.id} telemetry.disposition must be required or not-applicable, found '${disposition || "<missing>"}'`));

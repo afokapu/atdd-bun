@@ -52,6 +52,8 @@ const clean = async () => repo({
   "plan/commons/E001.yaml": DECIDED,
   "plan/commons/E002.yaml": `urn: wmbt:commons:E002\nacceptances:\n  - identity:\n      urn: acc:commons:E002-UNIT-001\n    telemetry:\n      disposition: not-applicable\n      rationale: No externally useful observable outcome beyond the tested return value.\n`,
   "telemetry/commons/response-invocation-accepted/event.be.json": ITEM,
+  "src/wagons/commons/features/ingress/domain/accept-response.ts": `// Telemetry: telemetry:event:be:commons:response-invocation-accepted\nexport function acceptResponse(response: { id: string }, telemetry: { emit(id: string, properties: Record<string, unknown>): void }): void {\n  telemetry.emit("telemetry:event:be:commons:response-invocation-accepted", { response_id: response.id, outcome: "accepted" });\n}\n`,
+  "tests/wagons/commons/features/ingress/unit/accept-response.telemetry.test.ts": `// URN: test:commons:ingress:E001-UNIT-001\n// Acceptance: acc:commons:E001-UNIT-001\n// Telemetry: telemetry:event:be:commons:response-invocation-accepted\nimport { expect, mock, test } from "bun:test";\n\ntest("emits the planned event", () => {\n  const emit = mock(() => {});\n  expect(emit).toHaveBeenCalledWith("telemetry:event:be:commons:response-invocation-accepted", { response_id: "r-1", outcome: "accepted" });\n});\n`,
 });
 
 test("the capability is inert until adopted: no telemetry root and no declaration means no findings", async () => {

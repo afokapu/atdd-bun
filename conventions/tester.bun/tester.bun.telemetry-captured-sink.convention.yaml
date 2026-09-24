@@ -1,0 +1,47 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-captured-sink
+kind: rule
+status: active
+name: Telemetry tests assert on a captured sink
+statement: >-
+  A telemetry test contains an assertion on the emission itself — `toHaveBeenCalled[With|Times]`, or
+  an expectation on `.emit` / `.emitted` / `.capture` / `.track` / `.record` (REQUIRED).
+terms:
+- term_id: captured_sink
+  text: >-
+    the spy, mock or captured array the emitter writes to: the thing whose CONTENT is the emission.
+    A return value is not a sink.
+- term_id: telemetry_test
+  text: >-
+    a test file with a Telemetry: header, a TELEMETRY/EVENT/METRIC URN kind segment, or
+    *.telemetry.test.* colocation.
+content:
+  summary: >-
+    Same obligation as tester.bun.telemetry-emit, carried into the telemetry profile and joined
+    with the exact-identity requirement: the event is the point, and only the sink saw it fire.
+  normative_text: |
+    A telemetry test that checks a return value has proven the function ran. It has not proven the
+    item fired — and dashboards, alerts and downstream analytics are built on the emission. The
+    predicate is deliberately the emission-assertion vocabulary, not a data-flow analysis: it names
+    what a test must contain, not what the runtime did.
+  fix_hint: |
+    Capture the emitter, assert on it:
+
+      const emit = mock(() => {});
+      acceptResponse({ id: "r-1" }, { emit });
+      expect(emit).toHaveBeenCalledWith("telemetry:event:be:commons:response-invocation-accepted", { response_id: "r-1" });
+  exceptions:
+  - >-
+    Only telemetry-identified tests are scanned; the tester profile's own rule governs the rest.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - TESTER-TELEMETRY-CAPTURED-SINK-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_test

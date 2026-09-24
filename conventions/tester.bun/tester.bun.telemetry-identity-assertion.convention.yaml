@@ -1,0 +1,44 @@
+schema_version: 1.1.0
+rule_id: tester.bun.telemetry-identity-assertion
+kind: rule
+status: active
+name: Telemetry tests assert the exact item identity
+statement: >-
+  Every concrete telemetry URN a telemetry test claims in its `// Telemetry:` header appears in
+  the test's code as an assertion string; a telemetry test with no header asserts at least one
+  concrete telemetry URN (REQUIRED).
+terms:
+- term_id: exact_identity
+  text: >-
+    the concrete telemetry URN, verbatim, inside a string literal of the test. Not a prefix, not a
+    captured-anything matcher, not a comment.
+content:
+  summary: >-
+    A test that mocks an emitter and asserts "called with anything" proves emission happened, not
+    that the planned item is the one that fired. Renames and copy-paste drift hide exactly there.
+  normative_text: |
+    The claimed URNs are the test's Telemetry: headers; each must appear in the comment-masked
+    source as a quoted string, so that the assertion and the plan cannot silently diverge. A
+    telemetry test identified only by URN segment or colocation must carry at least one concrete
+    telemetry: URN in code. When generated contracts ship, the contract identifier satisfies this
+    the same way.
+  fix_hint: |
+    Name the item in the assertion itself:
+
+      expect(emit).toHaveBeenCalledWith("telemetry:event:be:commons:response-invocation-accepted", { response_id: "r-1" });
+  exceptions:
+  - >-
+    Comments do not assert: a URN that appears only in the header or a comment does not satisfy
+    this rule.
+  - >-
+    Inert until adoption, like every rule in this family.
+metadata:
+  aliases:
+  - TESTER-TELEMETRY-IDENTITY-ASSERTION-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.7.0
+implementation:
+  type: validator
+  ref: bun_telemetry_test

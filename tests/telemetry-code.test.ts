@@ -98,7 +98,28 @@ test("forbidden properties are caught through snake_case and camelCase spellings
 test("a reference inside a string literal is not a Telemetry: reference", async () => {
   const dir = await repo({
     ...ADOPTED,
+    "src/wagons/commons/features/ingress/domain/accept.ts": "// Telemetry: telemetry:event:be:commons:response-invocation-accepted\nexport const f = 1;\n",
     "src/wagons/commons/features/ingress/domain/note.ts": `export const note = "// Telemetry: telemetry:event:be:commons:unknown-item";\n`,
   });
   try { expect(await run(dir)).toEqual([]); } finally { await cleanUp(dir); }
+});
+
+test("a required item no source binds is an implementation-binding finding", async () => {
+  const dir = await repo({
+    ...ADOPTED,
+    "plan/commons/E001.yaml": "urn: wmbt:commons:E001\nacceptances:\n  - identity:\n      urn: acc:commons:E001-UNIT-001\n    telemetry:\n      disposition: required\n      events:\n        - telemetry:event:be:commons:response-invocation-accepted\n      metrics:\n        - telemetry:metric:be:commons:response-invocation-accepted:duration\n",
+    "telemetry/commons/response-invocation-accepted/metric.be.duration.json": JSON.stringify({
+      id: "telemetry:metric:be:commons:response-invocation-accepted:duration", version: "1.0.0",
+      logical_artifact: "telemetry:commons:response-invocation-accepted", kind: "metric", plane: "be", measure: "duration",
+      owner: "commons", purpose: "Bounds how long an accepted response invocation takes to complete end to end.",
+      acceptances: ["acc:commons:E001-UNIT-001"], properties: { outcome: { type: "string", cardinality: "low" } },
+      required: ["outcome"], dimensions: [{ name: "outcome", cardinality: "low" }],
+    }, null, 2),
+    "src/wagons/commons/features/ingress/domain/accept.ts": `// Telemetry: telemetry:event:be:commons:response-invocation-accepted\nexport const f = 1;\n`,
+  });
+  try {
+    const findings = (await run(dir)).filter(f => f.startsWith("coder.bun.telemetry-implementation-binding"));
+    expect(findings.length).toBe(1);
+    expect(findings[0]).toContain("telemetry:metric:be:commons:response-invocation-accepted:duration is required by an acceptance but no implementation source binds it");
+  } finally { await cleanUp(dir); }
 });

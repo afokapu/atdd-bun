@@ -1,0 +1,24 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: validator
+implementation_id: tester.telemetry.impl
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# The test-side half of the telemetry profile: telemetry tests bind the acceptance
+# AND the telemetry item they prove, assert the exact identity on a captured sink,
+# every required item has at least one telemetry test, and declared timing
+# semantics are exercised. Inert until the repository adopts the capability.
+emits_rule_ids:
+  - tester.bun.telemetry-test-binding
+  - tester.bun.telemetry-captured-sink
+  - tester.bun.telemetry-identity-assertion
+  - tester.bun.telemetry-required-item-coverage
+  - tester.bun.telemetry-timing-semantics
+realizes_convention:
+  - tester.bun.telemetry-test-binding
+  - tester.bun.telemetry-captured-sink
+  - tester.bun.telemetry-identity-assertion
+  - tester.bun.telemetry-required-item-coverage
+  - tester.bun.telemetry-timing-semantics
+entrypoint: detect.mjs
+report: detect.mjs

@@ -91,6 +91,11 @@
           "cardinality": {"type": "string", "enum": ["low", "medium", "high"]}
         }
       }
+    },
+    "timing": {
+      "type": "array",
+      "description": "Critical timing semantics a telemetry test bound to this item must exercise: post-commit (emitted only after the transaction commits), absent-after-rollback (never emitted when the transaction rolls back), correlation-across-async (correlation context continues across an async handoff). Declaring a semantic is what makes it testable; a test that cannot exercise it should not claim the item.",
+      "items": {"type": "string", "enum": ["post-commit", "absent-after-rollback", "correlation-across-async"]}
     }
   },
   "definitions": {

@@ -13,10 +13,12 @@ emits_rule_ids:
   - coder.bun.telemetry-raw-string-emit
   - coder.bun.telemetry-vendor-sdk
   - coder.bun.telemetry-forbidden-properties
+  - coder.bun.telemetry-implementation-binding
 realizes_convention:
   - coder.bun.telemetry-source-binding
   - coder.bun.telemetry-raw-string-emit
   - coder.bun.telemetry-vendor-sdk
   - coder.bun.telemetry-forbidden-properties
+  - coder.bun.telemetry-implementation-binding
 entrypoint: detect.mjs
 report: detect.mjs
