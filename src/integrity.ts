@@ -118,10 +118,11 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
  * its absent-means-all default is right for execution and wrong for deciding whether a policy was ever declared. */
 const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
 
-/** A policy with null-valued keys (top level and worktrees) removed: YAML gives null for a key with no value, and the
- * hooks read null as absent, so the comparison must too. */
+/** A policy with null-valued hook keys (and worktrees children) removed: YAML gives null for a key with no value, and the
+ * hooks read null as absent, so the comparison must too. Other keys keep their null: delivery and profiles are read by
+ * readers that tell null apart from absent (`delivery:` with no value adopts delivery). */
 function withoutNulls(config: Record<string, unknown>): Record<string, unknown> {
-  const out = Object.fromEntries(Object.entries(config).filter(([, value]) => value !== null));
+  const out = Object.fromEntries(Object.entries(config).filter(([key, value]) => value !== null || !(key in defaultHookPolicy)));
   const worktrees = out.worktrees;
   if (typeof worktrees === "object" && worktrees !== null && !Array.isArray(worktrees)) out.worktrees = Object.fromEntries(Object.entries(worktrees).filter(([, value]) => value !== null));
   return out;

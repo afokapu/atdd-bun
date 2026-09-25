@@ -248,6 +248,12 @@ test("a key with no value is absent, as the hooks read it: a null baseline field
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees: { enabled: true }\n");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+    // Only hook keys: `delivery:` with no value adopts delivery, so removing it is still reported.
+    await git(root, "checkout", "-q", "-b", "delivery-null", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery:\n  # stages: {}\n"); await git(root, "commit", "-qam", "adopt delivery", "--no-verify"); await git(root, "branch", "-f", "dbase");
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+    expect((await checkIntegrity({ root, base: "dbase", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("delivery is no longer adopted")]);
+    await git(root, "checkout", "-q", "-f", "base");
     // And a null in the working tree compares as the default, not as 0.
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nmax_staged_files:\n");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
