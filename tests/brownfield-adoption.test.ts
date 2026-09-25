@@ -103,3 +103,18 @@ test("init declares every profile explicitly in a new atdd-bun.yaml, so a greenf
     expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe("max_staged_files: 20\n");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("8, pushed: a multi-commit direct push [docs, security] → no list → [docs] is judged from the pre-push tip", async () => {
+  const { checkIntegrity } = await import("../src/integrity");
+  await brownfield("profiles: [docs, security]\n", async root => {
+    await git(root, "checkout", "-q", "base"); const before = (await Bun.$`git -C ${root} rev-parse HEAD`.text()).trim();
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n"); await git(root, "commit", "-qam", "drop the list", "--no-verify");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n"); await git(root, "commit", "-qam", "narrow", "--no-verify");
+    const policy = (findings: { file: string; detail: string }[]) => findings.filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
+    // Judged one commit deep, the push reads as a first adoption; judged from the pre-push tip, it drops security.
+    expect(policy(await checkIntegrity({ root, base: "", push: true }))).toEqual([]);
+    expect(policy(await checkIntegrity({ root, base: before, push: true }))).toEqual([expect.stringContaining("profiles drops security")]);
+    // No usable before-SHA (a new branch or a force push): falls back to the parent, as before.
+    expect(policy(await checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: true }))).toEqual([]);
+  });
+});

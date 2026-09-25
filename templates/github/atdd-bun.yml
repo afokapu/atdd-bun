@@ -15,6 +15,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run atdd-bun integrity
+        env:
+          # On a push, judge atdd-bun.yaml against the pre-push tip, so a multi-commit push is judged as a whole.
+          ATDD_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
       - run: bun run atdd-bun all
       - run: bun test
       - run: bun run atdd-bun release check

@@ -131,11 +131,15 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
 
 /** atdd-bun.yaml is not looser than on the branch being merged into. */
 async function checkPolicy(root: string, base?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<IntegrityFinding[]> {
-  const ref = base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
-  if ((await git(root, ["rev-parse", "--verify", "--quiet", ref])).code) return [];
-  let against = (await git(root, ["merge-base", "HEAD", ref])).out;
-  // A CI push to the base branch has nothing to merge into: judge the pushed commit against its parent.
-  if (push && against === (await git(root, ["rev-parse", "HEAD"])).out) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
+  // On a push, the generated CI passes the pre-push tip (github.event.before) as ATDD_BASE_REF, so a multi-commit push
+  // is judged as a whole: [docs, security] → no list → [docs] in one push cannot read as a first adoption.
+  const ref = base || process.env.ATDD_BASE_REF || (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
+  const resolves = !/^0+$/.test(ref) && !(await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).code;
+  if (!resolves && !push) return [];
+  let against = resolves ? (await git(root, ["merge-base", "HEAD", ref])).out : "";
+  // A push with no usable before-SHA (a new branch, a force push) or whose base is its own head: judge the pushed
+  // commit against its parent.
+  if (push && (!against || against === (await git(root, ["rev-parse", "HEAD"])).out)) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
   if (!against) return [];
   const read = async (text: string | null) => (text ? Bun.YAML.parse(text) ?? {} : {}) as Partial<HookPolicy>;
   const before = await git(root, ["show", `${against}:atdd-bun.yaml`]), path = join(root, "atdd-bun.yaml");
