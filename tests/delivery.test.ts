@@ -749,3 +749,21 @@ test("records under the default root while another root is configured are report
     expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under docs/delivery/tranches (api) are outside the configured root delivery")]);
   });
 });
+
+// Round 3 of #23 (GLM S1 medium, S2 low).
+
+test("at the gate, a stray the change does not touch is not judged again; a symlinked file in a tranche folder is a stray", async () => {
+  await tranche(async (dir, commit) => {
+    await commit("legacy stray, merged before the rule", { "delivery/api/notes.adoc": "= notes\n", "delivery/api/evidence.yaml": record([]) });
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/next");
+    const sha = await commit("feat", { "src/app.ts": "export const a = 9;\n" });
+    await commit("evidence", tranchePR("next", sha));
+    expect((await validateDelivery(dir, { gate: true, base: "main" })).filter(f => f.rule_id === "delivery.evidence-schema")).toEqual([]);
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual(["delivery/api/notes.adoc"]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record([]), "elsewhere.md": "# authored\n" }, async dir => {
+    await Bun.$`ln -s ../../elsewhere.md ${join(dir, "delivery/api/notes.md")}`;
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual(["delivery/api/notes.md"]);
+  });
+});
