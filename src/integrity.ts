@@ -168,11 +168,16 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   if (!against) return [];
   const read = async (text: string | null) => (text ? Bun.YAML.parse(text) ?? {} : {}) as Partial<HookPolicy>;
   const before = await git(root, ["show", `${against}:atdd-bun.yaml`]), path = join(root, "atdd-bun.yaml");
-  // A baseline that does not parse cannot be compared; reading it as empty would compare against the defaults and could
-  // miss a loosening the baseline configured. It is a finding, as an unreadable working-tree file is.
+  // A baseline that does not parse, or parses to something other than a policy mapping, cannot be compared; reading it as
+  // empty would compare against the defaults and could miss a loosening the baseline configured. It is a finding, as an
+  // unreadable working-tree file is.
+  const unreadable = (why: string) => [{ file: "atdd-bun.yaml", detail: `the baseline atdd-bun.yaml at ${against.slice(0, 7)} ${why}, so the policy cannot be compared`, restore: push
+    ? `this push is compared with the tip it replaced (${against.slice(0, 7)}), whose atdd-bun.yaml is broken; once the repaired atdd-bun.yaml is on the branch, the next push is compared with a readable tip`
+    : `repair the atdd-bun.yaml on the base branch (git show ${against.slice(0, 7)}:atdd-bun.yaml) and land it there, which may need a maintainer; then bring that repair into this branch (rebase onto the base, or merge it in: a pull request is compared with its merge base) and re-run the check` }];
   let baseline: Partial<HookPolicy>;
   try { baseline = await read(before.code ? null : before.out); }
-  catch (error) { return [{ file: "atdd-bun.yaml", detail: `the baseline atdd-bun.yaml at ${against.slice(0, 7)} could not be parsed, so the policy cannot be compared: ${String(error)}`, restore: `repair the malformed atdd-bun.yaml on the base branch (git show ${against.slice(0, 7)}:atdd-bun.yaml) and land it there, which may need a maintainer; bring that repair into this branch (rebase onto the base, or merge it in; the comparison uses the merge base), then re-run the check` }]; }
+  catch (error) { return unreadable(`could not be parsed (${String(error)})`); }
+  if (typeof baseline !== "object" || baseline === null || Array.isArray(baseline)) return unreadable(`is not a policy mapping (${JSON.stringify(baseline)})`);
   const loosened = loosenedPolicy(baseline, await read(existsSync(path) ? await readFile(path, "utf8") : null));
   return loosened.length ? [{ file: "atdd-bun.yaml", detail: `loosens the policy of ${against.slice(0, 7)}: ${loosened.join("; ")}`, restore: `git checkout ${against.slice(0, 7)} -- atdd-bun.yaml` }] : [];
 }

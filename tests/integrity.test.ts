@@ -183,8 +183,8 @@ test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, an
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "broken base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
     const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml");
-    expect(findings.map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed, so the policy cannot be compared")]);
-    expect(findings[0].restore).toStartWith("repair the malformed atdd-bun.yaml on the base branch");
+    expect(findings.map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed")]);
+    expect(findings[0].restore).toStartWith("repair the atdd-bun.yaml on the base branch");
     expect(findings[0].restore).toContain("bring that repair into this branch");
     // The recovery the restore describes: repair the base branch, then merge it into the branch under review.
     await git(root, "stash", "-q", "-u"); await git(root, "checkout", "-qb", "work", "base"); await git(root, "stash", "pop", "-q");
@@ -196,3 +196,20 @@ test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, an
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a baseline that parses to a scalar or a list is not a policy and is never read as the defaults; a push gets its own restore", async () => {
+  for (const baseline of ["42\n", "[a, b]\n", "true\n"]) {
+    const root = await consumer();
+    try {
+      await writeFile(join(root, "atdd-bun.yaml"), baseline);
+      await git(root, "add", "-A"); await git(root, "commit", "-qm", "odd base", "--no-verify"); await git(root, "branch", "base");
+      await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+      const [finding] = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml");
+      expect(finding.detail, baseline).toContain("is not a policy mapping");
+      // On a push the comparison is with the replaced tip, not a merge base, so the restore says what clears it there.
+      await git(root, "commit", "-qam", "repair", "--no-verify");
+      const [pushed] = (await checkIntegrity({ root, base: "base", push: true })).filter(f => f.file === "atdd-bun.yaml");
+      expect(pushed.restore, baseline).toStartWith("this push is compared with the tip it replaced");
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+}, 30_000);
