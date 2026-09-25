@@ -211,7 +211,10 @@ test("the merge gate judges only records the branch changes, and reads a merge c
     // CI checks out the PR as a merge commit: first parent is the base, second the tranche head.
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "commit", "-q", "--allow-empty", "-m", "main moves on");
     await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/next");
-    expect((await validateDelivery(dir, { gate: true, base: "does-not-exist" })).filter(f => f.rule_id === "delivery.merge-gate")).toEqual([]);
+    // With no explicit base, the merge checkout's parents are the range (an unresolvable explicit base fails closed).
+    const saved = process.env.ATDD_BASE_REF; delete process.env.ATDD_BASE_REF;
+    try { expect((await validateDelivery(dir, { gate: true })).filter(f => f.rule_id === "delivery.merge-gate")).toEqual([]); } finally { if (saved !== undefined) process.env.ATDD_BASE_REF = saved; }
+    expect((await validateDelivery(dir, { gate: true, base: "does-not-exist" })).map(f => f.evidence)).toEqual([expect.stringContaining("cannot resolve the base branch")]);
   });
 });
 
@@ -605,4 +608,61 @@ test("GLM V2: the check after code_review covers the whole repository, whatever 
     await commit("evidence", { "svc/api/delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL.map(r => [`svc/api/delivery/api/${r.stage}.json`, "{}"])) });
     expect((await validateDelivery(join(dir, "svc/api"), { gate: false })).map(f => f.evidence)).toEqual([expect.stringContaining("svc/web/x.ts changed after code_review approved")]);
   });
+});
+
+// Round 6 of PR #19 (GLM, 4796c29; approved with one medium and four low findings).
+
+test("GLM W1: the freshness check follows code_review, so a reduced stage set can still become ready", async () => {
+  await tranche(async (dir, commit) => {
+    const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), code = await commit("code", { "src/app.ts": "export const a = 3;\n" });
+    const stages = (names: string[]) => `delivery:\n  stages:\n${names.map(n => `    ${n}: { reviewers: [${n === "test_review" || n === "final_review" ? "codex" : "glm"}, claude] }`).join("\n")}\n`;
+    const check = async (names: string[], shas: Record<string, string>, approved: string) => {
+      const reviews = FULL.filter(r => names.includes(r.stage as string)).map(r => ({ ...r, sha: shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
+      await mkdir(join(dir, "delivery/api"), { recursive: true });
+      await writeFile(join(dir, "atdd-bun.yaml"), stages(names));
+      await writeFile(join(dir, "delivery/api/evidence.yaml"), record(reviews, { status: "ready", approved_sha: approved }));
+      for (const r of reviews) await writeFile(join(dir, r.report as string), "{}");
+      return (await validateDelivery(dir, { gate: false })).map(f => f.evidence);
+    };
+    expect(await check(["plan_review", "code_review"], { plan_review: plan, code_review: code }, code)).toEqual([]);
+    expect(await check(["code_review"], { code_review: code }, code)).toEqual([]);
+    // With final_review configured, code after code_review is still caught.
+    expect(await check(["code_review", "final_review"], { code_review: plan, final_review: code }, code)).toEqual([expect.stringContaining("changed after code_review approved")]);
+  });
+});
+
+test("GLM W2: generated delivery skill files stay protected while present, even with delivery turned off", async () => {
+  const { checkIntegrity } = await import("../src/integrity");
+  const { agentInit } = await import("../src/agent");
+  const { initializeRepository } = await import("../src/setup");
+  const root = await mkdtemp(join(tmpdir(), "atdd-w2-"));
+  try {
+    await sh(root, "git", "init", "-q", "-b", "work");
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.7.0" } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@0.7.0", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="],\n  }\n}\n`);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, delivery]\n");
+    expect((await initializeRepository(root)).ok).toBeTrue();
+    expect((await agentInit(root, true)).ok).toBeTrue();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability]\n");
+    const review = join(root, ".claude/skills/delivery/review.md");
+    await writeFile(review, "Edit freely.\n");
+    expect((await checkIntegrity({ root })).map(f => f.file)).toEqual([".claude/skills/delivery/review.md"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("GLM W3: an explicit gate base that cannot be resolved fails closed in both modes", async () => {
+  await tranche(async (dir, commit) => {
+    await commit("a first commit on the branch, so the pushed tip has a parent", { "src/x.ts": "export const x = 1;\n" });
+    for (const gate of [true, "post-merge"] as const)
+      expect((await validateDelivery(dir, { gate, base: "1234567890abcdef1234567890abcdef12345678" })).map(f => f.evidence), String(gate)).toEqual([expect.stringContaining("cannot resolve the base branch")]);
+    expect((await validateDelivery(dir, { gate: "post-merge", base: "0".repeat(40) })).filter(f => f.evidence.includes("cannot resolve"))).toEqual([]);   // a new branch
+  });
+});
+
+test("GLM W4 and W5: changed commands and when_exhausted are loosening; a removed list is reported once", () => {
+  const base = { delivery: { commands: { claude: { review: "claude -p --allowedTools Read" } } } };
+  expect(loosenedDelivery(base, { delivery: { commands: { claude: { review: "claude -p --dangerously-skip-permissions" } } } })).toEqual(["delivery.commands.claude.review changed"]);
+  expect(loosenedDelivery(base, { delivery: {} })).toEqual(["delivery.commands.claude.review changed"]);
+  expect(loosenedDelivery({ delivery: {} }, { delivery: { fallback: { when_exhausted: "wait" } } })).toEqual(["delivery.fallback.when_exhausted block → wait"]);
+  expect(loosenedPolicy({ profiles: ["delivery", "docs"] }, {}).filter(line => line.includes("delivery"))).toEqual(["profiles becomes implicit: the explicit list [delivery, docs] was removed"]);
 });

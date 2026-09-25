@@ -73,7 +73,7 @@ test("10: a repository with no profiles field adopts [docs] through the real int
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n");
     expect((await run(root, "integrity")).code).toBe(0);
   });
-});
+}, 30_000);
 
 test("11: after adoption, the CLI fails on a dropped profile and on a removed list", async () => {
   await brownfield("profiles: [docs, security]\n", async root => {

@@ -83,10 +83,10 @@ export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split(
 /** Why `current` enforces less than `base`, for the integrity check's loosening report. Tightening is silent. */
 export function loosenedDelivery(base: unknown, current: unknown): string[] {
   if (!deliveryAdopted(base)) return [];
-  // Dropping `delivery` from one explicit profile list to another is already reported as a dropped profile. Any other
-  // way out is reported here: removing the block, or a first explicit list that leaves out a delivery adopted by its
-  // block (the block was itself an explicit adoption, so the first-list rule does not excuse it).
-  if (!deliveryAdopted(current)) return Array.isArray(record(base)?.profiles) && Array.isArray(record(current)?.profiles) ? [] : ["delivery is no longer adopted"];
+  // When the base lists its profiles, the profiles rule reports every way out (a dropped profile, a removed list). When
+  // delivery was adopted by its block alone, it is reported here: removing the block, or a first explicit list that
+  // leaves delivery out (the block was itself an explicit adoption, so the first-list rule does not excuse it).
+  if (!deliveryAdopted(current)) return Array.isArray(record(base)?.profiles) ? [] : ["delivery is no longer adopted"];
   const before = deliveryPolicy(record(base)!.delivery), after = deliveryPolicy(record(current)!.delivery), out: string[] = [];
   for (const stage of STAGES) {
     const b = before.stages[stage], c = after.stages[stage];
@@ -105,6 +105,10 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
   // Moving the root hides every earlier record from the validator and the gate.
   if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
   if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
+  if (before.fallback.when_exhausted === "block" && after.fallback.when_exhausted === "wait") out.push("delivery.fallback.when_exhausted block → wait");
+  // The commands decide how reviews run; changing one the base defined can weaken review isolation.
+  for (const [model, command] of Object.entries(before.commands)) for (const role of ["author", "review"] as const)
+    if (command?.[role] !== undefined && after.commands[model]?.[role] !== command[role]) out.push(`delivery.commands.${model}.${role} changed`);
   if (after.fallback.after_failures < before.fallback.after_failures) out.push(`delivery.fallback.after_failures ${before.fallback.after_failures} → ${after.fallback.after_failures}`);
   if (after.fallback.within_minutes > before.fallback.within_minutes) out.push(`delivery.fallback.within_minutes ${before.fallback.within_minutes} → ${after.fallback.within_minutes}`);
   return out;
@@ -250,15 +254,16 @@ async function gateRange(root: string, mode: GateMode, base?: string): Promise<{
   if (mode === "post-merge") {
     const head = (await git(root, ["rev-parse", "HEAD"])).out, before = base ?? process.env.ATDD_BASE_REF;
     if (before && !/^0+$/.test(before)) {
+      // An explicit baseline that cannot be resolved fails closed, as the integrity check does, rather than narrowing.
       const resolved = await git(root, ["rev-parse", "--verify", "--quiet", `${before}^{commit}`]);
-      if (!resolved.code && resolved.out) return { base: resolved.out, head };
+      return resolved.code || !resolved.out ? null : { base: resolved.out, head };
     }
     const parent = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^1"]);
     return parent.code || !parent.out ? null : { base: parent.out, head };
   }
   // An explicit base wins: a branch that merged its base in locally is still judged against that base.
   const explicit = base ?? process.env.ATDD_BASE_REF;
-  if (explicit && !(await git(root, ["rev-parse", "--verify", "--quiet", explicit])).code) return againstRef(root, explicit);
+  if (explicit && !/^0+$/.test(explicit)) return (await git(root, ["rev-parse", "--verify", "--quiet", `${explicit}^{commit}`])).code ? null : againstRef(root, explicit);
   // CI checks a pull request out as a merge commit: first parent the base, second the tranche head.
   const merge = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^2"]);
   if (!merge.code && merge.out) return { base: (await git(root, ["rev-parse", "HEAD^1"])).out, head: merge.out };
@@ -335,7 +340,10 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       }
       // The closing review does not replace the stage before it: code that changed after that stage approved must go
       // back through it (driver step 5), so nothing outside the delivery root may differ between the two.
-      const configured = STAGES.filter(name => policy.stages[name]), before = configured.at(-2), closing = configured.at(-1);
+      // Anchored on code_review, the stage that approves code: not the position, which would ask plan_review to approve
+      // the final code under a reduced stage set.
+      const configured = STAGES.filter(name => policy.stages[name]), closing = configured.at(-1);
+      const before: Stage | undefined = configured.includes("code_review") && closing !== "code_review" ? "code_review" : undefined;
       const earlier = before && entry.data.reviews.filter(review => review.stage === before).at(-1);
       if (earlier && earlier.verdict === "approve" && closing && !(await git(absolute, ["cat-file", "-e", `${earlier.sha}^{commit}`])).code) {
         const changedSince = (await git(absolute, ["diff", "--no-renames", "--name-only", earlier.sha, entry.data.approved_sha!, "--", ":(top)", `:(exclude)${policy.root}`])).out.split("\n").filter(Boolean);

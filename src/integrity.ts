@@ -100,7 +100,9 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
   else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
-  if (await deliveryInstalled(root)) for (const [path, template] of deliverySkillFiles) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
+  // Required while delivery is adopted; protected whenever present, so turning delivery off and on cannot launder an edit.
+  const adopted = await deliveryInstalled(root);
+  for (const [path, template] of deliverySkillFiles) if (adopted || existsSync(join(root, path))) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
