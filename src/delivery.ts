@@ -26,10 +26,11 @@ export type DeliveryPolicy = {
   stages: Partial<Record<Stage, StagePolicy>>;
   fallback: { after_failures: number; within_minutes: number; when_exhausted: "block" | "wait" };
   commands: Record<string, { author?: string; review?: string }>;
+  require_record: boolean;
 };
 
 type RawStage = { authors?: string[]; reviewers: string[]; independence?: Independence };
-type RawDelivery = { root?: string; independence?: Independence; stages?: Partial<Record<Stage, RawStage>>; fallback?: Partial<DeliveryPolicy["fallback"]>; commands?: DeliveryPolicy["commands"] };
+type RawDelivery = { root?: string; require_record?: boolean; independence?: Independence; stages?: Partial<Record<Stage, RawStage>>; fallback?: Partial<DeliveryPolicy["fallback"]>; commands?: DeliveryPolicy["commands"] };
 
 const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
   plan_review: { authors: ["codex"], reviewers: ["glm", "claude"] },
@@ -61,8 +62,11 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
     if (!given) continue;
     stages[stage] = { authors: given.authors ?? DEFAULT_STAGES[stage].authors, reviewers: given.reviewers, independence: (given as RawStage).independence ?? independence };
   }
-  return { root: raw.root ?? "delivery", independence, stages, fallback: { ...DEFAULT_FALLBACK, ...raw.fallback }, commands: raw.commands ?? {} };
+  return { root: canonicalRoot(raw.root ?? "delivery"), independence, stages, fallback: { ...DEFAULT_FALLBACK, ...raw.fallback }, commands: raw.commands ?? {}, require_record: raw.require_record ?? true };
 }
+
+/** One spelling per root, so filesystem discovery, Git pathspecs and drift filtering agree ("delivery/" is "delivery"). */
+export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split("/").filter(part => part && part !== ".").join("/") || "delivery";
 
 /** Why `current` enforces less than `base`, for the integrity check's loosening report. Tightening is silent. */
 export function loosenedDelivery(base: unknown, current: unknown): string[] {
@@ -75,9 +79,16 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
     if (!b) continue;
     if (!c) { out.push(`delivery.stages drops ${stage}`); continue; }
     if (b.independence === "different-model" && c.independence === "fresh-process") out.push(`delivery.stages.${stage}.independence different-model → fresh-process`);
-    const added = c.reviewers.filter(model => !b.reviewers.includes(model));
-    if (added.length) out.push(`delivery.stages.${stage}.reviewers adds ${added.join(", ")}`);
+    for (const role of ["reviewers", "authors"] as const) {
+      const added = c[role].filter(model => !b[role].includes(model));
+      if (added.length) out.push(`delivery.stages.${stage}.${role} adds ${added.join(", ")}`);
+    }
   }
+  // Moving the root hides every earlier record from the validator and the gate.
+  if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
+  if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
+  if (after.fallback.after_failures < before.fallback.after_failures) out.push(`delivery.fallback.after_failures ${before.fallback.after_failures} → ${after.fallback.after_failures}`);
+  if (after.fallback.within_minutes > before.fallback.within_minutes) out.push(`delivery.fallback.within_minutes ${before.fallback.within_minutes} → ${after.fallback.within_minutes}`);
   return out;
 }
 
@@ -99,8 +110,8 @@ const git = async (cwd: string, args: string[]) => {
 };
 
 type Actor = { model: string; run: string };
-type Finding = { id: string; rebuttal?: string; outcome?: "fixed" | "withdrawn" | "human"; decision?: string };
-type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Array<{ role?: "author" | "reviewer"; from: string; reason: string }>; verdict: "approve" | "request_changes"; findings?: Finding[] };
+type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Array<{ role?: "author" | "reviewer"; from: string; kind: string; failures: number; reason: string }>; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
+type Finding = { id: string; severity: string; rebuttal?: string; outcome?: "fixed" | "withdrawn" | "human"; decision?: string };
 type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; approved_sha?: string; reviews: Review[] };
 export type EvidenceFile = { file: string; tranche: string; data: Evidence | null; error?: string };
 
@@ -119,8 +130,10 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
 }
 
 /** Models must come from the stage's list; a model after the first needs a recorded fallback from each one before it. */
-function checkModels(file: string, review: Review, policy: StagePolicy, at: string): PlanFinding[] {
+function checkModels(file: string, review: Review, policy: StagePolicy, at: string, threshold: number): PlanFinding[] {
   const out: PlanFinding[] = [];
+  // The count is the driver's claim, but it is an explicit one: a fallback below the policy's threshold is out of policy.
+  for (const entry of review.fallback ?? []) if (entry.failures < threshold) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' after ${entry.failures} failure(s); the policy requires ${threshold} (delivery.fallback.after_failures)`));
   const role = (name: "author" | "reviewer", actor: Actor | undefined, list: string[]) => {
     if (!actor) return;
     const index = list.indexOf(actor.model);
@@ -142,7 +155,7 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
     const at = `reviews[${index}] (${review.stage} @ ${review.sha})`, stage = policy.stages[review.stage];
     if (!stage) { out.push(finding("delivery.evidence-schema", file, `${at}: ${review.stage} is not a configured stage in delivery.stages`)); return; }
     if (!review.author) out.push(finding("delivery.evidence-schema", file, `${at}: names no author; the reviewer's independence cannot be judged without one`));
-    out.push(...checkModels(file, review, stage, at));
+    out.push(...checkModels(file, review, stage, at, policy.fallback.after_failures));
     if (authorRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also authored in this tranche; a reviewer that edits becomes an author`));
     if (reviewerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' already reviewed reviews[${reviewerRuns.get(review.reviewer.run)}]; every review is a fresh process`));
     else reviewerRuns.set(review.reviewer.run, index);
@@ -152,7 +165,10 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
   // Findings: each one on a request-changes review is fixed, withdrawn after one written dispute, or ruled on by a
   // human, once the stage has moved on (a later review of it exists) or the record is ready.
   reviews.forEach((review, index) => {
-    if (review.verdict !== "request_changes") return;
+    if (review.verdict === "approve") {
+      for (const item of review.findings ?? []) if (item.severity === "critical" || item.severity === "high") out.push(finding("delivery.findings-resolved", file, `reviews[${index}] (${review.stage}) approves with ${item.severity} finding ${item.id}; a critical or high finding requests changes`));
+      return;
+    }
     const later = reviews.slice(index + 1).filter(next => next.stage === review.stage);
     for (const item of review.findings ?? []) {
       const at = `reviews[${index}] (${review.stage}) finding ${item.id}`, upheld = later.some(next => (next.findings ?? []).some(other => other.id === item.id));
@@ -183,15 +199,22 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
   return out;
 }
 
-/** The merge gate: ATDD_DELIVERY_GATE=merge, which the generated CI sets on pull requests and the merge queue.
- * Explicit rather than inferred from the CI event, so a repository's own tests are never judged as tranches. */
-export function atMergeGate(env: Record<string, string | undefined> = process.env): boolean {
-  return env.ATDD_DELIVERY_GATE === "merge";
+export type GateMode = "merge" | "post-merge";
+/** The gate: ATDD_DELIVERY_GATE, which the generated CI sets to `merge` on pull requests and the merge queue and to
+ * `post-merge` on pushes to the base branch. Explicit rather than inferred from the CI event, so a repository's own
+ * tests are never judged as tranches. */
+export function gateMode(env: Record<string, string | undefined> = process.env): GateMode | null {
+  return env.ATDD_DELIVERY_GATE === "merge" || env.ATDD_DELIVERY_GATE === "post-merge" ? env.ATDD_DELIVERY_GATE : null;
 }
 
 /** The commits the gate compares: a merge checkout (pull request, merge queue) is judged as base = first parent,
  * head = second parent; otherwise HEAD against the configured base ref. */
-async function gateRange(root: string, base?: string): Promise<{ base: string; head: string } | null> {
+async function gateRange(root: string, mode: GateMode, base?: string): Promise<{ base: string; head: string } | null> {
+  // After the merge, the pushed commit is judged against its first parent: what this push brought in.
+  if (mode === "post-merge") {
+    const parent = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^1"]), head = await git(root, ["rev-parse", "HEAD"]);
+    return parent.code || !parent.out ? null : { base: parent.out, head: head.out };
+  }
   const merge = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^2"]);
   if (!merge.code && merge.out) return { base: (await git(root, ["rev-parse", "HEAD^1"])).out, head: merge.out };
   const ref = base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
@@ -200,7 +223,8 @@ async function gateRange(root: string, base?: string): Promise<{ base: string; h
   return since && head ? { base: since, head } : null;
 }
 
-export type DeliveryOptions = { gate?: boolean; base?: string };
+/** `gate: true` is the pre-merge gate; `false` disables it; unset reads ATDD_DELIVERY_GATE. */
+export type DeliveryOptions = { gate?: boolean | GateMode; base?: string };
 
 export async function validateDelivery(root = process.cwd(), options: DeliveryOptions = {}): Promise<PlanFinding[]> {
   const absolute = resolve(root), config = await readConfig(absolute);
@@ -222,29 +246,37 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     findings.push(...checkEvidence(entry.file, entry.data, policy));
     if (entry.data.status === "ready") {
       ready.push(entry);
+      // Ready means auditable: every review's raw output is retained and named.
+      for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !existsSync(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which does not exist` : "retains no report"}`));
       if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`));
     }
   }
-  if (options.gate ?? atMergeGate()) findings.push(...await mergeGate(absolute, policy, files, options.base));
+  const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
+  if (mode) findings.push(...await mergeGate(absolute, policy, files, mode, options.base));
   return findings;
 }
 
-/** Every record the branch changes must be ready, and the head may differ from its approved SHA only under the
- * delivery root: the evidence commit itself is the one change allowed after approval. */
-async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFile[], base?: string): Promise<PlanFinding[]> {
-  const range = await gateRange(root, base);
+/** Every record the branch changes must be ready and approve a commit the head contains, the head may differ from
+ * that commit only under the delivery root, and (require_record) a change outside the root needs a record at all.
+ * Post-merge, the pushed commit must still contain the approved one: a squash or rebase merge rewrites it. */
+async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFile[], mode: GateMode, base?: string): Promise<PlanFinding[]> {
+  const range = await gateRange(root, mode, base);
   if (!range) return [finding("delivery.merge-gate", "atdd-bun.yaml", "the merge gate cannot resolve the base branch; fetch full history (fetch-depth: 0) or set ATDD_BASE_REF")];
-  const changed = (await git(root, ["diff", "--relative", "--name-only", `${range.base}...${range.head}`, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
+  const span = mode === "merge" ? [`${range.base}...${range.head}`] : [range.base, range.head];
+  const changedHere = (await git(root, ["diff", "--relative", "--name-only", ...span])).out.split("\n").filter(Boolean);
+  const changed = changedHere.filter(path => path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml")), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
   // Drift is judged over the whole repository, not just this root: a change anywhere after approval counts.
   const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, out: PlanFinding[] = [];
+  if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   for (const path of changed) {
     const entry = files.find(file => file.file === path);
     if (!entry?.data) continue; // removed, or already reported by the schema rule
     if (entry.data.status !== "ready") { out.push(finding("delivery.merge-gate", path, `${path} is ${entry.data.status}; a tranche merges only when its record is ready`)); continue; }
     const sha = entry.data.approved_sha!;
     if ((await git(root, ["cat-file", "-e", `${sha}^{commit}`])).code) continue; // reported by delivery.approved-sha-resolves
+    if ((await git(root, ["merge-base", "--is-ancestor", sha, range.head])).code) { out.push(finding("delivery.merge-gate", path, `approved_sha ${sha.slice(0, 7)} is not contained in ${mode === "merge" ? "the branch head" : "the merged commit"}${mode === "post-merge" ? "; a squash or rebase merge rewrites the approved commit, so merge with a merge commit" : "; the branch was rewritten after approval"}`)); continue; }
     const drift = (await git(root, ["diff", "--name-only", sha, range.head])).out.split("\n").filter(Boolean).filter(file => !file.startsWith(`${prefix}${policy.root}/`));
-    if (drift.length) out.push(finding("delivery.merge-gate", path, `the branch head changes ${drift.slice(0, 5).join(", ")}${drift.length > 5 ? ` and ${drift.length - 5} more` : ""} after approved_sha ${sha.slice(0, 7)}; any change after approval needs a fresh review`));
+    if (mode === "merge" && drift.length) out.push(finding("delivery.merge-gate", path, `the branch head changes ${drift.slice(0, 5).join(", ")}${drift.length > 5 ? ` and ${drift.length - 5} more` : ""} after approved_sha ${sha.slice(0, 7)}; any change after approval needs a fresh review`));
   }
   return out;
 }

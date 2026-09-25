@@ -29,11 +29,13 @@
     },
     "fallback": {
       "type": "object",
-      "required": ["from", "reason"],
+      "required": ["from", "kind", "failures", "reason"],
       "additionalProperties": false,
       "properties": {
         "role": { "enum": ["author", "reviewer"], "description": "Which actor fell back. Default: reviewer." },
         "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "kind": { "enum": ["outage", "rate_limit", "no_report", "timeout"], "description": "Why the model counts as unavailable. A verdict is never one of these." },
+        "failures": { "type": "integer", "minimum": 1, "description": "Failures observed before falling back; at least delivery.fallback.after_failures." },
         "reason": { "type": "string", "minLength": 10, "description": "Why the preferred model was unavailable: outage, rate limit, or no auditable report. Never a verdict." }
       }
     },

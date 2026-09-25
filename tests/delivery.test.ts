@@ -54,7 +54,7 @@ test("a malformed policy is reported and the evidence is judged against the defa
 
 test("stages the policy omits are not required, and a review of one is out of policy", async () => {
   const policy = "delivery:\n  stages:\n    code_review: { reviewers: [claude] }\n";
-  await withRepo({ "atdd-bun.yaml": policy, "delivery/api/evidence.yaml": record([review("code_review", "3333333", ["glm", "a"], ["claude", "r"])], { status: "ready", approved_sha: "3333333" }) }, async dir => {
+  await withRepo({ "atdd-bun.yaml": policy, "delivery/api/code.json": "{}", "delivery/api/evidence.yaml": record([review("code_review", "3333333", ["glm", "a"], ["claude", "r"], { report: "delivery/api/code.json" })], { status: "ready", approved_sha: "3333333" }) }, async dir => {
     expect((await rules(dir)).filter(id => id !== "delivery.approved-sha-resolves")).toEqual([]);
   });
   await withRepo({ "atdd-bun.yaml": policy, "delivery/api/evidence.yaml": record(FULL) }, async dir => {
@@ -67,10 +67,10 @@ test("a fallback model needs a recorded reason for every model it skipped, in li
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(skipped) }, async dir => {
     expect(await evidence(dir)).toEqual([expect.stringContaining("no fallback from 'glm'")]);
   });
-  const recorded = [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", reason: "rate limit: 3 failures in 10 minutes" }] }), FULL[3]];
+  const recorded = [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", kind: "rate_limit", failures: 3, reason: "rate limit: 3 failures in 10 minutes" }] }), FULL[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(recorded) }, async dir => expect(await rules(dir)).toEqual([]));
   // An author fallback is recorded under its own role: a reviewer fallback does not excuse it.
-  const author = [...FULL.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", reason: "provider outage since 09:00" }] }), FULL[3]];
+  const author = [...FULL.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", kind: "outage", failures: 3, reason: "provider outage since 09:00" }] }), FULL[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(author) }, async dir => {
     expect(await evidence(dir)).toEqual([expect.stringContaining("author 'claude' is a fallback"), expect.stringContaining("reviewer fallback from 'glm' does not precede 'glm'")]);
   });
@@ -155,13 +155,17 @@ async function tranche(body: (dir: string, commit: (message: string, files: Reco
     await body(dir, commit);
   });
 }
-const approved = (sha: string, status = "ready") => record(FULL.map(r => r.stage === "final_review" ? { ...r, sha } : r), { status, approved_sha: sha });
+// A ready record retains every review's raw output next to it.
+const tranchePR = (tranche: string, sha: string, status = "ready") => ({
+  [`delivery/${tranche}/evidence.yaml`]: record(FULL.map(r => ({ ...(r.stage === "final_review" ? { ...r, sha } : r), report: `delivery/${tranche}/${r.stage}.json` })), { tranche, status, approved_sha: sha }),
+  ...Object.fromEntries(FULL.map(r => [`delivery/${tranche}/${r.stage}.json`, "{}\n"])),
+});
 const gate = async (dir: string) => (await validateDelivery(dir, { gate: true, base: "main" })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence);
 
 test("the merge gate accepts a head that differs from its approved SHA only by the evidence", async () => {
   await tranche(async (dir, commit) => {
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
-    await commit("chore: evidence", { "delivery/api/evidence.yaml": approved(sha) });
+    await commit("chore: evidence", tranchePR("api", sha));
     expect(await rules(dir, true)).toEqual([]);
     // Outside the gate the same repository is judged without the change set.
     expect(await rules(dir, false)).toEqual([]);
@@ -171,13 +175,13 @@ test("the merge gate accepts a head that differs from its approved SHA only by t
 test("the merge gate rejects a change after approval and a record that is not ready", async () => {
   await tranche(async (dir, commit) => {
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
-    await commit("chore: evidence", { "delivery/api/evidence.yaml": approved(sha) });
+    await commit("chore: evidence", tranchePR("api", sha));
     await commit("fix: after approval", { "src/app.ts": "export const a = 3;\n" });
     expect(await gate(dir)).toEqual([expect.stringContaining("changes src/app.ts after approved_sha")]);
   });
   await tranche(async (dir, commit) => {
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
-    await commit("chore: evidence", { "delivery/api/evidence.yaml": approved(sha, "open") });
+    await commit("chore: evidence", tranchePR("api", sha, "open"));
     expect(await gate(dir)).toEqual(["delivery/api/evidence.yaml is open; a tranche merges only when its record is ready"]);
   });
 });
@@ -186,11 +190,11 @@ test("the merge gate judges only records the branch changes, and reads a merge c
   await tranche(async (dir, commit) => {
     // An earlier tranche, merged long ago: its approved SHA is no longer the head of anything.
     const old = await commit("feat: old", { "src/old.ts": "export const o = 1;\n" });
-    await commit("chore: old evidence", { "delivery/old/evidence.yaml": approved(old).replace('"api"', '"old"') });
+    await commit("chore: old evidence", tranchePR("old", old));
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--ff-only", "tranche/api");
     await sh(dir, "git", "checkout", "-qb", "tranche/next");
     const sha = await commit("feat: next", { "src/app.ts": "export const a = 5;\n" });
-    await commit("chore: evidence", { "delivery/next/evidence.yaml": approved(sha).replace('"api"', '"next"') });
+    await commit("chore: evidence", tranchePR("next", sha));
     expect(await gate(dir)).toEqual([]);
     // CI checks out the PR as a merge commit: first parent is the base, second the tranche head.
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "commit", "-q", "--allow-empty", "-m", "main moves on");
@@ -202,5 +206,76 @@ test("the merge gate judges only records the branch changes, and reads a merge c
 test("the merge gate fails loudly when it cannot find the base", async () => {
   await tranche(async dir => {
     expect((await validateDelivery(dir, { gate: true, base: "origin/nowhere" })).map(f => f.evidence)).toEqual([expect.stringContaining("cannot resolve the base branch")]);
+  });
+});
+
+// Regressions from the first headless review of PR #19 (Codex, fbfe235). One test per finding.
+
+test("F1: a change outside the delivery root with no tranche record fails the gate, unless require_record is off", async () => {
+  await tranche(async (dir, commit) => {
+    await commit("feat: sneaks past", { "src/app.ts": "export const a = 9;\n" });
+    expect(await gate(dir)).toEqual([expect.stringContaining("changes src/app.ts with no tranche record under delivery/")]);
+    await commit("chore: opt out", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  require_record: false\n" });
+    expect(await gate(dir)).toEqual([]);
+  });
+  expect(loosenedDelivery({ delivery: {} }, { delivery: { require_record: false } })).toEqual(["delivery.require_record true → false"]);
+});
+
+test("F2: an approving review cannot carry a critical or high finding", async () => {
+  const approving = [...FULL.slice(0, 3), review("final_review", "3333333", ["codex", "driver"], ["codex", "r4"], { findings: [{ ...FINDING, severity: "critical" }, { ...FINDING, id: "F2", severity: "low" }] })];
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(approving) }, async dir => {
+    expect(await evidence(dir)).toEqual(["reviews[3] (final_review) approves with critical finding F1; a critical or high finding requests changes"]);
+  });
+});
+
+test("F3: moving the root, adding an author, or making fallback easier is a loosening", () => {
+  const base = { delivery: {} };
+  expect(loosenedDelivery(base, { delivery: { root: "unused" } })).toEqual(["delivery.root delivery → unused"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, plan_review: { authors: ["codex", "gpt"], reviewers: ["glm", "claude"] } } } })).toEqual(["delivery.stages.plan_review.authors adds gpt"]);
+  expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 1, within_minutes: 60 } } })).toEqual(["delivery.fallback.after_failures 3 → 1", "delivery.fallback.within_minutes 10 → 60"]);
+  expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 5, within_minutes: 5 } } })).toEqual([]);
+});
+
+test("F4: a fallback states a kind of unavailability and at least the policy's failure count", async () => {
+  const fallback = (entry: Record<string, unknown>) => [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", reason: "the reviewer requested changes", ...entry }] }), FULL[3]];
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ kind: "request_changes", failures: 3 })) }, async dir => {
+    expect(await rules(dir)).toEqual(["delivery.evidence-schema"]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ kind: "rate_limit", failures: 1 })) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("after 1 failure(s); the policy requires 3")]);
+  });
+});
+
+test("F5: after the merge, the pushed commit must contain the approved one; a squash merge fails visibly", async () => {
+  const pushed = async (dir: string) => (await validateDelivery(dir, { gate: "post-merge" })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence);
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    expect(await pushed(dir)).toEqual([]);
+  });
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--squash", "tranche/api"); await sh(dir, "git", "commit", "-qm", "squash");
+    expect(await pushed(dir)).toEqual([expect.stringContaining("a squash or rebase merge rewrites the approved commit")]);
+  });
+});
+
+test("F6: a ready record retains every review's raw report", async () => {
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/final.json": "{}", "delivery/api/evidence.yaml": record(FULL.map((r, i) => i === 3 ? { ...r, report: "delivery/api/final.json" } : i === 2 ? { ...r, report: "delivery/api/gone.json" } : r), { status: "ready", approved_sha: "3333333" }) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.includes("report"))).toEqual([
+      "status is ready, but reviews[0] (plan_review) retains no report",
+      "status is ready, but reviews[1] (test_review) retains no report",
+      "status is ready, but reviews[2] (code_review) names report delivery/api/gone.json, which does not exist",
+    ]);
+  });
+});
+
+test("F7: the root has one spelling; a non-canonical one is a config finding and is read canonically", async () => {
+  expect(deliveryPolicy({ root: "delivery/" }).root).toBe("delivery");
+  expect(deliveryPolicy({ root: "./ops//delivery/" }).root).toBe("ops/delivery");
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery/\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
+    expect(await rules(dir)).toEqual(["delivery.config-schema"]);
   });
 });

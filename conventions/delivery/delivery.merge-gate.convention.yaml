@@ -4,21 +4,24 @@ kind: rule
 status: active
 name: A tranche merges only its approved SHA
 statement: >-
-  At the merge gate (ATDD_DELIVERY_GATE=merge, set by the generated CI on pull requests and the merge queue), every evidence record the branch changes is ready, and the branch head differs from its approved_sha only under the delivery root (REQUIRED).
+  At the gate (ATDD_DELIVERY_GATE, which the generated CI sets to merge on pull requests and the merge queue and to post-merge on pushes), every evidence record the change touches is ready and approves a commit the head contains; before the merge the head differs from that commit only under the delivery root; and, with require_record (the default), a change outside the delivery root comes with a tranche record (REQUIRED).
 terms:
 - term_id: merge_gate
   text: >-
     the CI run that decides whether a pull request may merge. It compares the branch against the base it merges into; for a merge checkout, the base is the first parent and the head the second.
 content:
   summary: >-
-    Any commit after approval, a code change, a regenerated file, a conflict resolution or a rebase, invalidates it. The evidence commit itself is the one change allowed, since it cannot be in the SHA it records.
+    Any commit after approval, a code change, a regenerated file, a conflict resolution or a rebase, invalidates it. The evidence commit itself is the one change allowed, since it cannot be in the SHA it records. A change with no record at all was never reviewed.
   normative_text: |
-    This is where the profile becomes a merge rule rather than an instruction. Records that the branch does not change, earlier tranches already on the base branch, are not judged again; their approved SHAs may no longer be the head of anything.
+    This is where the profile becomes a merge rule rather than an instruction. Records that the change does not touch, earlier tranches already on the base branch, are not judged again; their approved SHAs may no longer be the head of anything.
+    After the merge, the pushed commit is judged against its first parent: every record it brings in must approve a commit it contains. A squash or rebase merge writes a new commit no reviewer saw and fails here, visibly, on the base branch; merge tranches with a merge commit.
   fix_hint: |
     Run the final review on the current head and record its SHA as approved_sha, or remove the change made after approval. Locally, reproduce the gate with ATDD_DELIVERY_GATE=merge ATDD_BASE_REF=origin/main bun run atdd-bun delivery.
   exceptions:
   - >-
-    Outside the merge gate (hooks, local runs, pushes to the base branch) this rule emits nothing, so a tranche can push work in progress.
+    Outside the gate (hooks, local runs) this rule emits nothing, so a tranche can push work in progress.
+  - >-
+    require_record false exempts changes with no record; turning it off is a loosening the integrity check reports.
 metadata:
   aliases:
   - DELIVERY-MERGE-GATE-001

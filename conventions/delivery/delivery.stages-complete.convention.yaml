@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: A ready record has every configured stage approved
 statement: >-
-  A record with status ready has, for every stage the policy configures, a last review that approves, and its approved_sha is the SHA the last review of the closing stage approved (REQUIRED).
+  A record with status ready has, for every stage the policy configures, a last review that approves; its approved_sha is the SHA the last review of the closing stage approved; and every review names its retained raw report, which exists (REQUIRED).
 terms:
 - term_id: closing_stage
   text: >-

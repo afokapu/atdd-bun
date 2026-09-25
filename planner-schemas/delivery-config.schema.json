@@ -8,8 +8,12 @@
   "properties": {
     "root": {
       "type": "string",
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$",
-      "description": "Repository-relative folder holding one <tranche>/evidence.yaml per tranche. Default: delivery."
+      "pattern": "^[a-z0-9_][a-z0-9_.-]*(?:/[a-z0-9_][a-z0-9_.-]*)*$",
+      "description": "Repository-relative folder holding one <tranche>/evidence.yaml per tranche, in canonical form: no leading, trailing or doubled slash, no dot segments. Default: delivery. Changing it after adoption is a loosening the integrity check reports."
+    },
+    "require_record": {
+      "type": "boolean",
+      "description": "At the gate, a change outside the delivery root needs a tranche record in the same change. Default: true; turning it off is a loosening."
     },
     "independence": { "$ref": "#/definitions/independence" },
     "stages": {

@@ -17,8 +17,8 @@ jobs:
       - run: bun run atdd-bun integrity
       - run: bun run atdd-bun all
         env:
-          # The delivery profile's merge gate: judged on pull requests and the merge queue, never on a push.
-          ATDD_DELIVERY_GATE: ${{ github.event_name != 'push' && 'merge' || '' }}
+          # The delivery profile's gate: before the merge on pull requests and the merge queue, after it on a push.
+          ATDD_DELIVERY_GATE: ${{ github.event_name == 'push' && 'post-merge' || 'merge' }}
       - run: bun test
       - run: bun run atdd-bun release check
       - uses: actions/upload-artifact@v4

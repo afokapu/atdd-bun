@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: Every finding is fixed, withdrawn after one dispute, or ruled on by a human
 statement: >-
-  Once a stage has a later review, or the record is ready, every finding of a request-changes review records its outcome: fixed (confirmed by a later review of the stage), withdrawn (after a written rebuttal, by a later review that does not raise it again) or human (with the decision). A finding disputed more than once goes to a human (REQUIRED).
+  Once a stage has a later review, or the record is ready, every finding of a request-changes review records its outcome: fixed (confirmed by a later review of the stage), withdrawn (after a written rebuttal, by a later review that does not raise it again) or human (with the decision). A finding disputed more than once goes to a human. An approving review carries no critical or high finding (REQUIRED).
 terms:
 - term_id: rebuttal
   text: >-

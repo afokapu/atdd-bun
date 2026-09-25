@@ -55,7 +55,7 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | `topology` | feature decomposition and the plan, source, test and E2E locations |
 | `planner` | schemas for every plan artifact, graph integrity, the scoped planner rules |
 | `telemetry` | the telemetry tracking plan: item shape, path-mirrored identity and versioning under `telemetry/`, wagon ownership of logical artifacts, the per-acceptance telemetry decision, metric label cardinality, source `Telemetry:` references, raw-string and forbidden-property emission, the vendor-SDK boundary around the TelemetryPort, and telemetry tests that bind the acceptance and item, assert the exact identity on a captured sink, cover every required item, and exercise declared timing semantics |
-| `delivery` | the review record of each tranche under `delivery/`: allowed author and reviewer models with recorded fallbacks, reviewer independence, every finding fixed, withdrawn after one dispute or ruled on by a human, every configured stage approved, and, at the merge gate, a head that is exactly the approved SHA. Inert until adopted |
+| `delivery` | the review record of each tranche under `delivery/`: allowed author and reviewer models with recorded fallbacks, reviewer independence, every finding fixed, withdrawn after one dispute or ruled on by a human, every configured stage approved, and, at the gate, no change without a record and a merged head that contains exactly the approved commit. Inert until adopted |
 | `docs` | the documentation capability, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions |
 | `interlocking` | train/interlocking binding, infrastructure and route coverage |
@@ -111,7 +111,8 @@ key is optional; these are the defaults:
 
 ```yaml
 delivery:
-  root: delivery                     # one <tranche>/evidence.yaml per tranche
+  root: delivery                     # one <tranche>/evidence.yaml per tranche, reports beside it
+  require_record: true               # at the gate, a change outside the root needs a tranche record
   independence: fresh-process        # or different-model; overridable per stage
   stages:                            # models in preference order: the first, then recorded fallbacks
     plan_review:  { authors: [codex],       reviewers: [glm, claude] }
@@ -123,10 +124,18 @@ delivery:
 ```
 
 The profile checks the record, never the running agents. The generated CI sets
-`ATDD_DELIVERY_GATE=merge` on pull requests and the merge queue, where every record the branch
-changes must be `ready` and the branch may differ from its approved SHA only under the delivery
-root. Dropping a stage, relaxing a stage from `different-model` to `fresh-process`, or adding a
-reviewer loosens the policy and is reported by the integrity check.
+`ATDD_DELIVERY_GATE`: `merge` on pull requests and the merge queue, where every record the branch
+changes must be `ready`, the branch may differ from its approved SHA only under the delivery root,
+and a change outside the root needs a record (`require_record`, default true); `post-merge` on a
+push, where the pushed commit must contain every approved SHA it brings in. Merge tranches with a
+merge commit: a squash or rebase merge writes a commit no reviewer saw, and the post-merge check
+fails on it. Moving the root, dropping a stage, relaxing a stage from `different-model` to
+`fresh-process`, adding an author or reviewer, turning off `require_record`, or making fallback
+easier loosens the policy and is reported by the integrity check.
+
+The record's model and run identifiers are the driver's claims. The profile checks that they are
+consistent and that every review's raw report is retained; it does not verify them
+cryptographically.
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and
 validation of the affected area. Git can bypass them, so CI is the authority.

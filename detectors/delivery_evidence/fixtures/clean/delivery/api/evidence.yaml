@@ -20,7 +20,7 @@ reviews:
     author: { model: glm, run: glm-green-1 }
     reviewer: { model: claude, run: claude-code-1 }
     fallback:
-      - { from: glm, reason: "rate limit: 3 failures in 10 minutes" }
+      - { from: glm, kind: rate_limit, failures: 3, reason: "rate limit: 3 failures in 10 minutes" }
     verdict: request_changes
     checked: [ACC-API-001, ACC-API-002, src/wagons/api, coder.bun.error-response]
     findings:
@@ -43,7 +43,7 @@ reviews:
     author: { model: glm, run: glm-green-2 }
     reviewer: { model: claude, run: claude-code-2 }
     fallback:
-      - { from: glm, reason: "rate limit: 3 failures in 10 minutes" }
+      - { from: glm, kind: rate_limit, failures: 3, reason: "rate limit: 3 failures in 10 minutes" }
     verdict: approve
     checked: [ACC-API-001, ACC-API-002, src/wagons/api, F1, F2]
   - stage: final_review
