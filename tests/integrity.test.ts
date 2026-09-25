@@ -185,5 +185,14 @@ test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, an
     const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml");
     expect(findings.map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed, so the policy cannot be compared")]);
     expect(findings[0].restore).toStartWith("repair the malformed atdd-bun.yaml on the base branch");
+    expect(findings[0].restore).toContain("bring that repair into this branch");
+    // The recovery the restore describes: repair the base branch, then merge it into the branch under review.
+    await git(root, "stash", "-q", "-u"); await git(root, "checkout", "-qb", "work", "base"); await git(root, "stash", "pop", "-q");
+    await git(root, "commit", "-qam", "work", "--no-verify");
+    await git(root, "checkout", "-q", "base"); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n"); await git(root, "commit", "-qam", "repair base", "--no-verify");
+    await git(root, "checkout", "-q", "work");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed")]);   // still on the broken merge base
+    await git(root, "merge", "-q", "--no-edit", "base", "-X", "theirs");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
