@@ -31,8 +31,6 @@ export type DeliveryPolicy = {
   multiplexer: string;
 };
 
-type RawStage = { authors?: string[]; reviewers: string[]; independence?: Independence };
-type RawDelivery = { root?: string; require_record?: boolean; multiplexer?: string; independence?: Independence; stages?: Partial<Record<Stage, RawStage>>; fallback?: Partial<DeliveryPolicy["fallback"]>; commands?: DeliveryPolicy["commands"] };
 
 const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
   plan_review: { authors: ["codex"], reviewers: ["glm", "claude"] },
@@ -57,14 +55,25 @@ export function deliveryAdopted(config: unknown): boolean {
 /** The effective policy: package defaults under whatever the `delivery:` block sets. `stages`, when given,
  * replaces the default stage set, so a stage it omits is not required. */
 export function deliveryPolicy(block: unknown): DeliveryPolicy {
-  const raw = (record(block) ?? {}) as RawDelivery, independence = raw.independence ?? "fresh-process";
-  const stages: DeliveryPolicy["stages"] = {};
+  // Every value is type-guarded: a malformed block is the config-schema rule's to report, never a crash here (the
+  // validator and the integrity check both read the policy through this function). A wrong-typed value falls back
+  // to its default.
+  const raw = record(block) ?? {}, text = (value: unknown, fallback: string) => (typeof value === "string" ? value : fallback);
+  const models = (value: unknown, fallback: string[]) => (Array.isArray(value) && value.every(item => typeof item === "string") ? value as string[] : fallback);
+  const mode = (value: unknown, fallback: Independence): Independence => (value === "fresh-process" || value === "different-model" ? value : fallback);
+  const count = (value: unknown, fallback: number) => (Number.isInteger(value) ? value as number : fallback);
+  const independence = mode(raw.independence, "fresh-process"), given = record(raw.stages), stages: DeliveryPolicy["stages"] = {};
   for (const stage of STAGES) {
-    const given = raw.stages ? raw.stages[stage] : DEFAULT_STAGES[stage];
-    if (!given) continue;
-    stages[stage] = { authors: given.authors ?? DEFAULT_STAGES[stage].authors, reviewers: given.reviewers, independence: (given as RawStage).independence ?? independence };
+    const entry = given ? record(given[stage]) : DEFAULT_STAGES[stage];
+    if (!entry) continue;
+    stages[stage] = { authors: models(entry.authors, DEFAULT_STAGES[stage].authors), reviewers: models(entry.reviewers, DEFAULT_STAGES[stage].reviewers), independence: mode((entry as Record<string, unknown>).independence, independence) };
   }
-  return { root: canonicalRoot(raw.root ?? "delivery"), independence, stages, fallback: { ...DEFAULT_FALLBACK, ...raw.fallback }, commands: raw.commands ?? {}, require_record: raw.require_record ?? true, multiplexer: raw.multiplexer ?? "herdr" };
+  const fallback = record(raw.fallback) ?? {};
+  return {
+    root: canonicalRoot(text(raw.root, "delivery")), independence, stages,
+    fallback: { after_failures: count(fallback.after_failures, DEFAULT_FALLBACK.after_failures), within_minutes: count(fallback.within_minutes, DEFAULT_FALLBACK.within_minutes), when_exhausted: fallback.when_exhausted === "wait" ? "wait" : "block" },
+    commands: (record(raw.commands) ?? {}) as DeliveryPolicy["commands"], require_record: raw.require_record === false ? false : true, multiplexer: text(raw.multiplexer, "herdr"),
+  };
 }
 
 /** One spelling per root, so filesystem discovery, Git pathspecs and drift filtering agree ("delivery/" is "delivery"). */

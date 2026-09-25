@@ -58,7 +58,7 @@ reviews:
     verdict: request_changes
     checked: [ACC-API-001, src/wagons/api, coder.bun.error-response-*]
     findings:
-      - { id: F1, severity: high, evidence: "src/wagons/api/handler.ts:42", invariant: "coded error bodies", affects: [ui], proposed_fix: "return { code: 'API_NOT_FOUND' }", outcome: fixed }
+      - { id: F1, severity: high, evidence: "src/wagons/api/handler.ts:42", invariant: "coded error bodies", affects: [ui], proposed_fix: "return { code: 'API_NOT_FOUND' }" }   # outcome added once a fresh code_review confirms the fix
     report: delivery/api/code_review-1.json
 ```
 

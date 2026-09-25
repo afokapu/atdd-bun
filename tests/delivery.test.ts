@@ -477,3 +477,18 @@ test("T4: every stage approves a real commit in the approved history, in lifecyc
     expect(await write({ plan_review: red, test_review: plan })).toEqual([expect.stringContaining("test_review approved")]);
   });
 });
+
+// Round 3 of PR #19 (GLM, 64a07fb).
+
+test("GLM T1: a wrong-typed policy value is a config finding, never a crash, in the validator and the integrity check", async () => {
+  for (const policy of ["delivery:\n  root: 123\n", "delivery:\n  stages:\n    code_review: { reviewers: glm }\n", "delivery:\n  fallback: { after_failures: many }\n", "delivery: 7\n"])
+    await withRepo({ "atdd-bun.yaml": policy, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir), policy).toContain("delivery.config-schema"));
+  expect(() => loosenedDelivery({ delivery: {} }, { delivery: { root: 123, stages: { code_review: { reviewers: "glm" } } } })).not.toThrow();
+  expect(deliveryPolicy({ root: 123 }).root).toBe("delivery");
+});
+
+test("GLM T2: the skill's example record is a state the profile accepts", async () => {
+  const skill = await Bun.file(new URL("../templates/agents/delivery/SKILL.md", import.meta.url)).text();
+  const example = Bun.YAML.parse(skill.split("```yaml\n")[1].split("```")[0]) as Record<string, unknown>;
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(example) }, async dir => expect(await rules(dir)).toEqual([]));
+});
