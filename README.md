@@ -128,11 +128,11 @@ The profile checks the record, never the running agents. The generated CI sets
 `ATDD_DELIVERY_GATE`: `merge` on pull requests and the merge queue, where every record the branch
 changes must be `ready`, the branch may differ from its approved SHA only under the delivery root,
 and a change outside the root needs a record (`require_record`, default true); `post-merge` on a
-push, where the pushed commit must contain every approved SHA it brings in. Merge tranches with a
+push to a protected branch (the generated workflow's push branches follow `protected_branches`), where the pushed commit must contain every approved SHA it brings in. Merge tranches with a
 merge commit: a squash or rebase merge writes a commit no reviewer saw, and the post-merge check
 fails on it. Moving the root, dropping a stage, relaxing a stage from `different-model` to
-`fresh-process`, adding an author or reviewer, turning off `require_record`, or making fallback
-easier loosens the policy and is reported by the integrity check.
+`fresh-process`, adding an author or reviewer, moving a fallback model earlier in a list, turning off
+`require_record`, or making fallback easier loosens the policy and is reported by the integrity check.
 
 The record's model and run identifiers are the driver's claims. The profile checks that they are
 consistent and that every review's raw report is retained; it does not verify them
