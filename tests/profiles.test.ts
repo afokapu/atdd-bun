@@ -43,10 +43,10 @@ test("an unknown profile name or an empty list is an error, never a silent run o
   expect(await child.exited).not.toBe(0);
 });
 
-test("deactivating a profile is reported as loosening atdd-bun.yaml; activating one is not", () => {
-  expect(loosenedPolicy({}, { profiles: ["traceability", "planner"] })).toEqual([`profiles drops ${profileNames.filter(p => !["all", "traceability", "planner"].includes(p)).join(", ")}`]);
+test("deactivating an explicitly adopted profile is reported as loosening atdd-bun.yaml; activating one is not", () => {
+  expect(loosenedPolicy({ profiles: ["traceability", "planner"] }, { profiles: ["traceability"] })).toEqual(["profiles drops planner"]);
   expect(loosenedPolicy({ profiles: ["traceability"] }, { profiles: ["traceability", "coder"] })).toEqual([]);
-  expect(loosenedPolicy({ profiles: ["traceability"] }, {})).toEqual([]);
+  // The brownfield adoption cases (absent → explicit, explicit → absent) are in brownfield-adoption.test.ts.
 });
 
 test("hooks enforce only the activated profiles", async () => {

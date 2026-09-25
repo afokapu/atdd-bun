@@ -77,8 +77,15 @@ profiles: [traceability, planner]
 
 `all`, the hooks and the generated CI then run only those profiles. Any profile can still be run
 by name (`bun run atdd-bun coder`) to see what remains. An unknown name or an empty list is an
-error, never a silent run of nothing. Removing a profile loosens `atdd-bun.yaml`, so the integrity
-check reports it against the base branch until a human approves the change.
+error, never a silent run of nothing.
+
+With no `profiles:` field, every profile runs, but none is governed yet. The first explicit list is
+the adoption that establishes the governed set, so a brownfield repository can declare
+`profiles: [docs]` in an ordinary pull request. From then on, the integrity check reports, against
+the base branch, removing a profile from the list and removing the list itself. The second closes
+the two-step bypass `[docs, security]` → no list → `[docs]`. `init` writes a new `atdd-bun.yaml`
+with every profile listed, so a greenfield repository is governed from its first commit; trim the
+list before that commit to adopt gradually.
 
 ## Configuration
 
@@ -116,7 +123,8 @@ modify the toolkit itself, only the configuration it offers, and enable capabili
 - the installed package differs from its published hashes;
 - the dependency is not an npm registry version;
 - a generated file (workflow, skills, instruction block, integrity test) was edited;
-- `atdd-bun.yaml` is looser than on the base branch.
+- `atdd-bun.yaml` is looser than on the base branch (after the first explicit `profiles:` list,
+  dropping a profile or the list counts).
 
 Each finding names its restore command.
 
