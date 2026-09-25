@@ -108,11 +108,10 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
       if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
     }
   }
-  // Moving the root hides every earlier record from the validator and the gate. One exception: pinning `delivery`, the
-  // 0.8.0 default, over a base that never set a root keeps the records exactly where they were; it is the fix the
-  // legacy-records finding recommends, and the base's effective root is only computed with today's default.
-  const legacyPin = record(record(base)!.delivery)?.root === undefined && after.root === LEGACY_ROOT;
-  if (before.root !== after.root && !legacyPin) out.push(`delivery.root ${before.root} → ${after.root}`);
+  // Moving the root hides every earlier record from the validator and the gate. No exception, not even pinning the 0.8.0
+  // default: from the config alone it cannot be told apart from moving a 0.9 repository's records out of view, so a
+  // human approves it.
+  if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
   if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
   if (before.fallback.when_exhausted === "block" && after.fallback.when_exhausted === "wait") out.push("delivery.fallback.when_exhausted block → wait");
   // The commands decide how reviews run: adding or changing one, including over the skill's protected defaults, can
@@ -333,7 +332,7 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const configuredRoot = record(block)?.root;
   if (configuredRoot === undefined && policy.root === DEFAULT_ROOT && existsSync(join(absolute, LEGACY_ROOT))) {
     const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
-    if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the default root ${DEFAULT_ROOT}, where 0.8.0 kept them; move them there, or set delivery.root: delivery`));
+    if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the default root ${DEFAULT_ROOT}, where 0.8.0 kept them; move them there (with their report paths), or set delivery.root: delivery, a root change the integrity check reports for a human to approve`));
   }
   // The other direction: records under the default root while another root is configured are outside what is judged.
   if (policy.root !== DEFAULT_ROOT && existsSync(join(absolute, DEFAULT_ROOT))) {

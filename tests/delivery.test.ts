@@ -722,8 +722,8 @@ test("inside docs/, the only delivery root is docs/delivery/tranches, and the do
   await withRepo({ "atdd-bun.yaml": "delivery:\n  root: ops/delivery\n" }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
-test("pinning the 0.8.0 root over a base that never set one is not a loosening; any other root change is", () => {
-  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "delivery" } })).toEqual([]);
+test("every root change after adoption is a loosening, including pinning the 0.8.0 root (Codex round 3 of #23)", () => {
+  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "delivery" } })).toEqual(["delivery.root docs/delivery/tranches → delivery"]);
   expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "ops/records" } })).toEqual(["delivery.root docs/delivery/tranches → ops/records"]);
   expect(loosenedDelivery({ delivery: { root: "docs/delivery/tranches" } }, { delivery: { root: "delivery" } })).toEqual(["delivery.root docs/delivery/tranches → delivery"]);
 });
