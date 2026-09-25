@@ -137,7 +137,7 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   const newBranch = /^0+$/.test(ref), resolved = newBranch ? "" : (await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).out;
   let against: string;
   // An explicit baseline (the pre-push tip, the merge queue's target) that cannot be resolved fails closed.
-  if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the policy baseline ${ref.slice(0, 7)} to judge this change against; fetch it (fetch-depth: 0)`, restore: "git fetch origin && re-run the check" }];
+  if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the policy baseline ${ref} to judge this change against`, restore: /^[0-9a-f]{40}$/.test(ref) ? `git fetch origin ${ref}, then re-run the check (a replaced tip is reachable from no branch, so a plain fetch does not bring it)` : `git fetch origin, then re-run the check` }];
   if (push) {
     // A push is judged against the tip it replaced, directly, never a merge base: after a force push the merge base
     // can predate the policy being removed. A new branch has no previous tip and is judged against its parent.

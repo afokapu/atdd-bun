@@ -119,7 +119,10 @@ test("8, pushed: a multi-commit direct push [docs, security] → no list → [do
     // A new branch (all-zero before-SHA) has no previous tip: judged against its parent, as before.
     expect(policy(await checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: true }))).toEqual([]);
     // A before-SHA that cannot be resolved fails closed rather than skipping the check.
-    expect(policy(await checkIntegrity({ root, base: "1234567890abcdef1234567890abcdef12345678", push: true }))).toEqual([expect.stringContaining("cannot resolve the policy baseline")]);
+    const [unresolved] = (await checkIntegrity({ root, base: "1234567890abcdef1234567890abcdef12345678", push: true })).filter(f => f.file === "atdd-bun.yaml");
+    expect(unresolved.detail).toContain("cannot resolve the policy baseline 1234567890abcdef1234567890abcdef12345678");
+    // The way back names the full SHA: after a force push the replaced tip is on no branch, so `git fetch origin` alone misses it.
+    expect(unresolved.restore).toStartWith("git fetch origin 1234567890abcdef1234567890abcdef12345678, then re-run the check");
   });
 });
 
