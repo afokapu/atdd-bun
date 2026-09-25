@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { instructionPaths } from "./agent";
-import { concreteProfiles } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -106,6 +105,10 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   return findings;
 }
 
+/** The operator's explicit profile list, or null when atdd-bun.yaml declares none. Deliberately not enabledProfiles():
+ * its absent-means-all default is right for execution and wrong for deciding whether a policy was ever declared. */
+const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
+
 /** Names of the policy fields in `current` that are looser than in `base`. */
 export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
@@ -116,9 +119,12 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
   if (removed.length) out.push(`protected_branches drops ${removed.join(", ")}`);
   if (added.length) out.push(`registry_paths adds ${added.join(", ")}`);
-  // Deactivating a profile stops enforcing it; the operator may do it, as a change a human approves.
-  const active = (config: { profiles?: unknown }): string[] => Array.isArray(config.profiles) ? config.profiles.map(String) : concreteProfiles;
-  const dropped = active(base).filter(name => !active(current).includes(name));
+  // Profiles: an absent list runs every profile (enabledProfiles) but governs none. The first explicit list is the
+  // adoption that establishes the governed set, not a drop. From then on, dropping a profile or removing the list
+  // (explicit → implicit → narrower would otherwise be a two-step bypass) is loosening a human approves.
+  const before = explicitProfiles(base), after = explicitProfiles(current);
+  if (before && !after) out.push(`profiles becomes implicit: the explicit list [${before.join(", ")}] was removed`);
+  const dropped = before && after ? before.filter(name => !after.includes(name)) : [];
   if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
   return out;
 }
