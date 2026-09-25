@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
-import { existsSync, lstatSync } from "node:fs";
+import { existsSync, lstatSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { PlanFinding } from "./planner-kernel";
@@ -230,6 +230,9 @@ const namedReports = (data: unknown): string[] => {
   return Array.isArray(reviews) ? reviews.flatMap(review => { const report = record(review)?.report; return typeof report === "string" && report ? [report] : []; }) : [];
 };
 const isFolder = (path: string) => { try { return lstatSync(path).isDirectory(); } catch { return false; } };
+/** A folder, through a symlink too: the legacy and hidden-records probes look wherever records could be. */
+const isLink = (path: string) => { try { return lstatSync(path).isSymbolicLink(); } catch { return false; } };
+const reachesFolder = (path: string) => { try { return statSync(path).isDirectory(); } catch { return false; } };
 const regularFile = (path: string) => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
 /** Two spellings of one commit: an abbreviated SHA is a prefix of the full one. */
@@ -353,12 +356,12 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     policy = { ...policy, root: DEFAULT_ROOT };
   }
   // 0.8.0 kept records under delivery/ by default. Records left there under any other effective root would be unseen.
-  if (policy.root !== LEGACY_ROOT && isFolder(join(absolute, LEGACY_ROOT))) {
+  if (policy.root !== LEGACY_ROOT && reachesFolder(join(absolute, LEGACY_ROOT))) {
     const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
     if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the root ${policy.root}; 0.8.0 kept them there by default; set delivery.root: delivery (a root change the integrity check reports for a human to approve once), or move them there, which rewrites merged records and so needs a human-supervised merge`));
   }
   // The other direction: records under the default root while another root is configured are outside what is judged.
-  if (policy.root !== DEFAULT_ROOT && isFolder(join(absolute, DEFAULT_ROOT))) {
+  if (policy.root !== DEFAULT_ROOT && reachesFolder(join(absolute, DEFAULT_ROOT))) {
     const hidden = (await readdir(join(absolute, DEFAULT_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, DEFAULT_ROOT, entry.name, "evidence.yaml")));
     if (hidden.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under ${DEFAULT_ROOT} (${hidden.map(entry => entry.name).join(", ")}) are outside the configured root ${policy.root}; move them there, or remove delivery.root`));
   }
@@ -374,7 +377,11 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   // Per tranche: a data file is a report only when a record in its own tranche names it.
   const reported = new Set(files.flatMap(entry => namedReports(entry.data).filter(report => report.startsWith(`${policy.root}/${entry.tranche}/`))));
   const unnamed = (await dataFiles(absolute, policy)).filter(path => !reported.has(path));
-  if (existsSync(join(absolute, policy.root)) && !isFolder(join(absolute, policy.root))) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a file, not a folder; the records cannot be read`));
+  const rootPath = join(absolute, policy.root);
+  if (existsSync(rootPath) || isLink(rootPath)) {
+    if (isLink(rootPath)) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a symlink; the delivery root must be a real folder, whose records Git tracks`));
+    else if (!isFolder(rootPath)) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a file, not a folder; the records cannot be read`));
+  }
   for (const path of [...await strayFiles(absolute, policy), ...unnamed].sort()) if (!onBase || (await git(absolute, ["diff", "--quiet", onBase, "--", path])).code) findings.push(finding("delivery.evidence-schema", path, `${path} is neither a tranche's evidence.yaml nor a report a record in its tranche names (a data file: ${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}); the records folder holds only records and their reports`));
   for (const entry of files) {
     if (onBase && existsSync(join(absolute, entry.file)) && !(await git(absolute, ["diff", "--quiet", onBase, "--", `${policy.root}/${entry.tranche}`])).code) continue;

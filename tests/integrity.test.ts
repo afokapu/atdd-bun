@@ -213,3 +213,29 @@ test("a baseline that parses to a scalar or a list is not a policy and is never 
     } finally { await rm(root, { recursive: true, force: true }); }
   }
 }, 30_000);
+
+test("a wrongly typed policy field is a finding on either side, never a crash; an empty or null policy is the defaults", async () => {
+  const cases: Array<[string, string, string]> = [
+    ["protected_branches: 42\n", "max_staged_files: 20\n", "the baseline"],
+    ["max_staged_files: 20\n", "registry_paths: plan\n", "which the hooks would read as their defaults"],
+    ["max_staged_files: 20\n", "worktrees: [on]\n", "worktrees must be a mapping"],
+  ];
+  for (const [baseline, current, expected] of cases) {
+    const root = await consumer();
+    try {
+      await writeFile(join(root, "atdd-bun.yaml"), baseline);
+      await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+      await writeFile(join(root, "atdd-bun.yaml"), current);
+      const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
+      expect(findings, `${baseline} → ${current}`).toEqual([expect.stringContaining(expected)]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+  // Declined (GLM Q1 on #22): a null or comment-only baseline is the default policy, so comparing against the defaults is right.
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "# nothing configured\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 10\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);

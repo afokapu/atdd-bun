@@ -118,6 +118,22 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
  * its absent-means-all default is right for execution and wrong for deciding whether a policy was ever declared. */
 const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
 
+/** The hook policy fields whose value has the wrong type. The comparison below would otherwise crash on them (a string
+ * where a list is expected) or compare them as the defaults. An empty or null document is the default policy, and fine. */
+export function policyShapeErrors(config: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"])
+    if (config[key] !== undefined && !(typeof config[key] === "number" && Number.isFinite(config[key]))) out.push(`${key} must be a number`);
+  for (const key of ["require_plan_reference", "require_traceability"]) if (config[key] !== undefined && typeof config[key] !== "boolean") out.push(`${key} must be true or false`);
+  for (const key of ["protected_branches", "registry_paths"]) if (config[key] !== undefined && !(Array.isArray(config[key]) && (config[key] as unknown[]).every(item => typeof item === "string"))) out.push(`${key} must be a list of strings`);
+  const worktrees = config.worktrees;
+  if (worktrees !== undefined) {
+    if (typeof worktrees !== "object" || worktrees === null || Array.isArray(worktrees)) out.push("worktrees must be a mapping");
+    else for (const key of ["enabled", "require_linked_worktree"]) if ((worktrees as Record<string, unknown>)[key] !== undefined && typeof (worktrees as Record<string, unknown>)[key] !== "boolean") out.push(`worktrees.${key} must be true or false`);
+  }
+  return out;
+}
+
 /** Names of the policy fields in `current` that are looser than in `base`. */
 export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
@@ -178,7 +194,13 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   try { baseline = await read(before.code ? null : before.out); }
   catch (error) { return unreadable(`could not be parsed (${String(error)})`); }
   if (typeof baseline !== "object" || baseline === null || Array.isArray(baseline)) return unreadable(`is not a policy mapping (${JSON.stringify(baseline)})`);
-  const loosened = loosenedPolicy(baseline, await read(existsSync(path) ? await readFile(path, "utf8") : null));
+  const baseShape = policyShapeErrors(baseline);
+  if (baseShape.length) return unreadable(`has wrongly typed fields (${baseShape.join("; ")})`);
+  const current = await read(existsSync(path) ? await readFile(path, "utf8") : null);
+  // A wrongly typed field in the working tree is read by the hooks as its default, silently; it is reported instead.
+  const shape = typeof current === "object" && current !== null && !Array.isArray(current) ? policyShapeErrors(current) : ["the document is not a policy mapping"];
+  if (shape.length) return [{ file: "atdd-bun.yaml", detail: `has wrongly typed fields, which the hooks would read as their defaults: ${shape.join("; ")}`, restore: "correct the field types in atdd-bun.yaml, then re-run the check" }];
+  const loosened = loosenedPolicy(baseline, current);
   return loosened.length ? [{ file: "atdd-bun.yaml", detail: `loosens the policy of ${against.slice(0, 7)}: ${loosened.join("; ")}`, restore: `git checkout ${against.slice(0, 7)} -- atdd-bun.yaml` }] : [];
 }
 
