@@ -27,6 +27,9 @@ content:
           final_review: { authors: [codex], reviewers: [codex, claude] }
   exceptions:
   - >-
+    Adoption is not exempt from the gate: the pull request that adopts delivery changes files outside the delivery root,
+    so it carries its own ready tranche record like any other change.
+  - >-
     Inert until adoption: with no `delivery:` block and `delivery` absent from `profiles:`, no delivery rule emits anything.
 metadata:
   aliases:

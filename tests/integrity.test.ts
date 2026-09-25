@@ -154,3 +154,13 @@ test("W1: a protected branch name cannot change the generated workflow's structu
     expect(parsed.on.push.branches).toEqual(hostile);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("GLM round 8 (Y2): ci init --replace still runs with an unreadable atdd-bun.yaml", async () => {
+  const { ciInit, renderWorkflow } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    expect((await ciInit(root, true)).ok).toBeTrue();
+    expect(await renderWorkflow(root)).toContain('branches: ["main", "master"]');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

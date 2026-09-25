@@ -113,8 +113,10 @@ release: { enabled: false }
 
 For programs delivered as tranches by a coordinator and persistent drivers, with headless authors
 and independent reviewers. Adopt it by naming `delivery` in `profiles:` (or, with no list, by adding
-a `delivery:` block); `agent init` then installs the delivery skill and its review contract. Every
-key is optional; these are the defaults:
+a `delivery:` block); `agent init` then installs the delivery skill and its review contract. The
+adopting pull request is itself governed: it changes files outside the delivery root, so it carries
+its own tranche record, reviewed and `ready` like any other. Every key is optional; these are the
+defaults:
 
 ```yaml
 delivery:
@@ -142,7 +144,8 @@ fails on it. Moving the root, dropping a stage, relaxing a stage from `different
 `require_record`, making fallback easier, or adding or changing a model's `commands` loosens the policy and is reported by the integrity check.
 
 The record's model and run identifiers are the driver's claims. The profile checks that they are
-consistent and that every review's raw report is retained; it does not verify them
+consistent and that a `ready` record retains every review's raw report (a record in progress may lag
+behind); it does not verify them
 cryptographically.
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and
