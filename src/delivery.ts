@@ -83,8 +83,10 @@ export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split(
 /** Why `current` enforces less than `base`, for the integrity check's loosening report. Tightening is silent. */
 export function loosenedDelivery(base: unknown, current: unknown): string[] {
   if (!deliveryAdopted(base)) return [];
-  // Dropping `delivery` from an explicit profile list is already reported as a dropped profile.
-  if (!deliveryAdopted(current)) return Array.isArray(record(current)?.profiles) ? [] : ["delivery is no longer adopted (the delivery: block was removed)"];
+  // Dropping `delivery` from one explicit profile list to another is already reported as a dropped profile. Any other
+  // way out is reported here: removing the block, or a first explicit list that leaves out a delivery adopted by its
+  // block (the block was itself an explicit adoption, so the first-list rule does not excuse it).
+  if (!deliveryAdopted(current)) return Array.isArray(record(base)?.profiles) && Array.isArray(record(current)?.profiles) ? [] : ["delivery is no longer adopted"];
   const before = deliveryPolicy(record(base)!.delivery), after = deliveryPolicy(record(current)!.delivery), out: string[] = [];
   for (const stage of STAGES) {
     const b = before.stages[stage], c = after.stages[stage];

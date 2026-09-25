@@ -139,7 +139,10 @@ test("loosening the policy is reported; tightening is silent", () => {
   expect(loosenedDelivery(strict, base)).toEqual(STAGE_NAMES.map(stage => `delivery.stages.${stage}.independence different-model → fresh-process`));
   expect(loosenedDelivery(base, { delivery: { stages: { code_review: { reviewers: ["glm"] } } } })).toEqual(["delivery.stages drops plan_review", "delivery.stages drops test_review", "delivery.stages drops final_review"]);
   expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, code_review: { reviewers: ["glm", "claude", "gpt"] } } } })).toEqual(["delivery.stages.code_review.reviewers adds gpt"]);
-  expect(loosenedDelivery(base, {})).toEqual(["delivery is no longer adopted (the delivery: block was removed)"]);
+  expect(loosenedDelivery(base, {})).toEqual(["delivery is no longer adopted"]);
+  // A first explicit list is an adoption, but not of less than the delivery block already adopted.
+  expect(loosenedDelivery(base, { profiles: ["docs"], delivery: {} })).toEqual(["delivery is no longer adopted"]);
+  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["docs"] })).toEqual([]);   // reported as `profiles drops delivery`
   // Through the integrity check: dropping the profile from an explicit list is reported once, as a dropped profile.
   expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["traceability"] }).filter(line => line.includes("delivery"))).toEqual(["profiles drops delivery"]);
 });
