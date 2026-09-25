@@ -112,7 +112,9 @@ test("8, pushed: a multi-commit direct push [docs, security] → no list → [do
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n"); await git(root, "commit", "-qam", "narrow", "--no-verify");
     const policy = (findings: { file: string; detail: string }[]) => findings.filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
     // Judged one commit deep, the push reads as a first adoption; judged from the pre-push tip, it drops security.
-    expect(policy(await checkIntegrity({ root, base: "", push: true }))).toEqual([]);
+    // (ATDD_BASE_REF is scrubbed so the one-commit-deep view is what this assertion sees, even inside a CI push run.)
+    const saved = process.env.ATDD_BASE_REF; delete process.env.ATDD_BASE_REF;
+    try { expect(policy(await checkIntegrity({ root, base: "", push: true }))).toEqual([]); } finally { if (saved !== undefined) process.env.ATDD_BASE_REF = saved; }
     expect(policy(await checkIntegrity({ root, base: before, push: true }))).toEqual([expect.stringContaining("profiles drops security")]);
     // A new branch (all-zero before-SHA) has no previous tip: judged against its parent, as before.
     expect(policy(await checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: true }))).toEqual([]);
@@ -140,6 +142,8 @@ test("the merge queue is judged against its target, not the default branch; an u
   const { checkIntegrity } = await import("../src/integrity");
   const workflow = await readFile(resolve(import.meta.dir, "../templates/github/atdd-bun.yml"), "utf8");
   expect(workflow).toContain("github.event_name == 'merge_group' && github.event.merge_group.base_sha");
+  // Set at job level, so the integrity step and the generated integrity test judge the same baseline.
+  expect(workflow.indexOf("ATDD_BASE_REF")).toBeLessThan(workflow.indexOf("steps:"));
   // The queue's target already governs [docs, security]; the queued result narrows it to [docs].
   await brownfield("profiles: [docs, security]\n", async root => {
     const target = (await Bun.$`git -C ${root} rev-parse base`.text()).trim();

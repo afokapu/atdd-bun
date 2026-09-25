@@ -9,16 +9,17 @@ jobs:
   atdd-bun:
     name: atdd-bun
     runs-on: ubuntu-latest
+    env:
+      # The policy baseline for every step (the integrity step and the generated integrity test alike): on a push, the
+      # pre-push tip, so a multi-commit push is judged as a whole; in the merge queue, the queue's target (GitHub sets
+      # no GITHUB_BASE_REF there); on a pull request, GITHUB_BASE_REF.
+      ATDD_BASE_REF: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run atdd-bun integrity
-        env:
-          # The policy baseline: on a push, the pre-push tip, so a multi-commit push is judged as a whole; in the merge
-          # queue, the queue's target (GitHub sets no GITHUB_BASE_REF there); on a pull request, GITHUB_BASE_REF.
-          ATDD_BASE_REF: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'merge_group' && github.event.merge_group.base_sha || '' }}
       - run: bun run atdd-bun all
       - run: bun test
       - run: bun run atdd-bun release check
