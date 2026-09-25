@@ -106,9 +106,10 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
   if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
   if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
   if (before.fallback.when_exhausted === "block" && after.fallback.when_exhausted === "wait") out.push("delivery.fallback.when_exhausted block → wait");
-  // The commands decide how reviews run; changing one the base defined can weaken review isolation.
-  for (const [model, command] of Object.entries(before.commands)) for (const role of ["author", "review"] as const)
-    if (command?.[role] !== undefined && after.commands[model]?.[role] !== command[role]) out.push(`delivery.commands.${model}.${role} changed`);
+  // The commands decide how reviews run: adding or changing one, including over the skill's protected defaults, can
+  // weaken review isolation. Removing one returns to the default, which is not a loosening.
+  for (const [model, command] of Object.entries(after.commands)) for (const role of ["author", "review"] as const)
+    if (command?.[role] !== undefined && before.commands[model]?.[role] !== command[role]) out.push(`delivery.commands.${model}.${role} ${before.commands[model]?.[role] === undefined ? "overrides the default" : "changed"}`);
   if (after.fallback.after_failures < before.fallback.after_failures) out.push(`delivery.fallback.after_failures ${before.fallback.after_failures} → ${after.fallback.after_failures}`);
   if (after.fallback.within_minutes > before.fallback.within_minutes) out.push(`delivery.fallback.within_minutes ${before.fallback.within_minutes} → ${after.fallback.within_minutes}`);
   return out;

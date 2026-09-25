@@ -662,7 +662,9 @@ test("GLM W3: an explicit gate base that cannot be resolved fails closed in both
 test("GLM W4 and W5: changed commands and when_exhausted are loosening; a removed list is reported once", () => {
   const base = { delivery: { commands: { claude: { review: "claude -p --allowedTools Read" } } } };
   expect(loosenedDelivery(base, { delivery: { commands: { claude: { review: "claude -p --dangerously-skip-permissions" } } } })).toEqual(["delivery.commands.claude.review changed"]);
-  expect(loosenedDelivery(base, { delivery: {} })).toEqual(["delivery.commands.claude.review changed"]);
+  expect(loosenedDelivery(base, { delivery: {} })).toEqual([]);   // back to the protected default
+  // Codex round 7 (X1): overriding a default where the base set nothing is reported too.
+  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { commands: { claude: { review: "claude -p --dangerously-skip-permissions" } } } })).toEqual(["delivery.commands.claude.review overrides the default"]);
   expect(loosenedDelivery({ delivery: {} }, { delivery: { fallback: { when_exhausted: "wait" } } })).toEqual(["delivery.fallback.when_exhausted block → wait"]);
   expect(loosenedPolicy({ profiles: ["delivery", "docs"] }, {}).filter(line => line.includes("delivery"))).toEqual(["profiles becomes implicit: the explicit list [delivery, docs] was removed"]);
 });

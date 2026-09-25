@@ -21,6 +21,10 @@ content:
   - >-
     Outside the gate (hooks, local runs) this rule emits nothing, so a tranche can push work in progress.
   - >-
+    The policy governs the tree it sits in. With atdd-bun.yaml in a subfolder (a monorepo package run with --root),
+    require_record covers that subfolder, not the rest of the repository, which another policy or none governs; the
+    generated workflow runs from the repository root, and drift from an approved commit is judged repository-wide.
+  - >-
     require_record false exempts changes with no record; turning it off is a loosening the integrity check reports.
 metadata:
   aliases:
