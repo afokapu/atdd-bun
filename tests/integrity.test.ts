@@ -155,12 +155,23 @@ test("W1: a protected branch name cannot change the generated workflow's structu
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("GLM round 8 (Y2): ci init --replace still runs with an unreadable atdd-bun.yaml", async () => {
-  const { ciInit, renderWorkflow } = await import("../src/ci");
+test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci init refuses rather than guess the branches", async () => {
+  const { ciInit } = await import("../src/ci");
   const root = await consumer();
   try {
-    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [trunk]\n");
     expect((await ciInit(root, true)).ok).toBeTrue();
-    expect(await renderWorkflow(root)).toContain('branches: ["main", "master"]');
+    const workflow = join(root, ".github/workflows/atdd-bun.yml"), before = await readFile(workflow, "utf8");
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    // GLM round 9 (Z2): the restore command must not rewrite the push branches to a guess.
+    const refused = await ciInit(root, true);
+    expect(refused.ok).toBeFalse();
+    expect(refused.message).toContain("could not be parsed");
+    expect(await readFile(workflow, "utf8")).toBe(before);
+    // GLM round 9 (Z1): a finding with a restore, not a crash; the other findings are kept.
+    await writeFile(join(root, "AGENTS.md"), "# edited\n");
+    const findings = await checkIntegrity({ root, base: "HEAD", push: false });
+    expect(files(findings)).toEqual(["AGENTS.md", "atdd-bun.yaml"]);
+    expect(findings.find(f => f.file === "atdd-bun.yaml")!.restore).toBe("fix the YAML syntax in atdd-bun.yaml, then re-run the check");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

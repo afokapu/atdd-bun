@@ -88,7 +88,7 @@ async function checkDependency(root: string): Promise<IntegrityFinding[]> {
 }
 
 /** Generated files are byte-identical to what the installed version generates (ignoring its version stamp). */
-async function checkGenerated(root: string, packageRoot: string): Promise<IntegrityFinding[]> {
+async function checkGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
   const findings: IntegrityFinding[] = [];
   const same = async (file: string, template: string, restore: string) => {
     const path = join(root, file);
@@ -97,7 +97,8 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   };
   // The workflow is rendered per repository (its protected branches), so it is compared with that rendering.
   const workflow = join(root, WORKFLOW);
-  if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
+  if (skipWorkflow) { /* rendered from atdd-bun.yaml, which does not parse: reported by the caller */ }
+  else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
   else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
   // Required while delivery is adopted; protected whenever present, so turning delivery off and on cannot launder an edit.
@@ -173,7 +174,13 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
 
 export async function checkIntegrity(options: IntegrityOptions = {}): Promise<IntegrityFinding[]> {
   const root = resolve(options.root ?? process.cwd()), packageRoot = options.packageRoot ?? ownRoot;
-  return [...await checkInstalledPackage(packageRoot), ...await checkDependency(root), ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base, options.push)];
+  // An unreadable atdd-bun.yaml is a finding, not a crash: the policy and the workflow rendered from it cannot be
+  // judged until it parses, and every other finding is kept.
+  const config = join(root, "atdd-bun.yaml");
+  let unreadable: IntegrityFinding | null = null;
+  if (existsSync(config)) try { Bun.YAML.parse(await readFile(config, "utf8")); } catch (error) { unreadable = { file: "atdd-bun.yaml", detail: `could not be parsed, so the policy and the workflow's push branches cannot be judged: ${String(error)}`, restore: "fix the YAML syntax in atdd-bun.yaml, then re-run the check" }; }
+  const base = [...await checkInstalledPackage(packageRoot), ...await checkDependency(root)];
+  return unreadable ? [...base, ...await checkGenerated(root, packageRoot, true), unreadable] : [...base, ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base, options.push)];
 }
 
 /** The message both the local test and CI print: addressed to the agent, with the way back for every file. */
