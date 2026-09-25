@@ -217,7 +217,7 @@ test("a baseline that parses to a scalar or a list is not a policy and is never 
 test("a wrongly typed policy field is a finding on either side, never a crash; an empty or null policy is the defaults", async () => {
   const cases: Array<[string, string, string]> = [
     ["protected_branches: 42\n", "max_staged_files: 20\n", "the baseline"],
-    ["max_staged_files: 20\n", "registry_paths: plan\n", "which the hooks would read as their defaults"],
+    ["max_staged_files: 20\n", "registry_paths: plan\n", "which the hooks would ignore or misread"],
     ["max_staged_files: 20\n", "worktrees: [on]\n", "worktrees must be a mapping"],
   ];
   for (const [baseline, current, expected] of cases) {
@@ -239,3 +239,16 @@ test("a wrongly typed policy field is a finding on either side, never a crash; a
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
+
+test("a key with no value is absent, as the hooks read it: a null baseline field does not lock the repository", async () => {
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees:\n  # enabled: false\nprotected_branches:\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees: { enabled: true }\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+    // And a null in the working tree compares as the default, not as 0.
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nmax_staged_files:\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

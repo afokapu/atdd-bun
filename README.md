@@ -134,8 +134,9 @@ since every docs area needs an index.
 Upgrading from 0.8.0: records under `delivery/` are reported until `delivery.root: delivery` is set
 (a reported root change, approved once) or they are moved. A data file in an old tranche that no
 record there names is reported on local runs, not at the merge gate; removing it is a gate change a
-human approves, or a new tranche's record can name it. Every
-key is optional; these are the defaults:
+human approves, or a new tranche's record can name it.
+
+Every key is optional; these are the defaults:
 
 ```yaml
 delivery:

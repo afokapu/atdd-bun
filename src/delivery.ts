@@ -232,6 +232,8 @@ const namedReports = (data: unknown): string[] => {
 const isFolder = (path: string) => { try { return lstatSync(path).isDirectory(); } catch { return false; } };
 /** A folder, through a symlink too: the legacy and hidden-records probes look wherever records could be. */
 const isLink = (path: string) => { try { return lstatSync(path).isSymbolicLink(); } catch { return false; } };
+/** Whether any folder on the way to `relative` (below `root`) is a symlink. */
+const throughLink = (root: string, relative: string) => relative.split("/").some((_, i, parts) => isLink(join(root, ...parts.slice(0, i + 1))));
 const reachesFolder = (path: string) => { try { return statSync(path).isDirectory(); } catch { return false; } };
 const regularFile = (path: string) => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
@@ -379,7 +381,7 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const unnamed = (await dataFiles(absolute, policy)).filter(path => !reported.has(path));
   const rootPath = join(absolute, policy.root);
   if (existsSync(rootPath) || isLink(rootPath)) {
-    if (isLink(rootPath)) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a symlink; the delivery root must be a real folder, whose records Git tracks`));
+    if (isLink(rootPath) || throughLink(absolute, policy.root)) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is, or is reached through, a symlink; the delivery root must be a real folder, whose records Git tracks`));
     else if (!isFolder(rootPath)) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a file, not a folder; the records cannot be read`));
   }
   for (const path of [...await strayFiles(absolute, policy), ...unnamed].sort()) if (!onBase || (await git(absolute, ["diff", "--quiet", onBase, "--", path])).code) findings.push(finding("delivery.evidence-schema", path, `${path} is neither a tranche's evidence.yaml nor a report a record in its tranche names (a data file: ${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}); the records folder holds only records and their reports`));
