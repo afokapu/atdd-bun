@@ -709,3 +709,21 @@ test("records left under delivery/, the 0.8.0 default, are reported rather than 
   });
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));   // root pinned
 });
+
+test("inside docs/, the only delivery root is docs/delivery/tranches, and the docs profile gives up nothing else", async () => {
+  const { scanDocumentation } = await import("../src/docs-capability");
+  for (const root of ["docs", "docs/purpose", "docs/delivery"]) {
+    const files = { "atdd-bun.yaml": `profiles: [docs, delivery]\ndelivery:\n  root: ${root}\n`, "docs/index.adoc": "= D\n:doc-id: d\n:status: current\n", [`${root}/api/report.md`]: "# authored markdown\n" };
+    await withRepo(files, async dir => {
+      expect(await evidence(dir), root).toContainEqual(expect.stringContaining(`delivery.root ${root} is inside docs/`));
+      expect((await scanDocumentation(dir)).filter(v => v.rule_id === "planner.docs.asciidoc-only").map(v => v.file), root).toEqual([`${root}/api/report.md`]);
+    });
+  }
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: ops/delivery\n" }, async dir => expect(await rules(dir)).toEqual([]));
+});
+
+test("pinning the 0.8.0 root over a base that never set one is not a loosening; any other root change is", () => {
+  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "delivery" } })).toEqual([]);
+  expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "ops/records" } })).toEqual(["delivery.root docs/delivery/tranches → ops/records"]);
+  expect(loosenedDelivery({ delivery: { root: "docs/delivery/tranches" } }, { delivery: { root: "delivery" } })).toEqual(["delivery.root docs/delivery/tranches → delivery"]);
+});

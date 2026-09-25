@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { journeyDocs, journeyDocsApply } from "./journey-docs";
-import { deliveryAdopted, deliveryPolicy } from "./delivery";
+import { DEFAULT_ROOT, deliveryAdopted, deliveryPolicy } from "./delivery";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
@@ -59,8 +59,10 @@ async function deliveryRecords(root: string): Promise<(path: string) => boolean>
   try {
     const data = existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown> | null : null;
     if (!deliveryAdopted(data)) return () => false;
-    const records = deliveryPolicy(data!.delivery).root;
-    return path => path === records || path.startsWith(`${records}/`);
+    // Only the one folder the delivery profile may use under docs/; a root configured anywhere else in docs/ is a delivery
+    // finding and exempts nothing here.
+    if (deliveryPolicy(data!.delivery).root !== DEFAULT_ROOT) return () => false;
+    return path => path === DEFAULT_ROOT || path.startsWith(`${DEFAULT_ROOT}/`);
   } catch { return () => false; }
 }
 

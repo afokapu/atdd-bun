@@ -42,6 +42,9 @@ const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
 /** Tranche records live with the program's reasoning, under the docs profile's delivery area; the docs profile leaves
  * this folder to the delivery profile (records are YAML and data, never authored AsciiDoc). */
 export const DEFAULT_ROOT = "docs/delivery/tranches";
+/** The default before 0.9.0. */
+const LEGACY_ROOT = "delivery";
+const inDocs = (root: string) => root === "docs" || root.startsWith("docs/");
 const DEFAULT_FALLBACK: DeliveryPolicy["fallback"] = { after_failures: 3, within_minutes: 10, when_exhausted: "block" };
 const packageRoot = resolve(import.meta.dir, "..");
 
@@ -105,8 +108,11 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
       if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
     }
   }
-  // Moving the root hides every earlier record from the validator and the gate.
-  if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
+  // Moving the root hides every earlier record from the validator and the gate. One exception: pinning `delivery`, the
+  // 0.8.0 default, over a base that never set a root keeps the records exactly where they were; it is the fix the
+  // legacy-records finding recommends, and the base's effective root is only computed with today's default.
+  const legacyPin = record(record(base)!.delivery)?.root === undefined && after.root === LEGACY_ROOT;
+  if (before.root !== after.root && !legacyPin) out.push(`delivery.root ${before.root} → ${after.root}`);
   if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
   if (before.fallback.when_exhausted === "block" && after.fallback.when_exhausted === "wait") out.push("delivery.fallback.when_exhausted block → wait");
   // The commands decide how reviews run: adding or changing one, including over the skill's protected defaults, can
@@ -300,11 +306,16 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   if (overlap) {
     findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} overlaps the ${overlap} root; the delivery root holds only records and reports`));
     policy = { ...policy, root: DEFAULT_ROOT };
+  } else if (inDocs(policy.root) && policy.root !== DEFAULT_ROOT) {
+    // The docs profile gives up exactly one folder under docs/; any other root there would take authored documentation
+    // out of its rules.
+    findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is inside docs/; the only delivery root there is ${DEFAULT_ROOT}, the one folder the docs profile leaves to delivery`));
+    policy = { ...policy, root: DEFAULT_ROOT };
   }
   // 0.8.0 kept records under delivery/ by default. Records left there after the default moved would be silently unseen.
   const configuredRoot = record(block)?.root;
-  if (configuredRoot === undefined && policy.root === DEFAULT_ROOT && existsSync(join(absolute, "delivery"))) {
-    const legacy = (await readdir(join(absolute, "delivery"), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, "delivery", entry.name, "evidence.yaml")));
+  if (configuredRoot === undefined && policy.root === DEFAULT_ROOT && existsSync(join(absolute, LEGACY_ROOT))) {
+    const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
     if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the default root ${DEFAULT_ROOT}, where 0.8.0 kept them; move them there, or set delivery.root: delivery`));
   }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);

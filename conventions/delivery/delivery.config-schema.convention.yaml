@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: The delivery policy in atdd-bun.yaml is well-formed
 statement: >-
-  The `delivery:` block of atdd-bun.yaml validates against delivery-config.schema.json: known keys only, each stage listing at least one reviewer, models named in lowercase, independence one of fresh-process or different-model, the root in canonical form (no leading, trailing or doubled slash, no dot segment) and not overlapping the plan, source, test, e2e or telemetry root (REQUIRED).
+  The `delivery:` block of atdd-bun.yaml validates against delivery-config.schema.json: known keys only, each stage listing at least one reviewer, models named in lowercase, independence one of fresh-process or different-model, the root in canonical form (no leading, trailing or doubled slash, no dot segment) not overlapping the plan, source, test, e2e or telemetry root, and, inside docs/, exactly docs/delivery/tranches (REQUIRED).
 terms:
 - term_id: policy
   text: >-
@@ -18,7 +18,7 @@ content:
     Correct the key the finding names. The defaults are:
 
       delivery:
-        root: delivery
+        root: docs/delivery/tranches
         independence: fresh-process
         stages:
           plan_review:  { authors: [codex], reviewers: [glm, claude] }
