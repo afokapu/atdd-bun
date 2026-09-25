@@ -513,3 +513,50 @@ test("U2: an explicit `delivery: null` is validated as written, not read as an e
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery: null\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
 });
+
+// Round 4 of PR #19 (GLM, 6779137).
+
+test("GLM U1: two ready tranches in one change do not drift against each other", async () => {
+  await tranche(async (dir, commit) => {
+    const a = await commit("feat: a", { "src/a.ts": "export const a = 1;\n" });
+    await commit("chore: a evidence", tranchePR("a", a));
+    await sh(dir, "git", "checkout", "-q", "-b", "tranche/b", "main");
+    const b = await commit("feat: b", { "src/b.ts": "export const b = 1;\n" });
+    await commit("chore: b evidence", tranchePR("b", b));
+    // One PR carrying both tranches.
+    await sh(dir, "git", "checkout", "-q", "tranche/api"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "both", "tranche/b");
+    expect(await gate(dir)).toEqual([]);
+    // One push to main bringing both (a merge-queue batch).
+    await sh(dir, "git", "checkout", "-q", "main"); const before = await sh(dir, "git", "rev-parse", "HEAD");
+    await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "batch", "tranche/api");
+    expect((await validateDelivery(dir, { gate: "post-merge", base: before })).filter(f => f.rule_id === "delivery.merge-gate")).toEqual([]);
+    // An unreviewed file in the same batch is still drift for whichever record the batch side belongs to.
+    await sh(dir, "git", "reset", "-q", "--hard", before); await sh(dir, "git", "checkout", "-q", "tranche/api");
+    await commit("sneak", { "src/c.ts": "export const c = 1;\n" });
+    expect(await gate(dir)).toContainEqual(expect.stringContaining("changes src/c.ts after approved_sha"));
+  });
+});
+
+test("GLM U2: renaming a merged record away is a deletion", async () => {
+  for (const target of ["archive/evidence.yaml", "delivery/api2/moved.json"])
+    await tranche(async (dir, commit) => {
+      const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+      await commit("chore: evidence", tranchePR("api", sha));
+      await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+      await sh(dir, "git", "checkout", "-qb", "tranche/move");
+      await mkdir(dirname(join(dir, target)), { recursive: true }); await sh(dir, "git", "mv", "delivery/api/evidence.yaml", target);
+      const next = await commit("move", { "src/app.ts": "export const a = 4;\n" });
+      await commit("chore: api2", tranchePR("api2", next));
+      expect(await gate(dir), target).toContain("the branch deletes delivery/api/evidence.yaml; records are append-only, and deleting one would escape its findings and the gate");
+    });
+});
+
+test("GLM U3: code changed after code_review cannot merge on an appended final_review alone", async () => {
+  await tranche(async (dir, commit) => {
+    const green = await commit("green", { "src/app.ts": "export const a = 2;\n" });
+    const later = await commit("after code review", { "src/app.ts": "export const a = 666;\n" });
+    const reviews = FULL.map(r => ({ ...r, sha: r.stage === "final_review" ? later : green, report: `delivery/api/${r.stage}.json` }));
+    await commit("evidence", { "delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL.map(r => [`delivery/api/${r.stage}.json`, "{}"])) });
+    expect((await validateDelivery(dir, { gate: false })).map(f => f.evidence)).toEqual([`src/app.ts changed after code_review approved ${green.slice(0, 7)}, and only final_review reviewed the change; a code change goes back through code_review`]);
+  });
+});
