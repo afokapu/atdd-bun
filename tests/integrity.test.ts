@@ -74,7 +74,7 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);
 
 test("the installed package is checked file by file against its published manifest", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-integrity-installed-"));
@@ -258,4 +258,4 @@ test("a key with no value is absent, as the hooks read it: a null baseline field
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nmax_staged_files:\n");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);

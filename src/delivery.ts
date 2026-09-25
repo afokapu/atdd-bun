@@ -1,6 +1,6 @@
 import Ajv, { type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
-import { existsSync, lstatSync, statSync } from "node:fs";
+import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { PlanFinding } from "./planner-kernel";
@@ -234,6 +234,8 @@ const isFolder = (path: string) => { try { return lstatSync(path).isDirectory();
 const isLink = (path: string) => { try { return lstatSync(path).isSymbolicLink(); } catch { return false; } };
 /** Whether any folder on the way to `relative` (below `root`) is a symlink. */
 const throughLink = (root: string, relative: string) => relative.split("/").some((_, i, parts) => isLink(join(root, ...parts.slice(0, i + 1))));
+/** Two paths that resolve to one folder (a compatibility symlink to the root): its records are the root's, not outside it. */
+const sameFolder = (a: string, b: string) => { try { return realpathSync(a) === realpathSync(b); } catch { return false; } };
 const reachesFolder = (path: string) => { try { return statSync(path).isDirectory(); } catch { return false; } };
 const regularFile = (path: string) => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
@@ -358,12 +360,12 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     policy = { ...policy, root: DEFAULT_ROOT };
   }
   // 0.8.0 kept records under delivery/ by default. Records left there under any other effective root would be unseen.
-  if (policy.root !== LEGACY_ROOT && reachesFolder(join(absolute, LEGACY_ROOT))) {
+  if (policy.root !== LEGACY_ROOT && reachesFolder(join(absolute, LEGACY_ROOT)) && !sameFolder(join(absolute, LEGACY_ROOT), join(absolute, policy.root))) {
     const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
     if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the root ${policy.root}; 0.8.0 kept them there by default; set delivery.root: delivery (a root change the integrity check reports for a human to approve once), or move them there, which rewrites merged records and so needs a human-supervised merge`));
   }
   // The other direction: records under the default root while another root is configured are outside what is judged.
-  if (policy.root !== DEFAULT_ROOT && reachesFolder(join(absolute, DEFAULT_ROOT))) {
+  if (policy.root !== DEFAULT_ROOT && reachesFolder(join(absolute, DEFAULT_ROOT)) && !sameFolder(join(absolute, DEFAULT_ROOT), join(absolute, policy.root))) {
     const hidden = (await readdir(join(absolute, DEFAULT_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, DEFAULT_ROOT, entry.name, "evidence.yaml")));
     if (hidden.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under ${DEFAULT_ROOT} (${hidden.map(entry => entry.name).join(", ")}) are outside the configured root ${policy.root}; move them there, or remove delivery.root`));
   }

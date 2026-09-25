@@ -834,3 +834,10 @@ test("a symlink anywhere on the way to the root is reported", async () => {
     expect(await evidence(dir)).toContainEqual(expect.stringContaining("delivery.root docs/delivery/tranches is, or is reached through, a symlink"));
   });
 });
+
+test("a compatibility symlink to the root is not records outside it", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": record([]) }, async dir => {
+    await Bun.$`ln -s docs/delivery/tranches ${join(dir, "delivery")}`;
+    expect((await evidence(dir)).filter(e => e.includes("outside the root"))).toEqual([]);
+  });
+});

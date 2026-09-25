@@ -136,6 +136,10 @@ Upgrading from 0.8.0: records under `delivery/` are reported until `delivery.roo
 record there names is reported on local runs, not at the merge gate; removing it is a gate change a
 human approves, or a new tranche's record can name it.
 
+Upgrading from 0.9.0: an `atdd-bun.yaml` field with the wrong type (a quoted number, `yes`/`no`, a
+non-string list item, `.inf`) is now reported, and on the base branch it blocks every pull request,
+since the policy cannot be compared. Correct such fields on the base branch before upgrading.
+
 Every key is optional; these are the defaults:
 
 ```yaml
