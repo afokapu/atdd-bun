@@ -175,3 +175,15 @@ test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci ini
     expect(findings.find(f => f.file === "atdd-bun.yaml")!.restore).toBe("fix the YAML syntax in atdd-bun.yaml, then re-run the check");
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, and is never read as the defaults", async () => {
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "broken base", "--no-verify"); await git(root, "branch", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+    const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml");
+    expect(findings.map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed, so the policy cannot be compared")]);
+    expect(findings[0].restore).toStartWith("repair the malformed atdd-bun.yaml on the base branch");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
