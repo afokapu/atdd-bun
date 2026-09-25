@@ -792,3 +792,14 @@ test("a data file in a tranche folder belongs only as a report a record there na
     expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual(["delivery/api/design.md"]);
   });
 });
+
+// Round 5 of #23 (Claude fallback reviewer: U1 medium, U2 low).
+
+test("a malformed record is a schema finding, never a crash, and a file named delivery is not a records folder", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/a/evidence.yaml": JSON.stringify({ tranche: "a", status: "open", reviews: "x" }), "docs/delivery/tranches/b/evidence.yaml": JSON.stringify({ tranche: "b", status: "open", reviews: [null] }) }, async dir => {
+    const found = await validateDelivery(dir, { gate: false });
+    expect(found.map(f => f.rule_id).every(id => id === "delivery.evidence-schema")).toBeTrue();
+    expect(found.map(f => f.evidence)).toContainEqual(expect.stringContaining("/reviews must be array"));
+  });
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery": "#!/bin/sh\necho deliver\n" }, async dir => expect(await rules(dir)).toEqual([]));
+});
