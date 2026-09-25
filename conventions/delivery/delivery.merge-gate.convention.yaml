@@ -21,6 +21,10 @@ content:
   - >-
     Outside the gate (hooks, local runs) this rule emits nothing, so a tranche can push work in progress.
   - >-
+    Before the merge, a pull request is judged at its head (the second parent of the test merge GitHub computes), not at
+    that merge commit; content only a merge commit introduces is judged after the merge, where a push is judged whole.
+    Judging GitHub's merge result instead would report the base branch's own changes to the same files as drift.
+  - >-
     The policy governs the tree it sits in. With atdd-bun.yaml in a subfolder (a monorepo package run with --root),
     require_record covers that subfolder, not the rest of the repository, which another policy or none governs; the
     generated workflow runs from the repository root, and drift from an approved commit is judged repository-wide.

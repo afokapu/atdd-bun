@@ -139,7 +139,7 @@ push to a protected branch (the generated workflow's push branches follow `prote
 merge commit: a squash or rebase merge writes a commit no reviewer saw, and the post-merge check
 fails on it. Moving the root, dropping a stage, relaxing a stage from `different-model` to
 `fresh-process`, adding an author or reviewer, moving a fallback model earlier in a list, turning off
-`require_record`, or making fallback easier loosens the policy and is reported by the integrity check.
+`require_record`, making fallback easier, or adding or changing a model's `commands` loosens the policy and is reported by the integrity check.
 
 The record's model and run identifiers are the driver's claims. The profile checks that they are
 consistent and that every review's raw report is retained; it does not verify them

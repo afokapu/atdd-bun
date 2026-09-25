@@ -43,7 +43,7 @@
     },
     "commands": {
       "type": "object",
-      "description": "Headless invocation per model, overriding the skill's built-in defaults. {prompt} and {worktree} are substituted by the driver.",
+      "description": "Headless invocation per model, overriding the skill's built-in defaults. {prompt} and {worktree} are substituted by the driver. Adding or changing an entry after adoption is a loosening the integrity check reports; removing one returns to the default.",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
