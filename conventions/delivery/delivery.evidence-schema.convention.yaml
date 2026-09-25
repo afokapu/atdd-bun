@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: Every tranche folder holds a well-formed evidence record
 statement: >-
-  Every folder under the delivery root holds an evidence.yaml that validates against delivery-evidence.schema.json, whose tranche matches the folder name, whose reviews each name an author and a configured stage, and whose reports are data files (json, jsonl, yaml, yml, txt, md, log) inside the tranche's own folder, one per review; a ready record names one for every review (delivery.stages-complete); and the records folder holds nothing else: every other file in it, including a loose file directly under the root, is a finding (REQUIRED).
+  Every folder under the delivery root holds an evidence.yaml that validates against delivery-evidence.schema.json, whose tranche matches the folder name, whose reviews each name an author and a configured stage, and whose reports are data files (json, jsonl, yaml, yml, txt, md, log) inside the tranche's own folder, one per review; a ready record names one for every review (delivery.stages-complete); and the records folder holds nothing else: a data file belongs only as a report a record in its tranche names, and every other file, including a loose file directly under the root, is a finding (REQUIRED).
 terms:
 - term_id: tranche
   text: >-

@@ -53,12 +53,12 @@ test("the multiplexer is named in the policy, herdr by default, any command name
   expect(deliveryPolicy({}).multiplexer).toBe("herdr");
   expect(deliveryPolicy({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
   await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  multiplexer: zellij\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
-  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  multiplexer: Herdr CLI\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  multiplexer: Herdr CLI\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect([...new Set(await rules(dir))]).toEqual(["delivery.config-schema"]));
 });
 
 test("a malformed policy is reported and the evidence is judged against the defaults", async () => {
   await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  stages:\n    code_review: { reviewers: [] }\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
-    expect(await rules(dir)).toEqual(["delivery.config-schema"]);
+    expect([...new Set(await rules(dir))]).toEqual(["delivery.config-schema"]);
   });
 });
 
@@ -293,7 +293,7 @@ test("F7: the root has one spelling; a non-canonical one is a config finding and
   expect(deliveryPolicy({ root: "delivery/" }).root).toBe("delivery");
   expect(deliveryPolicy({ root: "./ops//delivery/" }).root).toBe("ops/delivery");
   await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery/\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
-    expect(await rules(dir)).toEqual(["delivery.config-schema"]);
+    expect([...new Set(await rules(dir))]).toEqual(["delivery.config-schema"]);
   });
 });
 
@@ -619,6 +619,7 @@ test("GLM W1: the freshness check follows code_review, so a reduced stage set ca
     const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), code = await commit("code", { "src/app.ts": "export const a = 3;\n" });
     const stages = (names: string[]) => `delivery:\n  root: delivery\n  stages:\n${names.map(n => `    ${n}: { reviewers: [${n === "test_review" || n === "final_review" ? "codex" : "glm"}, claude] }`).join("\n")}\n`;
     const check = async (names: string[], shas: Record<string, string>, approved: string) => {
+      await rm(join(dir, "delivery"), { recursive: true, force: true });
       const reviews = FULL.filter(r => names.includes(r.stage as string)).map(r => ({ ...r, sha: shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
       await mkdir(join(dir, "delivery/api"), { recursive: true });
       await writeFile(join(dir, "atdd-bun.yaml"), stages(names));
@@ -705,7 +706,7 @@ test("where delivery is adopted, the docs profile leaves the records folder to i
 
 test("records left under delivery/, the 0.8.0 default, are reported rather than silently unseen", async () => {
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
-    expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under delivery/ (api) are outside the default root docs/delivery/tranches")]);
+    expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under delivery/ (api) are outside the root docs/delivery/tranches")]);
   });
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));   // root pinned
 });
@@ -765,5 +766,29 @@ test("at the gate, a stray the change does not touch is not judged again; a syml
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record([]), "elsewhere.md": "# authored\n" }, async dir => {
     await Bun.$`ln -s ../../elsewhere.md ${join(dir, "delivery/api/notes.md")}`;
     expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual(["delivery/api/notes.md"]);
+  });
+});
+
+// Round 4 of #23 (Claude fallback reviewer for Codex, T1 high and T2 low; GLM T1 low).
+
+test("0.8.0 records under delivery/ stay append-only after the root moves, and an explicit default root does not silence them", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: docs/delivery/tranches\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under delivery/ (api) are outside the root docs/delivery/tranches")]);
+  });
+  await tranche(async (dir, commit) => {
+    await commit("0.8.0 record", { "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record([]) });
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/upgrade");
+    await sh(dir, "git", "rm", "-rq", "delivery/api");
+    const sha = await commit("upgrade", { "src/app.ts": "export const a = 4;\n" });
+    const fresh = Object.fromEntries(Object.entries(tranchePR("up", sha)).map(([path, text]) => [path.replace(/^delivery\//, "docs/delivery/tranches/"), text.replaceAll("delivery/up/", "docs/delivery/tranches/up/")]));
+    await commit("evidence", fresh);
+    expect(await gate(dir)).toContain("the branch deletes delivery/api/evidence.yaml, a record 0.8.0 kept under delivery/; records stay append-only when the root moves");
+  });
+});
+
+test("a data file in a tranche folder belongs only as a report a record there names", async () => {
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record([FULL[0]].map(r => ({ ...r, report: "delivery/api/plan.json" }))), "delivery/api/plan.json": "{}", "delivery/api/design.md": "# authored\n" }, async dir => {
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual(["delivery/api/design.md"]);
   });
 });
