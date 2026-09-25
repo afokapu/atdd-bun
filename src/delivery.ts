@@ -148,6 +148,9 @@ function checkModels(file: string, review: Review, policy: StagePolicy, at: stri
   return out;
 }
 
+/** Two spellings of one commit: an abbreviated SHA is a prefix of the full one. */
+const sameCommit = (a: string, b: string) => a.length <= b.length ? b.startsWith(a) : a.startsWith(b);
+
 /** The judgement over one well-formed record. */
 function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy): PlanFinding[] {
   const out: PlanFinding[] = [], reviews = evidence.reviews;
@@ -195,7 +198,7 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
       else if (last.verdict !== "approve") out.push(finding("delivery.stages-complete", file, `status is ready, but the last ${stage} requests changes`));
     }
     const closing = configured.at(-1), approval = closing && reviews.filter(review => review.stage === closing).at(-1);
-    if (approval && approval.verdict === "approve" && approval.sha !== evidence.approved_sha) out.push(finding("delivery.stages-complete", file, `approved_sha ${evidence.approved_sha} is not the SHA the last ${closing} approved (${approval.sha})`));
+    if (approval && approval.verdict === "approve" && !sameCommit(approval.sha, evidence.approved_sha ?? "")) out.push(finding("delivery.stages-complete", file, `approved_sha ${evidence.approved_sha} is not the SHA the last ${closing} approved (${approval.sha})`));
   }
   return out;
 }
@@ -216,10 +219,17 @@ async function gateRange(root: string, mode: GateMode, base?: string): Promise<{
     const parent = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^1"]), head = await git(root, ["rev-parse", "HEAD"]);
     return parent.code || !parent.out ? null : { base: parent.out, head: head.out };
   }
+  // An explicit base wins: a branch that merged its base in locally is still judged against that base.
+  const explicit = base ?? process.env.ATDD_BASE_REF;
+  if (explicit && !(await git(root, ["rev-parse", "--verify", "--quiet", explicit])).code) return againstRef(root, explicit);
+  // CI checks a pull request out as a merge commit: first parent the base, second the tranche head.
   const merge = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^2"]);
   if (!merge.code && merge.out) return { base: (await git(root, ["rev-parse", "HEAD^1"])).out, head: merge.out };
-  const ref = base ?? process.env.ATDD_BASE_REF ?? (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
-  if ((await git(root, ["rev-parse", "--verify", "--quiet", ref])).code) return null;
+  const ref = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD";
+  return (await git(root, ["rev-parse", "--verify", "--quiet", ref])).code ? null : againstRef(root, ref);
+}
+
+async function againstRef(root: string, ref: string): Promise<{ base: string; head: string } | null> {
   const since = (await git(root, ["merge-base", "HEAD", ref])).out, head = (await git(root, ["rev-parse", "HEAD"])).out;
   return since && head ? { base: since, head } : null;
 }
@@ -229,7 +239,8 @@ export type DeliveryOptions = { gate?: boolean | GateMode; base?: string };
 
 export async function validateDelivery(root = process.cwd(), options: DeliveryOptions = {}): Promise<PlanFinding[]> {
   const absolute = resolve(root), config = await readConfig(absolute);
-  if (config.error || !deliveryAdopted(config.data)) return [];
+  if (config.error) return [finding("delivery.config-schema", "atdd-bun.yaml", `atdd-bun.yaml could not be parsed, so the delivery policy cannot be read: ${config.error}`)];
+  if (!deliveryAdopted(config.data)) return [];
   const findings: PlanFinding[] = [], validConfig = await schema("delivery-config.schema.json"), block = config.data!.delivery ?? {};
   let policy = deliveryPolicy(block);
   if (!validConfig(block)) {
@@ -237,6 +248,9 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     policy = deliveryPolicy({});
   }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy), ready: EvidenceFile[] = [];
+  const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
+  // At the gate, records the change does not touch were judged when they merged; see approved-sha-resolves below.
+  const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null : null;
   for (const entry of files) {
     if (!entry.data) { findings.push(finding("delivery.evidence-schema", entry.file, entry.error ?? "evidence is missing")); continue; }
     if (!validEvidence(entry.data)) {
@@ -249,10 +263,12 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       ready.push(entry);
       // Ready means auditable: every review's raw output is retained and named.
       for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !existsSync(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which does not exist` : "retains no report"}`));
+      // At the gate, a record already on the base branch was judged when it merged; re-judging it would fail every
+      // later change once its tranche branch is gone.
+      if (onBase && !(await git(absolute, ["diff", "--quiet", onBase, "--", entry.file])).code) continue;
       if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`));
     }
   }
-  const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
   if (mode) findings.push(...await mergeGate(absolute, policy, files, mode, options.base));
   return findings;
 }
@@ -268,15 +284,19 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   const changed = changedHere.filter(path => path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml")), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
   // Drift is judged over the whole repository, not just this root: a change anywhere after approval counts.
   const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, out: PlanFinding[] = [];
+  const deleted = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=D", ...span, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
+  for (const path of deleted) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} deletes ${path}; records are append-only, and deleting one would escape its findings and the gate`));
   if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   for (const path of changed) {
     const entry = files.find(file => file.file === path);
-    if (!entry?.data) continue; // removed, or already reported by the schema rule
+    if (!entry?.data) continue; // deleted (reported above), or already reported by the schema rule
     if (entry.data.status !== "ready") { out.push(finding("delivery.merge-gate", path, `${path} is ${entry.data.status}; a tranche merges only when its record is ready`)); continue; }
     const sha = entry.data.approved_sha!;
     if ((await git(root, ["cat-file", "-e", `${sha}^{commit}`])).code) continue; // reported by delivery.approved-sha-resolves
     if ((await git(root, ["merge-base", "--is-ancestor", sha, range.head])).code) { out.push(finding("delivery.merge-gate", path, `approved_sha ${sha.slice(0, 7)} is not contained in ${mode === "merge" ? "the branch head" : "the merged commit"}${mode === "post-merge" ? "; a squash or rebase merge rewrites the approved commit, so merge with a merge commit" : "; the branch was rewritten after approval"}`)); continue; }
-    const drift = (await git(root, ["diff", "--name-only", sha, range.head])).out.split("\n").filter(Boolean).filter(file => !file.startsWith(`${prefix}${policy.root}/`));
+    // Only the record and the reports it names may postdate the approval; anything else under the root is drift too.
+    const exempt = new Set([path, ...entry.data.reviews.flatMap(review => review.report ? [review.report] : [])].map(file => `${prefix}${file}`));
+    const drift = (await git(root, ["diff", "--name-only", sha, range.head])).out.split("\n").filter(Boolean).filter(file => !exempt.has(file));
     if (mode === "merge" && drift.length) out.push(finding("delivery.merge-gate", path, `the branch head changes ${drift.slice(0, 5).join(", ")}${drift.length > 5 ? ` and ${drift.length - 5} more` : ""} after approved_sha ${sha.slice(0, 7)}; any change after approval needs a fresh review`));
   }
   return out;

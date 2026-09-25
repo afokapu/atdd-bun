@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: A tranche merges only its approved SHA
 statement: >-
-  At the gate (ATDD_DELIVERY_GATE, which the generated CI sets to merge on pull requests and the merge queue and to post-merge on pushes), every evidence record the change touches is ready and approves a commit the head contains; before the merge the head differs from that commit only under the delivery root; and, with require_record (the default), a change outside the delivery root comes with a tranche record (REQUIRED).
+  At the gate (ATDD_DELIVERY_GATE, which the generated CI sets to merge on pull requests and the merge queue and to post-merge on pushes), every evidence record the change touches is ready and approves a commit the head contains; before the merge the head differs from that commit only by the record and the reports it names; no record is deleted; and, with require_record (the default), a change outside the delivery root comes with a tranche record (REQUIRED).
 terms:
 - term_id: merge_gate
   text: >-

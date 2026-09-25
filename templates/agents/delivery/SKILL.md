@@ -69,7 +69,7 @@ reviews:
 | Model | Author | Review (read-only) |
 |---|---|---|
 | glm | `zcode -p="{prompt}" --cwd {worktree} --mode edit` | `zcode -p="{prompt}" --cwd {worktree} --mode plan` |
-| claude | `cd {worktree} && claude -p "{prompt}" --permission-mode acceptEdits --allowedTools "Bash(bun:*)" "Bash(git:*)" "Bash(gh pr:*)" --output-format json` | `cd {worktree} && claude -p "{prompt}" --allowedTools Read Grep Glob "Bash(git show:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(bun test:*)" "Bash(bun run atdd-bun:*)" --disallowedTools Edit Write NotebookEdit --output-format json` |
+| claude | `cd {worktree} && claude -p "{prompt}" --permission-mode acceptEdits --allowedTools "Bash(bun:*)" "Bash(git:*)" "Bash(gh pr:*)" --output-format json` | `cd {worktree} && claude -p "{prompt}" --allowedTools Read Grep Glob "Bash(git show:*)" "Bash(git diff:*)" "Bash(git log:*)" "Bash(bun test:*)" "Bash(bun run atdd-bun all)" "Bash(bun run atdd-bun planner)" "Bash(bun run atdd-bun tester)" "Bash(bun run atdd-bun coder security)" "Bash(bun run atdd-bun traceability)" "Bash(bun run atdd-bun delivery)" --disallowedTools Edit Write NotebookEdit --output-format json` |
 | codex | `codex exec --cd {worktree} --sandbox workspace-write "{prompt}"` | `codex exec --cd {worktree} --sandbox read-only "{prompt}"` |
 
 Before a hosted model receives private repository content, confirm the user or organization authorized it.

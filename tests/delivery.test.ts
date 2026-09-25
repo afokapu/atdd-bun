@@ -286,3 +286,66 @@ test("F7: the root has one spelling; a non-canonical one is a config finding and
     expect(await rules(dir)).toEqual(["delivery.config-schema"]);
   });
 });
+
+// Regressions from the second headless review of PR #19 (GLM, fbfe235). Findings that repeat Codex's are covered above.
+
+test("GLM F2: deleting a tranche record fails the gate; records are append-only", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha, "open"));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/erase");
+    await sh(dir, "git", "rm", "-rq", "delivery/api"); await commit("chore: erase", { "src/app.ts": "export const a = 3;\n" });
+    expect(await gate(dir)).toContain("the branch deletes delivery/api/evidence.yaml; records are append-only, and deleting one would escape its findings and the gate");
+  });
+});
+
+test("GLM F3: at the gate, a ready record already on the base branch is not re-judged", async () => {
+  await tranche(async (dir, commit) => {
+    await commit("chore: legacy record", { "delivery/old/evidence.yaml": record(FULL, { tranche: "old", status: "ready", approved_sha: "abcdef0" }) });
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--ff-only", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/next");
+    const sha = await commit("feat: next", { "src/app.ts": "export const a = 5;\n" });
+    await commit("chore: evidence", tranchePR("next", sha));
+    expect((await validateDelivery(dir, { gate: true, base: "main" })).filter(f => f.rule_id === "delivery.approved-sha-resolves")).toEqual([]);
+    // Outside the gate every ready record is judged, so the broken legacy record is still visible locally.
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.approved-sha-resolves").map(f => f.file)).toEqual(["delivery/old/evidence.yaml"]);
+  });
+});
+
+test("GLM F5: a file under the delivery root that the record does not name is drift", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", { ...tranchePR("api", sha), "delivery/api/module.ts": "export const hidden = 1;\n" });
+    expect(await gate(dir)).toEqual([expect.stringContaining("changes delivery/api/module.ts after approved_sha")]);
+  });
+});
+
+test("GLM F6: an abbreviated and a full SHA of one commit are the same approval", async () => {
+  const full = "3333333aaaabbbbccccddddeeeeffff000011112";
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL.map(r => r.stage === "final_review" ? { ...r, sha: full } : r), { status: "ready", approved_sha: "3333333" }) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.includes("is not the SHA"))).toEqual([]);
+  });
+});
+
+test("GLM F10: an unreadable atdd-bun.yaml is a finding, not silence", async () => {
+  await withRepo({ "atdd-bun.yaml": "delivery: [unclosed\n" }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+});
+
+test("GLM F12: an explicit base wins over a local merge of the base into the branch", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await commit("main: unrelated", { "src/other.ts": "export const o = 1;\n" });
+    await sh(dir, "git", "checkout", "-q", "tranche/api"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge main in", "main");
+    // Merging main in after approval is a change after approval: judged against main, the head drifts.
+    expect(await gate(dir)).toEqual([expect.stringContaining("changes src/other.ts after approved_sha")]);
+  });
+});
+
+test("GLM F9: the default claude review command allows only gates, never a writing atdd-bun subcommand", async () => {
+  const skill = await Bun.file(new URL("../templates/agents/delivery/SKILL.md", import.meta.url)).text();
+  const review = skill.split("\n").find(line => line.startsWith("| claude |"))!.split("|")[3];
+  expect(review).not.toContain("atdd-bun:*");
+  expect(review).toContain("--disallowedTools Edit Write NotebookEdit");
+});

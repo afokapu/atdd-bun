@@ -4,14 +4,14 @@
   "description": "Validates one <delivery root>/<tranche>/evidence.yaml: the record a tranche leaves of its reviews. Local shape only: stage completeness, allowed models and fallbacks, reviewer independence, finding outcomes and SHA resolution are cross-field validator concerns (src/delivery.ts).",
   "$comment": "Shipped by the delivery profile (delivery_evidence). `reviews` is chronological: a repair loop appends a new entry for the same stage rather than editing the earlier one.",
   "type": "object",
-  "required": ["tranche", "status", "base_sha", "reviews"],
+  "required": ["tranche", "status", "reviews"],
   "additionalProperties": false,
   "properties": {
     "tranche": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "Must equal the tranche folder name." },
     "status": { "enum": ["open", "ready"], "description": "open: the lifecycle is in progress. ready: every configured stage is approved and approved_sha is the commit to merge." },
-    "base_sha": { "$ref": "#/definitions/sha" },
+    "base_sha": { "$ref": "#/definitions/sha", "$comment": "Informational: the commit the tranche started from. Not checked; the gate derives its range from Git." },
     "approved_sha": { "$ref": "#/definitions/sha" },
-    "pr": { "type": "string", "minLength": 1 },
+    "pr": { "type": "string", "minLength": 1, "$comment": "Informational: the pull request URL. Not checked." },
     "reviews": { "type": "array", "items": { "$ref": "#/definitions/review" } }
   },
   "if": { "required": ["status"], "properties": { "status": { "const": "ready" } } },
