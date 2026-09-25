@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Delivery Evidence Schema",
+  "description": "Validates one <delivery root>/<tranche>/evidence.yaml: the record a tranche leaves of its reviews. Local shape only: stage completeness, allowed models and fallbacks, reviewer independence, finding outcomes and SHA resolution are cross-field validator concerns (src/delivery.ts).",
+  "$comment": "Shipped by the delivery profile (delivery_evidence). `reviews` is chronological: a repair loop appends a new entry for the same stage rather than editing the earlier one.",
+  "type": "object",
+  "required": ["tranche", "status", "base_sha", "reviews"],
+  "additionalProperties": false,
+  "properties": {
+    "tranche": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "Must equal the tranche folder name." },
+    "status": { "enum": ["open", "ready"], "description": "open: the lifecycle is in progress. ready: every configured stage is approved and approved_sha is the commit to merge." },
+    "base_sha": { "$ref": "#/definitions/sha" },
+    "approved_sha": { "$ref": "#/definitions/sha" },
+    "pr": { "type": "string", "minLength": 1 },
+    "reviews": { "type": "array", "items": { "$ref": "#/definitions/review" } }
+  },
+  "if": { "required": ["status"], "properties": { "status": { "const": "ready" } } },
+  "then": { "required": ["approved_sha"] },
+  "definitions": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+    "actor": {
+      "type": "object",
+      "required": ["model", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "run": { "type": "string", "minLength": 1, "description": "Identifies the process: a session id, a pane id plus start time, or the report file. Two entries with the same run are the same process." }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "required": ["from", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "role": { "enum": ["author", "reviewer"], "description": "Which actor fell back. Default: reviewer." },
+        "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "reason": { "type": "string", "minLength": 10, "description": "Why the preferred model was unavailable: outage, rate limit, or no auditable report. Never a verdict." }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["id", "severity", "evidence", "invariant", "proposed_fix"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$", "description": "Stable across re-reviews, so an upheld finding keeps its id." },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "evidence": { "type": "string", "minLength": 5, "description": "Concrete: file:line, a failing command, a counter-example." },
+        "invariant": { "type": "string", "minLength": 5 },
+        "affects": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "proposed_fix": { "type": "string", "minLength": 5, "description": "A precise correction for the author to apply; the reviewer never applies it." },
+        "rebuttal": { "type": "string", "minLength": 20, "description": "The author's written dispute, with evidence. One round only." },
+        "outcome": { "enum": ["fixed", "withdrawn", "human"] },
+        "decision": { "type": "string", "minLength": 5, "description": "The human's ruling when outcome is human." }
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": ["stage", "sha", "reviewer", "verdict", "checked"],
+      "additionalProperties": false,
+      "properties": {
+        "stage": { "enum": ["plan_review", "test_review", "code_review", "final_review"] },
+        "sha": { "$ref": "#/definitions/sha" },
+        "author": { "$ref": "#/definitions/actor" },
+        "reviewer": { "$ref": "#/definitions/actor" },
+        "fallback": { "type": "array", "items": { "$ref": "#/definitions/fallback" } },
+        "verdict": { "enum": ["approve", "request_changes"] },
+        "checked": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Everything the reviewer went through, not only what failed." },
+        "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
+        "report": { "type": "string", "minLength": 1, "description": "Path of the retained raw reviewer output." }
+      },
+      "if": { "required": ["verdict"], "properties": { "verdict": { "const": "request_changes" } } },
+      "then": { "required": ["findings"], "properties": { "findings": { "minItems": 1 } } }
+    }
+  }
+}

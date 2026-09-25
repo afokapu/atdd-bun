@@ -1,0 +1,8 @@
+profiles: [delivery]
+delivery:
+  independence: fresh-process
+  stages:
+    plan_review: { authors: [codex], reviewers: [glm, claude] }
+    test_review: { authors: [glm, claude], reviewers: [codex, claude] }
+    code_review: { authors: [glm, claude], reviewers: [glm, claude], independence: different-model }
+    final_review: { authors: [codex], reviewers: [codex, claude] }

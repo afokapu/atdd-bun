@@ -1,0 +1,8 @@
+# A reviewer without a verdict or a checklist.
+tranche: data
+status: open
+base_sha: 3f2a91c
+reviews:
+  - stage: plan_review
+    sha: 8b10e44
+    reviewer: { model: glm, run: glm-plan-1 }

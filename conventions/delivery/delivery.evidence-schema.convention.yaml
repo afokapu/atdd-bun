@@ -1,0 +1,34 @@
+schema_version: 1.1.0
+rule_id: delivery.evidence-schema
+kind: rule
+status: active
+name: Every tranche folder holds a well-formed evidence record
+statement: >-
+  Every folder under the delivery root holds an evidence.yaml that validates against delivery-evidence.schema.json, whose tranche matches the folder name, whose reviews each name an author and a configured stage (REQUIRED).
+terms:
+- term_id: tranche
+  text: >-
+    one independently mergeable piece of a program, delivered on its own branch by one persistent driver through PLAN, RED, GREEN, SMOKE, REFACTOR and TRACE, with its reviews.
+- term_id: evidence
+  text: >-
+    the tranche's record of its reviews at `<root>/<tranche>/evidence.yaml`: status (open or ready), base and approved SHAs, and the chronological list of reviews, each with stage, reviewed SHA, author, reviewer, fallbacks, verdict, the checklist it went through and its findings.
+content:
+  summary: >-
+    The record is what CI can check. A review that is not written down, or written down in a shape the validator cannot read, did not happen as far as the merge gate is concerned.
+  normative_text: |
+    The profile judges the record a tranche leaves, not the agents while they work. Each review is appended, never edited, so a repair loop shows as a request-changes entry followed by a fresh review of the same stage. A review must name its author: independence is judged against the author, and without one it cannot be judged.
+  fix_hint: |
+    Create or repair `<root>/<tranche>/evidence.yaml`; the finding names the schema path at fault. A request-changes review carries at least one finding; every review carries its `checked` list.
+  exceptions:
+  - >-
+    Files other than evidence.yaml inside a tranche folder (retained raw reviewer reports) are not judged.
+metadata:
+  aliases:
+  - DELIVERY-EVIDENCE-SCHEMA-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.8.0
+implementation:
+  type: validator
+  ref: delivery_evidence

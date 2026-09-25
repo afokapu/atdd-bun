@@ -54,7 +54,7 @@ async function sourceFiles(dir: string): Promise<string[]> {
   }
   return out;
 }
-const RULE_LITERAL = /["'`]((?:planner|coder|tester|traceability|atdd-bun)\.[a-z0-9-]+(?:\.[a-z0-9-]+)+)["'`]/g;
+const RULE_LITERAL = /["'`]((?:planner|coder|tester|traceability|atdd-bun|delivery)\.[a-z0-9-]+(?:\.[a-z0-9-]+)+)["'`]/g;
 const withoutComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
 
 test("every rule id written in detector or package source is declared, so no emission path escapes", async () => {

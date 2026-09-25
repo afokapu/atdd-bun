@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
 
-export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
+export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "delivery" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
 
 export type Violation = {
   rule_id: string;
@@ -28,6 +28,7 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   docs: ["planner_docs_capability"],
   planner: ["planner_plan_integrity", "planner_schema_validation", "planner_static_validators", "atdd_topology"],
   telemetry: ["planner_telemetry_plan", "bun_telemetry_code", "bun_telemetry_test"],
+  delivery: ["delivery_evidence"],
   coder: ["bun_green_traceability_detector", "bun_clean_architecture_detector", "bun_ts_metrics_detector", "bun_fullstack_detector", "bun_design_system_detector", "bun_responsive_detector", "atdd_topology"],
   tester: ["bun_tester_discipline_detector", "htmx_e2e_detector", "atdd_topology"],
   security: ["bun_security_hygiene_detector"],

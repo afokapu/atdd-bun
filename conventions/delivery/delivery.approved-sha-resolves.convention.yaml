@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: delivery.approved-sha-resolves
+kind: rule
+status: active
+name: The approved SHA is a commit in this repository
+statement: >-
+  A ready record's approved_sha resolves to a commit in the repository's history (REQUIRED).
+terms:
+- term_id: approved_sha
+  text: >-
+    the commit the closing review approved and the tranche asks to merge.
+content:
+  summary: >-
+    An approval of a commit nobody can find proves nothing: it may be a typo, a rewritten history, or an invention.
+  normative_text: |
+    The validator asks Git whether the commit exists. A rebase after approval changes every SHA and therefore needs a fresh review; the record cannot be updated by hand to follow it.
+  fix_hint: |
+    Record the full or abbreviated SHA the final review named. After a rebase, run the final review again on the new head.
+  exceptions:
+  - >-
+    A shallow clone may lack the commit: CI must fetch full history (the generated workflow uses fetch-depth 0).
+metadata:
+  aliases:
+  - DELIVERY-APPROVED-SHA-RESOLVES-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.8.0
+implementation:
+  type: validator
+  ref: delivery_evidence

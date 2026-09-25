@@ -1,0 +1,42 @@
+schema_version: 1.1.0
+rule_id: delivery.findings-resolved
+kind: rule
+status: active
+name: Every finding is fixed, withdrawn after one dispute, or ruled on by a human
+statement: >-
+  Once a stage has a later review, or the record is ready, every finding of a request-changes review records its outcome: fixed (confirmed by a later review of the stage), withdrawn (after a written rebuttal, by a later review that does not raise it again) or human (with the decision). A finding disputed more than once goes to a human (REQUIRED).
+terms:
+- term_id: rebuttal
+  text: >-
+    the author's written dispute of a finding, with evidence: a test result, a rule id, a file and line. The next fresh reviewer upholds or withdraws the finding.
+- term_id: outcome
+  text: >-
+    fixed, withdrawn or human, recorded on the finding where it was raised.
+content:
+  summary: >-
+    A reviewer can be wrong and an author can be wrong. One written round, judged by a fresh reviewer, settles most disagreements; the rest go to a human instead of looping.
+  normative_text: |
+    No conversation between author and reviewer: a reviewer is stateless, and a long exchange turns it into a co-author. The author fixes a finding or disputes it once in writing; the next fresh reviewer decides. If that reviewer upholds a disputed finding, the tranche emits BLOCKED disputed-finding and a human rules.
+  fix_hint: |
+    On each finding of the request-changes review, record the outcome:
+
+      outcome: fixed
+
+      rebuttal: "handler.test.ts:31 proves the loop stops on abort"
+      outcome: withdrawn
+
+      outcome: human
+      decision: "Keep the retry; the caller owns the bound."
+  exceptions:
+  - >-
+    While a stage has no later review and the record is open, a finding without an outcome is work in progress, not a finding.
+metadata:
+  aliases:
+  - DELIVERY-FINDINGS-RESOLVED-001
+  severity: 2
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.8.0
+implementation:
+  type: validator
+  ref: delivery_evidence

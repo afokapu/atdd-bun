@@ -1,0 +1,33 @@
+schema_version: "1.0.0"
+kind: implementation
+subtype: validator
+implementation_id: delivery.evidence.impl
+targets_workspace: atdd.workspace.bun
+contract_version: "1.0.0"
+# The delivery record: one <root>/<tranche>/evidence.yaml per tranche, judged against the `delivery:` policy
+# in atdd-bun.yaml. Runs only under the delivery profile and is inert until the repository adopts it
+# (a `delivery:` block, or `delivery` named in `profiles:`).
+emits_rule_ids:
+  - delivery.config-schema
+  - delivery.evidence-schema
+  - delivery.model-allowed
+  - delivery.reviewer-independent
+  - delivery.findings-resolved
+  - delivery.stages-complete
+  - delivery.approved-sha-resolves
+# Emitted only at the merge gate (ATDD_DELIVERY_GATE=merge, set by the generated CI on pull requests and the
+# merge queue): it needs a change set against the base branch. tests/delivery.test.ts triggers it in a real
+# repository.
+api_emits_rule_ids:
+  - delivery.merge-gate
+realizes_convention:
+  - delivery.config-schema
+  - delivery.evidence-schema
+  - delivery.model-allowed
+  - delivery.reviewer-independent
+  - delivery.findings-resolved
+  - delivery.stages-complete
+  - delivery.approved-sha-resolves
+  - delivery.merge-gate
+entrypoint: detect.mjs
+report: detect.mjs

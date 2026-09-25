@@ -1,0 +1,31 @@
+schema_version: 1.1.0
+rule_id: delivery.stages-complete
+kind: rule
+status: active
+name: A ready record has every configured stage approved
+statement: >-
+  A record with status ready has, for every stage the policy configures, a last review that approves, and its approved_sha is the SHA the last review of the closing stage approved (REQUIRED).
+terms:
+- term_id: closing_stage
+  text: >-
+    the last configured stage in lifecycle order (plan_review, test_review, code_review, final_review); by default final_review, the review of the PR head.
+content:
+  summary: >-
+    Ready is the driver's claim that the tranche can merge. It is only true when no stage is missing and the approval covers the commit being merged.
+  normative_text: |
+    Each stage may take several rounds; only its last review counts. The closing stage's approval names the SHA the whole tranche stands on, and approved_sha must be that SHA: the merge gate compares the branch head against it.
+  fix_hint: |
+    Run the missing review, or set status back to open until it has run. Set approved_sha to the SHA the final review approved.
+  exceptions:
+  - >-
+    A stage the policy omits is not required. Omitting one loosens the policy and is reported by the integrity check until a human approves it.
+metadata:
+  aliases:
+  - DELIVERY-STAGES-COMPLETE-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.8.0
+implementation:
+  type: validator
+  ref: delivery_evidence
