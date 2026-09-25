@@ -393,3 +393,40 @@ test("R4: a fallback's failures fall within the policy's window", async () => {
   });
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ from: "yesterday", to: "today" })) }, async dir => expect(await rules(dir)).toEqual(["delivery.evidence-schema", "delivery.evidence-schema"]));
 });
+
+// Regressions from the GLM re-review of PR #19 (059c1ae). Its R3 and R4 repeat Codex's R1 and R2, covered above.
+
+test("GLM R1: tightening the policy later does not fail every change on a record that merged under the old one", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));   // code_review: glm reviewed glm, legal under fresh-process
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await commit("chore: tighten", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n" });
+    await sh(dir, "git", "checkout", "-qb", "tranche/next");
+    const next = await commit("feat: next", { "src/app.ts": "export const a = 3;\n" });
+    const record = tranchePR("next", next);
+    record["delivery/next/evidence.yaml"] = record["delivery/next/evidence.yaml"].replace('"run":"a2"}', '"run":"a2"}').replace(/"reviewer":\{"model":"glm","run":"r3"\}/, '"reviewer":{"model":"claude","run":"r3"},"fallback":[{"from":"glm","kind":"outage","failures":3,"window":{"from":"2026-09-25T09:00:00Z","to":"2026-09-25T09:05:00Z"},"reason":"provider outage all morning"}]');
+    await commit("chore: evidence", record);
+    expect(await validateDelivery(dir, { gate: true, base: "main" })).toEqual([]);
+    // Outside the gate the old record is judged against today's policy, so the history stays visible.
+    expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.reviewer-independent delivery/api/evidence.yaml"]);
+  });
+});
+
+test("GLM R2: the post-merge gate judges everything a push brings in, not only its last commit", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    const before = await sh(dir, "git", "rev-parse", "HEAD");
+    await sh(dir, "git", "rm", "-rq", "delivery/api"); await commit("direct: rewrite and erase", { "src/app.ts": "export const a = 99;\n" });
+    await sh(dir, "git", "commit", "-q", "--allow-empty", "-m", "direct: cover");
+    const judged = async (base?: string) => (await validateDelivery(dir, { gate: "post-merge", base })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence);
+    expect(await judged()).toEqual([]);   // one commit deep: the empty tip hides the push
+    const found = await judged(before);
+    expect(found).toContain("this push deletes delivery/api/evidence.yaml; records are append-only, and deleting one would escape its findings and the gate");
+    expect(found).toContainEqual(expect.stringContaining("this push changes src/app.ts with no tranche record"));   // a deleted record covers nothing
+    expect(found).toContainEqual(expect.stringContaining("changes delivery/api/final_review.json under delivery/"));
+    expect(await judged("0000000000000000000000000000000000000000")).toEqual([]);   // a new branch's first push falls back to the parent
+  });
+});

@@ -227,9 +227,16 @@ export function gateMode(env: Record<string, string | undefined> = process.env):
  * head = second parent; otherwise HEAD against the configured base ref. */
 async function gateRange(root: string, mode: GateMode, base?: string): Promise<{ base: string; head: string } | null> {
   // After the merge, the pushed commit is judged against its first parent: what this push brought in.
+  // With the push's before-SHA (the generated CI passes it as ATDD_BASE_REF), everything the push brought in is judged,
+  // not only its last commit; a new branch's first push (all zeros) falls back to the first parent.
   if (mode === "post-merge") {
-    const parent = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^1"]), head = await git(root, ["rev-parse", "HEAD"]);
-    return parent.code || !parent.out ? null : { base: parent.out, head: head.out };
+    const head = (await git(root, ["rev-parse", "HEAD"])).out, before = base ?? process.env.ATDD_BASE_REF;
+    if (before && !/^0+$/.test(before)) {
+      const resolved = await git(root, ["rev-parse", "--verify", "--quiet", `${before}^{commit}`]);
+      if (!resolved.code && resolved.out) return { base: resolved.out, head };
+    }
+    const parent = await git(root, ["rev-parse", "--verify", "--quiet", "HEAD^1"]);
+    return parent.code || !parent.out ? null : { base: parent.out, head };
   }
   // An explicit base wins: a branch that merged its base in locally is still judged against that base.
   const explicit = base ?? process.env.ATDD_BASE_REF;
@@ -259,11 +266,15 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     for (const error of validConfig.errors ?? []) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery${error.instancePath.replaceAll("/", ".")} ${error.message ?? error.keyword}`));
     policy = deliveryPolicy({});
   }
-  const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy), ready: EvidenceFile[] = [];
+  const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
-  // At the gate, records the change does not touch were judged when they merged; see approved-sha-resolves below.
+  // At the gate, a record the change does not touch was judged when it merged. It is not judged again, against a
+  // later policy, schema or history: records are append-only and could never be repaired, so one tightening would
+  // fail every later change. Outside the gate every record is judged. The gate itself still rejects any change to
+  // an untouched record's folder (mergeGate).
   const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null : null;
   for (const entry of files) {
+    if (onBase && existsSync(join(absolute, entry.file)) && !(await git(absolute, ["diff", "--quiet", onBase, "--", `${policy.root}/${entry.tranche}`])).code) continue;
     if (!entry.data) { findings.push(finding("delivery.evidence-schema", entry.file, entry.error ?? "evidence is missing")); continue; }
     if (!validEvidence(entry.data)) {
       for (const error of validEvidence.errors ?? []) findings.push(finding("delivery.evidence-schema", entry.file, `${entry.file} violates delivery-evidence.schema.json: ${error.instancePath || "/"} ${error.message ?? error.keyword}`));
@@ -276,12 +287,8 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] report ${review.report} must be a file inside ${folder}, other than evidence.yaml`));
     findings.push(...checkEvidence(entry.file, entry.data, policy));
     if (entry.data.status === "ready") {
-      ready.push(entry);
       // Ready means auditable: every review's raw output is retained and named.
       for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !existsSync(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which does not exist` : "retains no report"}`));
-      // At the gate, a record already on the base branch was judged when it merged; re-judging it would fail every
-      // later change once its tranche branch is gone.
-      if (onBase && !(await git(absolute, ["diff", "--quiet", onBase, "--", entry.file])).code) continue;
       if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`));
     }
   }
@@ -297,7 +304,8 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   if (!range) return [finding("delivery.merge-gate", "atdd-bun.yaml", "the merge gate cannot resolve the base branch; fetch full history (fetch-depth: 0) or set ATDD_BASE_REF")];
   const span = mode === "merge" ? [`${range.base}...${range.head}`] : [range.base, range.head];
   const changedHere = (await git(root, ["diff", "--relative", "--name-only", ...span])).out.split("\n").filter(Boolean);
-  const changed = changedHere.filter(path => path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml")), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
+  // A deleted record is reported below; it never counts as the record that covers a change.
+  const changed = changedHere.filter(path => path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml") && existsSync(join(root, path))), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
   // Drift is judged over the whole repository, not just this root: a change anywhere after approval counts.
   const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, out: PlanFinding[] = [];
   const deleted = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=D", ...span, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
