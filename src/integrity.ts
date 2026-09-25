@@ -138,7 +138,11 @@ export function policyShapeErrors(config: Record<string, unknown>): string[] {
   const worktrees = config.worktrees;
   if (worktrees !== undefined) {
     if (typeof worktrees !== "object" || worktrees === null || Array.isArray(worktrees)) out.push("worktrees must be a mapping");
-    else for (const key of ["enabled", "require_linked_worktree"]) if ((worktrees as Record<string, unknown>)[key] !== undefined && typeof (worktrees as Record<string, unknown>)[key] !== "boolean") out.push(`worktrees.${key} must be true or false`);
+    else {
+      const layout = worktrees as Record<string, unknown>;
+      for (const key of ["enabled", "require_linked_worktree"]) if (layout[key] !== undefined && typeof layout[key] !== "boolean") out.push(`worktrees.${key} must be true or false`);
+      for (const key of ["root", "primary_directory", "primary_branch"]) if (layout[key] !== undefined && typeof layout[key] !== "string") out.push(`worktrees.${key} must be a string`);
+    }
   }
   return out;
 }

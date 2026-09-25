@@ -219,6 +219,7 @@ test("a wrongly typed policy field is a finding on either side, never a crash; a
     ["protected_branches: 42\n", "max_staged_files: 20\n", "the baseline"],
     ["max_staged_files: 20\n", "registry_paths: plan\n", "which the hooks would ignore or misread"],
     ["max_staged_files: 20\n", "worktrees: [on]\n", "worktrees must be a mapping"],
+    ["max_staged_files: 20\n", "worktrees: { primary_branch: [main] }\n", "worktrees.primary_branch must be a string"],
   ];
   for (const [baseline, current, expected] of cases) {
     const root = await consumer();
