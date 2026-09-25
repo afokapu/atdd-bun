@@ -62,13 +62,15 @@ async function deliveryRecords(root: string): Promise<(path: string) => boolean>
     // Only the one folder the delivery profile may use under docs/; a root configured anywhere else in docs/ is a delivery
     // finding and exempts nothing here.
     if (deliveryPolicy(data!.delivery).root !== DEFAULT_ROOT) return () => false;
-    return path => path === DEFAULT_ROOT || path.startsWith(`${DEFAULT_ROOT}/`);
+    // Records and data only: AsciiDoc there stays documentation, judged by every docs rule (the delivery profile also
+    // reports it as a file that does not belong in the records folder).
+    return path => path.startsWith(`${DEFAULT_ROOT}/`) && !path.endsWith(".adoc");
   } catch { return () => false; }
 }
 
 async function documents(root: string): Promise<Document[]> {
-  const paths = await walk(join(root, DOCS), ".adoc"), records = await deliveryRecords(root);
-  return Promise.all(paths.filter(path => { const file = relative(root, path).replaceAll("\\", "/"); return !generated(file) && !records(file); }).map(async path => {
+  const paths = await walk(join(root, DOCS), ".adoc");
+  return Promise.all(paths.filter(path => !generated(relative(root, path).replaceAll("\\", "/"))).map(async path => {
     const text = await readFile(path, "utf8"); const parsed = parseAttributes(text);
     return { path: relative(root, path).replaceAll("\\", "/"), text, ...parsed };
   }));

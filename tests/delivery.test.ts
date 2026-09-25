@@ -727,3 +727,25 @@ test("pinning the 0.8.0 root over a base that never set one is not a loosening; 
   expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { root: "ops/records" } })).toEqual(["delivery.root docs/delivery/tranches → ops/records"]);
   expect(loosenedDelivery({ delivery: { root: "docs/delivery/tranches" } }, { delivery: { root: "delivery" } })).toEqual(["delivery.root docs/delivery/tranches → delivery"]);
 });
+
+// Round 2 of #23 (Codex R1 high, GLM R1 medium and R2 low).
+
+test("the records folder holds only records and data: authored AsciiDoc there is reported by delivery and stays under the docs rules", async () => {
+  const { scanDocumentation } = await import("../src/docs-capability");
+  await withRepo({
+    "atdd-bun.yaml": "profiles: [docs, delivery]\n", "docs/index.adoc": "= D\n:doc-id: d\n:status: current\n",
+    "docs/delivery/tranches/api/evidence.yaml": record([]), "docs/delivery/tranches/api/hidden.adoc": "= Hidden\n",
+    "docs/delivery/tranches/api/tool.ts": "export {};\n", "docs/delivery/tranches/loose.json": "{}",
+  }, async dir => {
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.evidence-schema").map(f => f.file)).toEqual([
+      "docs/delivery/tranches/api/hidden.adoc", "docs/delivery/tranches/api/tool.ts", "docs/delivery/tranches/loose.json",
+    ]);
+    expect((await scanDocumentation(dir)).filter(v => v.rule_id === "planner.docs.identity-required").map(v => v.file)).toEqual(["docs/delivery/tranches/api/hidden.adoc"]);
+  });
+});
+
+test("records under the default root while another root is configured are reported, so the legacy pin cannot hide them", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: delivery\n", "docs/delivery/tranches/api/evidence.yaml": record(FULL) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under docs/delivery/tranches (api) are outside the configured root delivery")]);
+  });
+});

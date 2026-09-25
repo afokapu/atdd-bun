@@ -150,6 +150,23 @@ type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; a
 export type EvidenceFile = { file: string; tranche: string; data: Evidence | null; error?: string };
 
 /** Every tranche folder under the delivery root with its parsed evidence, or why it has none. */
+/** Files in the records folder that are neither a tranche's evidence.yaml nor a data file (a report): authored documents
+ * or code would otherwise sit in a folder no other profile judges. Loose files directly under the root count too. */
+export async function strayFiles(root: string, policy: DeliveryPolicy): Promise<string[]> {
+  const dir = join(root, policy.root), out: string[] = [];
+  if (!existsSync(dir)) return out;
+  const walk = async (path: string, depth: number): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), rel = `${policy.root}/${child.slice(dir.length + 1).replaceAll("\\", "/")}`;
+      if (entry.isSymbolicLink()) continue; // a symlinked tranche folder is reported by loadEvidence
+      if (entry.isDirectory()) await walk(child, depth + 1);
+      else if (depth === 0 || !(entry.name === "evidence.yaml" && depth === 1 || REPORT_EXTENSION.test(entry.name))) out.push(rel);
+    }
+  };
+  await walk(dir, 0);
+  return out.sort();
+}
+
 export async function loadEvidence(root: string, policy: DeliveryPolicy): Promise<EvidenceFile[]> {
   const dir = join(root, policy.root);
   if (!existsSync(dir)) return [];
@@ -318,7 +335,13 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
     if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the default root ${DEFAULT_ROOT}, where 0.8.0 kept them; move them there, or set delivery.root: delivery`));
   }
+  // The other direction: records under the default root while another root is configured are outside what is judged.
+  if (policy.root !== DEFAULT_ROOT && existsSync(join(absolute, DEFAULT_ROOT))) {
+    const hidden = (await readdir(join(absolute, DEFAULT_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, DEFAULT_ROOT, entry.name, "evidence.yaml")));
+    if (hidden.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under ${DEFAULT_ROOT} (${hidden.map(entry => entry.name).join(", ")}) are outside the configured root ${policy.root}; move them there, or remove delivery.root`));
+  }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);
+  for (const path of await strayFiles(absolute, policy)) findings.push(finding("delivery.evidence-schema", path, `${path} is neither a tranche's evidence.yaml nor a data file (${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}); the records folder holds only records and their reports`));
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
   // At the gate, a record the change does not touch was judged when it merged. It is not judged again, against a
   // later policy, schema or history: records are append-only and could never be repaired, so one tightening would

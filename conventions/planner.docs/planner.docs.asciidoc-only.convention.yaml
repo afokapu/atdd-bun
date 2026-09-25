@@ -45,7 +45,7 @@ content:
     migration preserves history and never promotes it.
   exceptions:
   - Everything beneath `docs/dist/` is generated output and is never scanned.
-  - Where the delivery profile is adopted, its records folder (delivery.root, by default `docs/delivery/tranches/`) holds tranche records and raw reviewer reports, not authored documentation, and is left to that profile.
+  - Where the delivery profile is adopted, its records folder (delivery.root, by default `docs/delivery/tranches/`) holds tranche records and raw reviewer reports, not authored documentation; its record and data files are left to that profile, while AsciiDoc there stays documentation.
   - Markdown OUTSIDE `docs/` is untouched by this rule. `README.md`, `CONTRIBUTING.md` and the
     repository-root corpus are out of its scope; they are migrated by the adoption step, not
     rejected by this detector.
