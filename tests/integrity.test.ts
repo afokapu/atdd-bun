@@ -66,11 +66,12 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
     expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 5000\nrequire_traceability: false\nprotected_branches: [develop]\n");
-    const [finding] = await checkIntegrity({ root, base: "base", push: false });
-    expect(finding.file).toBe("atdd-bun.yaml");
+    // The workflow's push branches follow protected_branches, so it is reported as stale too.
+    const loosened = await checkIntegrity({ root, base: "base", push: false }), finding = loosened.find(f => f.file === "atdd-bun.yaml")!;
+    expect(files(loosened)).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     for (const text of ["max_staged_changed_lines 300 → 5000", "require_traceability true → false", "protected_branches drops main, master"]) expect(finding.detail).toContain(text);
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
-    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual(["atdd-bun.yaml"]);
+    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -108,5 +109,69 @@ test("the CLI exits non-zero with the loud message, and the generated workflow r
     expect(await new Response(child.stderr).text()).toContain("ATDD INTEGRITY VIOLATION");
     const workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
     expect(workflow.indexOf("bun run atdd-bun integrity")).toBeLessThan(workflow.indexOf("bun run atdd-bun all"));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("the delivery skill is installed and protected only where the delivery profile is adopted", async () => {
+  const { agentInit, agentStatus } = await import("../src/agent");
+  const root = await consumer();
+  try {
+    const skill = join(root, ".agents/skills/delivery/SKILL.md"), review = join(root, ".claude/skills/delivery/review.md");
+    expect(await Bun.file(skill).exists()).toBeFalse();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, delivery]\n");
+    expect((await agentStatus(root)).ok).toBeFalse();
+    expect((await agentInit(root)).ok).toBeTrue();
+    expect(await readFile(skill, "utf8")).toStartWith("---\nname: delivery\n");
+    expect(await readFile(review, "utf8")).toContain("**Read only.**");
+    expect((await agentStatus(root)).ok).toBeTrue();
+    expect(await checkIntegrity({ root })).toEqual([]);
+    await writeFile(review, (await readFile(review, "utf8")).replace("**Read only.**", "Edit freely."));
+    expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/review.md"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("R5: the generated workflow runs on pushes to the repository's protected branches, and integrity compares that rendering", async () => {
+  const { ciInit } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    const workflow = join(root, ".github/workflows/atdd-bun.yml");
+    expect(await readFile(workflow, "utf8")).toContain('branches: ["main", "master"]');
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
+    expect(files(await checkIntegrity({ root }))).toEqual([".github/workflows/atdd-bun.yml"]);
+    expect((await ciInit(root, true)).ok).toBeTrue();
+    expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
+    expect(await checkIntegrity({ root })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("W1: a protected branch name cannot change the generated workflow's structure", async () => {
+  const { renderWorkflow } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    const hostile = ["main", "master", "x]\n  push:\n    branches: [never] #", "*", "it's \"quoted\"", "a # comment"];
+    await writeFile(join(root, "atdd-bun.yaml"), `protected_branches: ${JSON.stringify(hostile)}\n`);
+    const parsed = Bun.YAML.parse((await renderWorkflow(root)).replace(/\$\{\{[^}]*\}\}/g, "x")) as { on: { push: { branches: string[] } } };
+    expect(parsed.on.push.branches).toEqual(hostile);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci init refuses rather than guess the branches", async () => {
+  const { ciInit } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [trunk]\n");
+    expect((await ciInit(root, true)).ok).toBeTrue();
+    const workflow = join(root, ".github/workflows/atdd-bun.yml"), before = await readFile(workflow, "utf8");
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    // GLM round 9 (Z2): the restore command must not rewrite the push branches to a guess.
+    const refused = await ciInit(root, true);
+    expect(refused.ok).toBeFalse();
+    expect(refused.message).toContain("could not be parsed");
+    expect(await readFile(workflow, "utf8")).toBe(before);
+    // GLM round 9 (Z1): a finding with a restore, not a crash; the other findings are kept.
+    await writeFile(join(root, "AGENTS.md"), "# edited\n");
+    const findings = await checkIntegrity({ root, base: "HEAD", push: false });
+    expect(files(findings)).toEqual(["AGENTS.md", "atdd-bun.yaml"]);
+    expect(findings.find(f => f.file === "atdd-bun.yaml")!.restore).toBe("fix the YAML syntax in atdd-bun.yaml, then re-run the check");
   } finally { await rm(root, { recursive: true, force: true }); }
 });

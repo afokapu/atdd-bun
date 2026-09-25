@@ -7,6 +7,8 @@ export type { PlanArtifact, PlanFinding, PlanGraph, PlanKind } from "./planner-k
 export { validateStaticPlannerConventions } from "./planner-validators";
 export { validateTelemetryPlan, loadTelemetryFiles, telemetryDecisionOf, CONCRETE_URN } from "./telemetry-plan";
 export type { TelemetryPlanItem, TelemetryFile } from "./telemetry-plan";
+export { canonicalRoot, gateMode, deliveryAdopted, deliveryPolicy, loadEvidence, loosenedDelivery, STAGES, validateDelivery } from "./delivery";
+export type { DeliveryOptions, GateMode, DeliveryPolicy, EvidenceFile, Independence, Stage, StagePolicy } from "./delivery";
 export { PLANNER_SCHEMA_RULE_ID, validatePlannerSchemas } from "./planner-schema-validator";
 export { defaultHookPolicy, hookEvents, hooksStatus, installHooks, runHook, uninstallHooks } from "./hooks";
 export type { HookEvent, HookPolicy } from "./hooks";

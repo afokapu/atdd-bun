@@ -55,6 +55,7 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | `topology` | feature decomposition and the plan, source, test and E2E locations |
 | `planner` | schemas for every plan artifact, graph integrity, the scoped planner rules |
 | `telemetry` | the telemetry tracking plan: item shape, path-mirrored identity and versioning under `telemetry/`, wagon ownership of logical artifacts, the per-acceptance telemetry decision, metric label cardinality, source `Telemetry:` references, raw-string and forbidden-property emission, the vendor-SDK boundary around the TelemetryPort, and telemetry tests that bind the acceptance and item, assert the exact identity on a captured sink, cover every required item, and exercise declared timing semantics |
+| `delivery` | the review record of each tranche under `delivery/`: allowed author and reviewer models with recorded fallbacks, reviewer independence, every finding fixed, withdrawn after one dispute or ruled on by a human, every configured stage approved, and, at the gate, no change without a record and a merged head that contains exactly the approved commit. Inert until adopted |
 | `docs` | the documentation capability, including the generated journey view |
 | `coder`, `tester`, `security`, `architecture`, `metrics`, `runtime` | Bun source and test conventions |
 | `interlocking` | train/interlocking binding, infrastructure and route coverage |
@@ -84,7 +85,7 @@ the adoption that establishes the governed set, so a brownfield repository can d
 `profiles: [docs]` in an ordinary pull request. From then on, the integrity check reports, against
 the base branch, removing a profile from the list and removing the list itself. The second closes
 the two-step bypass `[docs, security]` → no list → `[docs]`. `init` writes a new `atdd-bun.yaml`
-with every profile listed, so a greenfield repository is governed from its first commit; trim the
+with every profile listed except the opt-in `delivery`, so a greenfield repository is governed from its first commit; trim the
 list before that commit to adopt gradually.
 
 ## Configuration
@@ -108,6 +109,45 @@ worktrees: { enabled: false }
 release: { enabled: false }
 ```
 
+### Delivery
+
+For programs delivered as tranches by a coordinator and persistent drivers, with headless authors
+and independent reviewers. Adopt it by naming `delivery` in `profiles:` (or, with no list, by adding
+a `delivery:` block); `agent init` then installs the delivery skill and its review contract. The
+adopting pull request is itself governed: it changes files outside the delivery root, so it carries
+its own tranche record, reviewed and `ready` like any other. Every key is optional; these are the
+defaults:
+
+```yaml
+delivery:
+  root: delivery                     # one <tranche>/evidence.yaml per tranche, reports beside it
+  require_record: true               # at the gate, a change outside the root needs a tranche record
+  multiplexer: herdr                 # the terminal multiplexer agents run in; any command name
+  independence: fresh-process        # or different-model; overridable per stage
+  stages:                            # models in preference order: the first, then recorded fallbacks
+    plan_review:  { authors: [codex],       reviewers: [glm, claude] }
+    test_review:  { authors: [glm, claude], reviewers: [codex, claude] }
+    code_review:  { authors: [glm, claude], reviewers: [glm, claude] }
+    final_review: { authors: [codex],       reviewers: [codex, claude] }
+  fallback: { after_failures: 3, within_minutes: 10, when_exhausted: block }   # or wait
+  commands: {}                       # per model: { author: "...", review: "..." } overriding the skill's defaults
+```
+
+The profile checks the record, never the running agents. The generated CI sets
+`ATDD_DELIVERY_GATE`: `merge` on pull requests and the merge queue, where every record the branch
+changes must be `ready`, the branch may differ from its approved SHA only under the delivery root,
+and a change outside the root needs a record (`require_record`, default true); `post-merge` on a
+push to a protected branch (the generated workflow's push branches follow `protected_branches`), where the pushed commit must contain every approved SHA it brings in. Merge tranches with a
+merge commit: a squash or rebase merge writes a commit no reviewer saw, and the post-merge check
+fails on it. Moving the root, dropping a stage, relaxing a stage from `different-model` to
+`fresh-process`, adding an author or reviewer, moving a fallback model earlier in a list, turning off
+`require_record`, making fallback easier, or adding or changing a model's `commands` loosens the policy and is reported by the integrity check.
+
+The record's model and run identifiers are the driver's claims. The profile checks that they are
+consistent and that a `ready` record retains every review's raw report (a record in progress may lag
+behind); it does not verify them
+cryptographically.
+
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and
 validation of the affected area. Git can bypass them, so CI is the authority.
 
@@ -115,14 +155,15 @@ validation of the affected area. Git can bypass them, so CI is the authority.
 
 The skill gives every coding agent the lifecycle PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE and
 the profile that gates each stage. The block in `AGENTS.md` and `CLAUDE.md` adds the rules: never
-modify the toolkit itself, only the configuration it offers, and enable capabilities through
-`profiles`.
+modify the toolkit itself, only the configuration it offers; turn profiles on or off in
+`profiles:` only when the user asks; and, where `delivery` is active, deliver tranches through the
+delivery skill.
 
 `atdd-bun integrity`, run by the generated test and first in CI on a clean install, fails when:
 
 - the installed package differs from its published hashes;
 - the dependency is not an npm registry version;
-- a generated file (workflow, skills, instruction block, integrity test) was edited;
+- a generated file (workflow, skills, the delivery review contract, instruction block, integrity test) was edited;
 - `atdd-bun.yaml` is looser than on the base branch (after the first explicit `profiles:` list,
   dropping a profile or the list counts).
 

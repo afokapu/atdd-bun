@@ -29,7 +29,7 @@ test("agent init writes the skill for every agent and a managed AGENTS.md block,
     // Claude Code reads CLAUDE.md: the same block, saying what an agent may change.
     const claude = await readFile(join(root, "CLAUDE.md"), "utf8"), managed = /<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/;
     expect(claude.match(managed)?.[0]).toBe(agents.match(managed)?.[0]);
-    for (const text of ["Never modify the toolkit itself", "change only the configuration it offers", "enabled gradually", "profiles:"]) expect(claude).toContain(text);
+    for (const text of ["Never modify the toolkit itself", "change only the configuration it offers", "controls which profiles are active", "profiles:", "only when the user asks", ".agents/skills/delivery/SKILL.md"]) expect(claude).toContain(text);
     expect((await agentInit(root)).ok).toBeFalse();
     const skill = join(root, ".claude/skills/atdd/SKILL.md");
     await writeFile(skill, "kept\n"); expect((await agentInit(root)).ok).toBeFalse(); expect(await readFile(skill, "utf8")).toBe("kept\n");

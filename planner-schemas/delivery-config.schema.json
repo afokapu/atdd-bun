@@ -1,0 +1,80 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Delivery Profile Configuration",
+  "description": "The `delivery:` block of atdd-bun.yaml: which models may author and review each lifecycle stage, in preference order, how independent a reviewer must be, and when a model counts as unavailable. Every key is optional; an omitted key takes the package default (src/delivery.ts). `stages`, when given, replaces the default stage set: a stage it omits is not required.",
+  "$comment": "Shipped by the delivery profile (delivery_evidence). Cross-field checks (a reviewer listed twice, a stage override naming an unknown mode) are schema-level; loosening against the base branch is judged by the integrity check.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "root": {
+      "type": "string",
+      "pattern": "^[a-z0-9_][a-z0-9_.-]*(?:/[a-z0-9_][a-z0-9_.-]*)*$",
+      "description": "Repository-relative folder holding one <tranche>/evidence.yaml per tranche, in canonical form: no leading, trailing or doubled slash, no dot segments. Default: delivery. Changing it after adoption is a loosening the integrity check reports."
+    },
+    "require_record": {
+      "type": "boolean",
+      "description": "At the gate, a change outside the delivery root needs a tranche record in the same change. Default: true; turning it off is a loosening."
+    },
+    "multiplexer": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The terminal multiplexer the coordinator drives agents through, named by its command. Default: herdr. Any other name is accepted; the agent learns its commands from the multiplexer's own help."
+    },
+    "independence": { "$ref": "#/definitions/independence" },
+    "stages": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "plan_review": { "$ref": "#/definitions/stage" },
+        "test_review": { "$ref": "#/definitions/stage" },
+        "code_review": { "$ref": "#/definitions/stage" },
+        "final_review": { "$ref": "#/definitions/stage" }
+      }
+    },
+    "fallback": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "after_failures": { "type": "integer", "minimum": 1, "description": "Failures (outage, rate limit, no auditable report) before a model counts as unavailable. A REQUEST CHANGES verdict is never a failure." },
+        "within_minutes": { "type": "integer", "minimum": 1 },
+        "when_exhausted": { "enum": ["block", "wait"], "description": "block: the tranche emits BLOCKED provider-unavailable and the coordinator reassigns the slot. wait: the driver keeps retrying the last model in the list." }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "description": "Headless invocation per model, overriding the skill's built-in defaults. {prompt} and {worktree} are substituted by the driver. Adding or changing an entry after adoption is a loosening the integrity check reports; removing one returns to the default.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "author": { "type": "string", "minLength": 1 },
+          "review": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "independence": {
+      "enum": ["fresh-process", "different-model"],
+      "description": "fresh-process: the reviewer is a new process that authored nothing in the tranche. different-model: additionally, the reviewer's model differs from the stage author's."
+    },
+    "models": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "description": "Models in preference order: the first is used normally, each later one only as a recorded fallback."
+    },
+    "stage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewers"],
+      "properties": {
+        "authors": { "$ref": "#/definitions/models" },
+        "reviewers": { "$ref": "#/definitions/models" },
+        "independence": { "$ref": "#/definitions/independence" }
+      }
+    }
+  }
+}

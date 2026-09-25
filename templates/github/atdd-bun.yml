@@ -4,7 +4,7 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main, master]
+    branches: [{{PROTECTED_BRANCHES}}]
 jobs:
   atdd-bun:
     name: atdd-bun
@@ -21,6 +21,11 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run atdd-bun integrity
       - run: bun run atdd-bun all
+        env:
+          # The delivery profile's gate: before the merge on pull requests and the merge queue, after it on a push.
+          ATDD_DELIVERY_GATE: ${{ github.event_name == 'push' && 'post-merge' || 'merge' }}
+          # On a push, the gate judges everything since the previous tip, not only the last commit.
+          ATDD_BASE_REF: ${{ github.event_name == 'push' && github.event.before || '' }}
       - run: bun test
       - run: bun run atdd-bun release check
       - uses: actions/upload-artifact@v4

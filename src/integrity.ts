@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { instructionPaths } from "./agent";
+import { deliveryInstalled, deliverySkillFiles, instructionPaths } from "./agent";
+import { renderWorkflow } from "./ci";
+import { loosenedDelivery } from "./delivery";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -86,15 +88,22 @@ async function checkDependency(root: string): Promise<IntegrityFinding[]> {
 }
 
 /** Generated files are byte-identical to what the installed version generates (ignoring its version stamp). */
-async function checkGenerated(root: string, packageRoot: string): Promise<IntegrityFinding[]> {
+async function checkGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
   const findings: IntegrityFinding[] = [];
   const same = async (file: string, template: string, restore: string) => {
     const path = join(root, file);
     if (!existsSync(path)) return findings.push({ file, detail: "is missing", restore });
     if (unstamp(await readFile(path, "utf8")) !== unstamp(await readFile(join(packageRoot, template), "utf8"))) findings.push({ file, detail: "was edited; it must match what the package generates", restore });
   };
-  await same(WORKFLOW, "templates/github/atdd-bun.yml", "bun run atdd-bun ci init --replace");
+  // The workflow is rendered per repository (its protected branches), so it is compared with that rendering.
+  const workflow = join(root, WORKFLOW);
+  if (skipWorkflow) { /* rendered from atdd-bun.yaml, which does not parse: reported by the caller */ }
+  else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
+  else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
+  // Required while delivery is adopted; protected whenever present, so turning delivery off and on cannot launder an edit.
+  const adopted = await deliveryInstalled(root);
+  for (const [path, template] of deliverySkillFiles) if (adopted || existsSync(join(root, path))) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
@@ -110,7 +119,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
 const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown }): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -126,18 +135,20 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
   if (before && !after) out.push(`profiles becomes implicit: the explicit list [${before.join(", ")}] was removed`);
   const dropped = before && after ? before.filter(name => !after.includes(name)) : [];
   if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
+  out.push(...loosenedDelivery(base, current));
   return out;
 }
 
-/** atdd-bun.yaml is not looser than on the branch being merged into. */
-/** How to recover a baseline that cannot be resolved. A replaced tip is reachable from no branch, so only a fetch by its
- * full object id brings it back (SHA-1 or SHA-256, any case); an abbreviated id cannot be fetched; a ref name can. */
+/** How to recover a baseline that cannot be resolved. A full object id (SHA-1 or SHA-256, any case) is fetched by id: after
+ * a force push the replaced tip is on no branch. A shorter hex string may be an abbreviated SHA, which cannot be fetched,
+ * or a branch or tag that merely looks like hex; anything else is a ref name, which a plain fetch brings. */
 export function baselineRestore(ref: string): string {
-  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return `git fetch origin ${ref}, then re-run the check (a replaced tip is reachable from no branch, so a plain fetch does not bring it)`;
-  if (/^[0-9a-f]{4,63}$/i.test(ref)) return `set ATDD_BASE_REF to the full SHA of ${ref} (an abbreviated SHA cannot be fetched), fetch it with git fetch origin <full SHA>, then re-run the check`;
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return `git fetch origin ${ref}, then re-run the check (a plain fetch may not bring it: after a force push the replaced tip is on no branch)`;
+  if (/^[0-9a-f]{4,39}$/i.test(ref)) return `if ${ref} is an abbreviated SHA, set ATDD_BASE_REF to its full SHA and git fetch origin <full SHA> (an abbreviated SHA cannot be fetched); if it is a branch or tag, git fetch origin; then re-run the check`;
   return `git fetch origin, then re-run the check`;
 }
 
+/** atdd-bun.yaml is not looser than on the branch being merged into. */
 async function checkPolicy(root: string, base?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<IntegrityFinding[]> {
   // On a push, the generated CI passes the pre-push tip (github.event.before) as ATDD_BASE_REF, so a multi-commit push
   // is judged as a whole: [docs, security] → no list → [docs] in one push cannot read as a first adoption.
@@ -163,7 +174,13 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
 
 export async function checkIntegrity(options: IntegrityOptions = {}): Promise<IntegrityFinding[]> {
   const root = resolve(options.root ?? process.cwd()), packageRoot = options.packageRoot ?? ownRoot;
-  return [...await checkInstalledPackage(packageRoot), ...await checkDependency(root), ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base, options.push)];
+  // An unreadable atdd-bun.yaml is a finding, not a crash: the policy and the workflow rendered from it cannot be
+  // judged until it parses, and every other finding is kept.
+  const config = join(root, "atdd-bun.yaml");
+  let unreadable: IntegrityFinding | null = null;
+  if (existsSync(config)) try { Bun.YAML.parse(await readFile(config, "utf8")); } catch (error) { unreadable = { file: "atdd-bun.yaml", detail: `could not be parsed, so the policy and the workflow's push branches cannot be judged: ${String(error)}`, restore: "fix the YAML syntax in atdd-bun.yaml, then re-run the check" }; }
+  const base = [...await checkInstalledPackage(packageRoot), ...await checkDependency(root)];
+  return unreadable ? [...base, ...await checkGenerated(root, packageRoot, true), unreadable] : [...base, ...await checkGenerated(root, packageRoot), ...await checkPolicy(root, options.base, options.push)];
 }
 
 /** The message both the local test and CI print: addressed to the agent, with the way back for every file. */

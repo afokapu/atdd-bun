@@ -94,6 +94,14 @@ nodes:
   - coder.htmx.verb-endpoint-is-routed
   - coder.htmx.verb-endpoint-same-origin
   - coder.htmx.verb-mutation-signals-progress
+  - delivery.approved-sha-resolves
+  - delivery.config-schema
+  - delivery.evidence-schema
+  - delivery.findings-resolved
+  - delivery.merge-gate
+  - delivery.model-allowed
+  - delivery.reviewer-independent
+  - delivery.stages-complete
   - planner.acceptance.abstract-fields-required
   - planner.acceptance.authoring-guidelines
   - planner.acceptance.boundary-kind-vocabulary
@@ -5184,5 +5192,95 @@ edges:
     source_ref: tester.bun.telemetry-timing-semantics
     strength: important
     target_ref: planner.telemetry.tracking-plan-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: evidence is judged against the stages the policy configures
+    source_ref: delivery.evidence-schema
+    strength: important
+    target_ref: delivery.config-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: allowed models and their preference order come from the policy
+    source_ref: delivery.model-allowed
+    strength: important
+    target_ref: delivery.config-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: models are read from a well-formed review entry
+    source_ref: delivery.model-allowed
+    strength: important
+    target_ref: delivery.evidence-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: independence is judged over the author and reviewer runs the record names
+    source_ref: delivery.reviewer-independent
+    strength: important
+    target_ref: delivery.evidence-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: outcomes are read from well-formed findings
+    source_ref: delivery.findings-resolved
+    strength: important
+    target_ref: delivery.evidence-schema
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: a stage is approved only once its earlier findings are settled
+    source_ref: delivery.stages-complete
+    strength: important
+    target_ref: delivery.findings-resolved
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the approved SHA is the one the closing review approved
+    source_ref: delivery.approved-sha-resolves
+    strength: important
+    target_ref: delivery.stages-complete
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the gate compares the branch head with an approved SHA that exists
+    source_ref: delivery.merge-gate
+    strength: important
+    target_ref: delivery.approved-sha-resolves
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: the gate merges a tranche whose lifecycle closed its acceptances
+    source_ref: delivery.merge-gate
+    strength: important
+    target_ref: traceability.plan.executable-acceptance-has-test
     type: requires
     origin: "@afokapu/atdd-bun"

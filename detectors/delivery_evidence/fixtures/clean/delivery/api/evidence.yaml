@@ -1,0 +1,54 @@
+# In progress: every stage reviewed, the code-review dispute settled, the PR not yet marked ready.
+tranche: api
+status: open
+base_sha: 3f2a91c
+reviews:
+  - stage: plan_review
+    sha: 8b10e44
+    author: { model: codex, run: driver-api }
+    reviewer: { model: glm, run: glm-plan-1 }
+    verdict: approve
+    checked: [ACC-API-001, ACC-API-002, planner.decomposition]
+  - stage: test_review
+    sha: 91aa0b2
+    author: { model: glm, run: glm-red-1 }
+    reviewer: { model: codex, run: codex-test-1 }
+    verdict: approve
+    checked: [ACC-API-001, ACC-API-002, tester.bun.red]
+  - stage: code_review
+    sha: a4c0f11
+    author: { model: glm, run: glm-green-1 }
+    reviewer: { model: claude, run: claude-code-1 }
+    fallback:
+      - { from: glm, kind: rate_limit, failures: 3, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" }, reason: "rate limit: 3 failures in 10 minutes" }
+    verdict: request_changes
+    checked: [ACC-API-001, ACC-API-002, src/wagons/api, coder.bun.error-response]
+    findings:
+      - id: F1
+        severity: high
+        evidence: src/wagons/api/handler.ts:42 returns a bare string
+        invariant: every error response carries a coded body
+        affects: [ui]
+        proposed_fix: return { code "API_NOT_FOUND" } instead of the bare string
+        outcome: fixed
+      - id: F2
+        severity: medium
+        evidence: src/wagons/api/handler.ts:57 retries without a bound
+        invariant: outbound calls are bounded
+        proposed_fix: cap the retry loop at three attempts
+        rebuttal: "The loop is bounded by the caller's AbortSignal; see handler.test.ts:31 which proves it stops."
+        outcome: withdrawn
+  - stage: code_review
+    sha: c77d0a2
+    author: { model: glm, run: glm-green-2 }
+    reviewer: { model: claude, run: claude-code-2 }
+    fallback:
+      - { from: glm, kind: rate_limit, failures: 3, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" }, reason: "rate limit: 3 failures in 10 minutes" }
+    verdict: approve
+    checked: [ACC-API-001, ACC-API-002, src/wagons/api, F1, F2]
+  - stage: final_review
+    sha: c77d0a2
+    author: { model: codex, run: driver-api }
+    reviewer: { model: codex, run: codex-final-1 }
+    verdict: approve
+    checked: [src/wagons/api, contracts, ui]

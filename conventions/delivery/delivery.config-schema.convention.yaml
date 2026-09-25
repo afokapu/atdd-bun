@@ -1,0 +1,43 @@
+schema_version: 1.1.0
+rule_id: delivery.config-schema
+kind: rule
+status: active
+name: The delivery policy in atdd-bun.yaml is well-formed
+statement: >-
+  The `delivery:` block of atdd-bun.yaml validates against delivery-config.schema.json: known keys only, each stage listing at least one reviewer, models named in lowercase, independence one of fresh-process or different-model, the root in canonical form (no leading, trailing or doubled slash, no dot segment) and not overlapping the plan, source, test, e2e or telemetry root (REQUIRED).
+terms:
+- term_id: policy
+  text: >-
+    the `delivery:` block: root, independence, stages (per stage: authors, reviewers, optional independence), fallback and commands. Every key is optional; an omitted key takes the package default.
+content:
+  summary: >-
+    The skill and the validators read the same policy. A misspelled key would be ignored by one and not the other, so a malformed block is a finding, and the rest of the run judges evidence against the package defaults.
+  normative_text: |
+    The policy decides which models may author and review each stage, in preference order, how independent a reviewer must be, and when a model counts as unavailable. It is read by the delivery skill when it dispatches work and by this profile when it judges the record, so both must see the same, valid document.
+  fix_hint: |
+    Correct the key the finding names. The defaults are:
+
+      delivery:
+        root: delivery
+        independence: fresh-process
+        stages:
+          plan_review:  { authors: [codex], reviewers: [glm, claude] }
+          test_review:  { authors: [glm, claude], reviewers: [codex, claude] }
+          code_review:  { authors: [glm, claude], reviewers: [glm, claude] }
+          final_review: { authors: [codex], reviewers: [codex, claude] }
+  exceptions:
+  - >-
+    Adoption is not exempt from the gate: the pull request that adopts delivery changes files outside the delivery root,
+    so it carries its own ready tranche record like any other change.
+  - >-
+    Inert until adoption: with no `delivery:` block and `delivery` absent from `profiles:`, no delivery rule emits anything.
+metadata:
+  aliases:
+  - DELIVERY-CONFIG-SCHEMA-001
+  severity: 3
+  # strict: atdd-bun fails on every finding; it has no advisory mode and no ratchet baseline.
+  disposition: strict
+  introduced_in: 0.8.0
+implementation:
+  type: validator
+  ref: delivery_evidence

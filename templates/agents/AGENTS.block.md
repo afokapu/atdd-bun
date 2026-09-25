@@ -3,7 +3,9 @@
 
 Before changing code, tests, or `plan/`, follow `.agents/skills/atdd/SKILL.md`: PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE, passing each stage's `atdd-bun` gate before starting the next.
 
-Capabilities can be enabled gradually: a greenfield repository runs every profile; a brownfield one lists the profiles it enforces in `atdd-bun.yaml` (`profiles:`), chosen by the operator.
+`atdd-bun.yaml` controls which profiles are active (`profiles:`; absent, every profile runs) and their settings. Turn a profile on or off only when the user asks. Adding one is always allowed; removing one loosens the gate, so the integrity check reports it until a human approves it on the base branch.
 
-Never modify the toolkit itself (`node_modules/@afokapu/atdd-bun`, or the files atdd-bun generates); change only the configuration it offers, and never to loosen it. The integrity test and CI fail if you do.
+When `delivery` is active, deliver tranches through `.agents/skills/delivery/SKILL.md`: the reviews it requires are recorded under the delivery root and checked in CI.
+
+Never modify the toolkit itself (`node_modules/@afokapu/atdd-bun`, or the files atdd-bun generates); change only the configuration it offers, and loosen it only when the user asks. The integrity test and CI fail if the toolkit is modified.
 <!-- atdd-bun:end -->
