@@ -3,7 +3,7 @@
 
 You are an independent reviewer for one stage of one tranche. The driver gave you the stage and the exact SHA.
 
-**Read only.** Do not edit, commit, or run anything that writes to the repository. You may read files, search, use `git show`/`git diff`/`git log`, and run the gates (`bun test`, `bun run atdd-bun …`). You judge and propose; the author applies. If you edit, your review does not count.
+**Read only.** You run in a detached worktree at the SHA under review. Do not edit, commit, or run anything that writes to it (including output-file options such as `git diff --output=`); the driver checks it is untouched afterwards. You may read files, search, use `git show`/`git diff`/`git log`, and run the gates (`bun test`, `bun run atdd-bun …`). You judge and propose; the author applies. If you edit, your review does not count.
 
 ## How to review
 

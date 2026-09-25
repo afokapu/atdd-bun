@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: The approved SHA is a commit in this repository
 statement: >-
-  A ready record's approved_sha resolves to a commit in the repository's history (REQUIRED).
+  A ready record's approved_sha resolves to a commit in the repository's history, and every configured stage's last approval names a commit in approved_sha's history, each stage's containing the one before it in lifecycle order (REQUIRED).
 terms:
 - term_id: approved_sha
   text: >-

@@ -165,7 +165,8 @@ async function tranche(body: (dir: string, commit: (message: string, files: Reco
 }
 // A ready record retains every review's raw output next to it.
 const tranchePR = (tranche: string, sha: string, status = "ready") => ({
-  [`delivery/${tranche}/evidence.yaml`]: record(FULL.map(r => ({ ...(r.stage === "final_review" ? { ...r, sha } : r), report: `delivery/${tranche}/${r.stage}.json` })), { tranche, status, approved_sha: sha }),
+  // Every stage approves a real commit in the approved history (here the approved one itself).
+  [`delivery/${tranche}/evidence.yaml`]: record(FULL.map(r => ({ ...r, sha, report: `delivery/${tranche}/${r.stage}.json` })), { tranche, status, approved_sha: sha }),
   ...Object.fromEntries(FULL.map(r => [`delivery/${tranche}/${r.stage}.json`, "{}\n"])),
 });
 const gate = async (dir: string) => (await validateDelivery(dir, { gate: true, base: "main" })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence);
@@ -319,7 +320,7 @@ test("GLM F5: a file under the delivery root that the record does not name is dr
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
     await commit("chore: evidence", { ...tranchePR("api", sha), "delivery/api/module.ts": "export const hidden = 1;\n" });
     const found = await gate(dir);
-    expect(found).toContain("the branch changes delivery/api/module.ts under delivery/, and no record it changes names it as a report; only records and their reports live there");
+    expect(found).toContain("the branch changes delivery/api/module.ts under delivery/, and no record it changes names it as a report; only <tranche>/evidence.yaml records and their reports live there");
     expect(found).toContainEqual(expect.stringContaining("changes delivery/api/module.ts after approved_sha"));
   });
 });
@@ -341,8 +342,11 @@ test("GLM F12: an explicit base wins over a local merge of the base into the bra
     await commit("chore: evidence", tranchePR("api", sha));
     await sh(dir, "git", "checkout", "-q", "main"); await commit("main: unrelated", { "src/other.ts": "export const o = 1;\n" });
     await sh(dir, "git", "checkout", "-q", "tranche/api"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge main in", "main");
-    // Merging main in after approval is a change after approval: judged against main, the head drifts.
-    expect(await gate(dir)).toEqual([expect.stringContaining("changes src/other.ts after approved_sha")]);
+    // Judged against main, the branch still brings in exactly what was approved: main's own file is not the tranche's.
+    expect(await gate(dir)).toEqual([]);
+    // A change to the tranche's files after approval (as a conflict resolution would make) is drift.
+    await commit("fix: resolve", { "src/app.ts": "export const a = 7;\n" });
+    expect(await gate(dir)).toEqual([expect.stringContaining("changes src/app.ts after approved_sha")]);
   });
 });
 
@@ -428,5 +432,48 @@ test("GLM R2: the post-merge gate judges everything a push brings in, not only i
     expect(found).toContainEqual(expect.stringContaining("this push changes src/app.ts with no tranche record"));   // a deleted record covers nothing
     expect(found).toContainEqual(expect.stringContaining("changes delivery/api/final_review.json under delivery/"));
     expect(await judged("0000000000000000000000000000000000000000")).toEqual([]);   // a new branch's first push falls back to the parent
+  });
+});
+
+// Regressions from round 3 of PR #19 (Codex, 64a07fb).
+
+test("T1: an evidence.yaml at any depth other than <root>/<tranche>/ covers nothing", async () => {
+  for (const decoy of ["delivery/evidence.yaml", "delivery/x/y/evidence.yaml"])
+    await tranche(async (dir, commit) => {
+      await commit("feat: pwn", { "src/pwn.ts": "export const p = 1;\n", [decoy]: "anything: true\n" });
+      const found = await gate(dir);
+      expect(found, decoy).toContainEqual(expect.stringContaining(`changes ${decoy} under delivery/`));
+      expect(found, decoy).toContainEqual(expect.stringContaining("changes src/pwn.ts with no tranche record"));
+    });
+});
+
+test("T2: a push that adds code alongside a record approving an older commit drifts after the merge too", async () => {
+  await tranche(async (dir, commit) => {
+    const old = await sh(dir, "git", "rev-parse", "main");
+    await sh(dir, "git", "checkout", "-q", "main");
+    const before = await sh(dir, "git", "rev-parse", "HEAD");
+    await commit("direct: pwn", { "src/pwn.ts": "export const p = 1;\n", ...tranchePR("api", old) });
+    expect((await validateDelivery(dir, { gate: "post-merge", base: before })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence))
+      .toEqual([expect.stringContaining("this push changes src/pwn.ts after approved_sha")]);
+  });
+});
+
+test("T4: every stage approves a real commit in the approved history, in lifecycle order", async () => {
+  await tranche(async (dir, commit) => {
+    const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), red = await commit("red", { "tests/a.test.ts": "//\n" }), green = await commit("green", { "src/app.ts": "export const a = 3;\n" });
+    const shas: Record<string, string> = { plan_review: plan, test_review: red, code_review: green, final_review: green };
+    const write = async (overrides: Record<string, string>) => {
+      await mkdir(join(dir, "delivery/api"), { recursive: true });
+      const reviews = FULL.map(r => ({ ...r, sha: overrides[r.stage as string] ?? shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
+      await writeFile(join(dir, "delivery/api/evidence.yaml"), record(reviews, { status: "ready", approved_sha: green }));
+      for (const r of FULL) await writeFile(join(dir, `delivery/api/${r.stage}.json`), "{}");
+      return (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.approved-sha-resolves").map(f => f.evidence);
+    };
+    expect(await write({})).toEqual([]);
+    expect(await write({ plan_review: "0000000" })).toEqual(["plan_review approved 0000000, which is not a commit in this repository's history"]);
+    // A commit off the approved history, made without touching the record files.
+    const side = await sh(dir, "git", "commit-tree", "-p", "main", "-m", "side", `${await sh(dir, "git", "rev-parse", "main")}^{tree}`);
+    expect(await write({ test_review: side })).toEqual([expect.stringContaining("which is not in the history of approved_sha")]);
+    expect(await write({ plan_review: red, test_review: plan })).toEqual([expect.stringContaining("test_review approved")]);
   });
 });

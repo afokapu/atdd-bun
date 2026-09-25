@@ -289,7 +289,17 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     if (entry.data.status === "ready") {
       // Ready means auditable: every review's raw output is retained and named.
       for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !existsSync(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which does not exist` : "retains no report"}`));
-      if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`));
+      if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`)); continue; }
+      // Every stage's approval names a real commit in the approved history, in lifecycle order.
+      let previous: { stage: Stage; sha: string } | null = null;
+      for (const stage of STAGES.filter(name => policy.stages[name])) {
+        const last = entry.data.reviews.filter(review => review.stage === stage).at(-1);
+        if (!last || last.verdict !== "approve") continue; // reported by delivery.stages-complete
+        if ((await git(absolute, ["cat-file", "-e", `${last.sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha}, which is not a commit in this repository's history`)); continue; }
+        if ((await git(absolute, ["merge-base", "--is-ancestor", last.sha, entry.data.approved_sha!])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha.slice(0, 7)}, which is not in the history of approved_sha ${entry.data.approved_sha!.slice(0, 7)}`)); continue; }
+        if (previous && (await git(absolute, ["merge-base", "--is-ancestor", previous.sha, last.sha])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha.slice(0, 7)}, which does not contain what ${previous.stage} approved (${previous.sha.slice(0, 7)}); stages follow the lifecycle`));
+        previous = { stage, sha: last.sha };
+      }
     }
   }
   if (mode) findings.push(...await mergeGate(absolute, policy, files, mode, options.base));
@@ -304,16 +314,19 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   if (!range) return [finding("delivery.merge-gate", "atdd-bun.yaml", "the merge gate cannot resolve the base branch; fetch full history (fetch-depth: 0) or set ATDD_BASE_REF")];
   const span = mode === "merge" ? [`${range.base}...${range.head}`] : [range.base, range.head];
   const changedHere = (await git(root, ["diff", "--relative", "--name-only", ...span])).out.split("\n").filter(Boolean);
-  // A deleted record is reported below; it never counts as the record that covers a change.
-  const changed = changedHere.filter(path => path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml") && existsSync(join(root, path))), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
+  // A record is exactly <root>/<tranche>/evidence.yaml and was loaded: an evidence.yaml at any other depth, or a
+  // deleted one (reported below), never counts as the record that covers a change.
+  const isRecord = (path: string) => path.split("/").length === policy.root.split("/").length + 2 && path.startsWith(`${policy.root}/`) && path.endsWith("/evidence.yaml");
+  const changed = changedHere.filter(path => isRecord(path) && files.some(file => file.file === path && file.data)), outside = changedHere.filter(path => !path.startsWith(`${policy.root}/`));
   // Drift is judged over the whole repository, not just this root: a change anywhere after approval counts.
   const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, out: PlanFinding[] = [];
+  const inRange = new Set((await git(root, ["diff", "--name-only", ...span])).out.split("\n").filter(Boolean));
   const deleted = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=D", ...span, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
   for (const path of deleted) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} deletes ${path}; records are append-only, and deleting one would escape its findings and the gate`));
   // Under the root, only records and the reports a changed record names may change: anything else is unbound.
   const named = new Set(changed.flatMap(path => files.find(file => file.file === path)?.data?.reviews?.flatMap(review => review.report ? [review.report] : []) ?? []));
-  for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !path.endsWith("/evidence.yaml") && !named.has(path)))
-    out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only records and their reports live there`));
+  for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !isRecord(path) && !named.has(path)))
+    out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only <tranche>/evidence.yaml records and their reports live there`));
   if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   for (const path of changed) {
     const entry = files.find(file => file.file === path);
@@ -324,8 +337,13 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
     if ((await git(root, ["merge-base", "--is-ancestor", sha, range.head])).code) { out.push(finding("delivery.merge-gate", path, `approved_sha ${sha.slice(0, 7)} is not contained in ${mode === "merge" ? "the branch head" : "the merged commit"}${mode === "post-merge" ? "; a squash or rebase merge rewrites the approved commit, so merge with a merge commit" : "; the branch was rewritten after approval"}`)); continue; }
     // Only the record and the reports it names may postdate the approval; anything else under the root is drift too.
     const exempt = new Set([path, ...entry.data.reviews.flatMap(review => review.report ? [review.report] : [])].map(file => `${prefix}${file}`));
-    const drift = (await git(root, ["diff", "--name-only", sha, range.head])).out.split("\n").filter(Boolean).filter(file => !exempt.has(file));
-    if (mode === "merge" && drift.length) out.push(finding("delivery.merge-gate", path, `the branch head changes ${drift.slice(0, 5).join(", ")}${drift.length > 5 ? ` and ${drift.length - 5} more` : ""} after approved_sha ${sha.slice(0, 7)}; any change after approval needs a fresh review`));
+    // Drift: what this change brings in that differs from the approved commit. After a merge commit, the tranche's
+    // side is the second parent; a direct push is judged at its head. Intersecting with the change's own files keeps
+    // other tranches merged since the approval out of it.
+    const merged = mode === "post-merge" ? await git(root, ["rev-parse", "--verify", "--quiet", `${range.head}^2`]) : { code: 1, out: "" };
+    const tip = !merged.code && merged.out && !(await git(root, ["merge-base", "--is-ancestor", sha, merged.out])).code ? merged.out : range.head;
+    const drift = (await git(root, ["diff", "--name-only", sha, tip])).out.split("\n").filter(Boolean).filter(file => inRange.has(file) && !exempt.has(file));
+    if (drift.length) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch head" : "this push"} changes ${drift.slice(0, 5).join(", ")}${drift.length > 5 ? ` and ${drift.length - 5} more` : ""} after approved_sha ${sha.slice(0, 7)}; any change after approval needs a fresh review`));
   }
   return out;
 }
