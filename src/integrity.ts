@@ -136,15 +136,16 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown;
   return out;
 }
 
-/** atdd-bun.yaml is not looser than on the branch being merged into. */
-/** How to recover a baseline that cannot be resolved. A replaced tip is reachable from no branch, so only a fetch by its
- * full object id brings it back (SHA-1 or SHA-256, any case); an abbreviated id cannot be fetched; a ref name can. */
+/** How to recover a baseline that cannot be resolved. A full object id (SHA-1 or SHA-256, any case) is fetched by id: after
+ * a force push the replaced tip is on no branch. A shorter hex string may be an abbreviated SHA, which cannot be fetched,
+ * or a branch or tag that merely looks like hex; anything else is a ref name, which a plain fetch brings. */
 export function baselineRestore(ref: string): string {
-  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return `git fetch origin ${ref}, then re-run the check (a replaced tip is reachable from no branch, so a plain fetch does not bring it)`;
-  if (/^[0-9a-f]{4,63}$/i.test(ref)) return `set ATDD_BASE_REF to the full SHA of ${ref} (an abbreviated SHA cannot be fetched), fetch it with git fetch origin <full SHA>, then re-run the check`;
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return `git fetch origin ${ref}, then re-run the check (a plain fetch may not bring it: after a force push the replaced tip is on no branch)`;
+  if (/^[0-9a-f]{4,39}$/i.test(ref)) return `if ${ref} is an abbreviated SHA, set ATDD_BASE_REF to its full SHA and git fetch origin <full SHA> (an abbreviated SHA cannot be fetched); if it is a branch or tag, git fetch origin; then re-run the check`;
   return `git fetch origin, then re-run the check`;
 }
 
+/** atdd-bun.yaml is not looser than on the branch being merged into. */
 async function checkPolicy(root: string, base?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<IntegrityFinding[]> {
   // On a push, the generated CI passes the pre-push tip (github.event.before) as ATDD_BASE_REF, so a multi-commit push
   // is judged as a whole: [docs, security] → no list → [docs] in one push cannot read as a first adoption.

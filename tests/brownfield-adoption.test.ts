@@ -163,6 +163,8 @@ test("the restore hint for an unresolvable baseline can always recover it", asyn
   const { baselineRestore } = await import("../src/integrity");
   const sha1 = "1234567890abcdef1234567890abcdef12345678", sha256 = "ab".repeat(32);
   for (const full of [sha1, sha1.toUpperCase(), sha256]) expect(baselineRestore(full), full).toStartWith(`git fetch origin ${full}, then`);
-  expect(baselineRestore("1234567")).toStartWith("set ATDD_BASE_REF to the full SHA of 1234567");
+  expect(baselineRestore("1234567")).toStartWith("if 1234567 is an abbreviated SHA, set ATDD_BASE_REF to its full SHA");
+  expect(baselineRestore("cafe")).toContain("if it is a branch or tag, git fetch origin");
+  expect(baselineRestore("a".repeat(50))).toBe("git fetch origin, then re-run the check");   // no object id is 41-63 hex long
   expect(baselineRestore("origin/release")).toBe("git fetch origin, then re-run the check");
 });
