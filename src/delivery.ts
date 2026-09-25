@@ -138,7 +138,9 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
   const dir = join(root, policy.root);
   if (!existsSync(dir)) return [];
   const out: EvidenceFile[] = [];
-  for (const entry of (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
+  for (const entry of (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory() || entry.isSymbolicLink()).sort((a, b) => a.name.localeCompare(b.name))) {
+    // A symlinked tranche folder could point anywhere, and would otherwise be skipped unread.
+    if (entry.isSymbolicLink()) { out.push({ file: `${policy.root}/${entry.name}`, tranche: entry.name, data: null, error: `${policy.root}/${entry.name} is a symlink; a tranche folder is a real folder holding its own evidence.yaml` }); continue; }
     const file = `${policy.root}/${entry.name}/evidence.yaml`, path = join(root, file);
     if (!existsSync(path)) { out.push({ file, tranche: entry.name, data: null, error: `tranche folder ${policy.root}/${entry.name} has no evidence.yaml` }); continue; }
     try { out.push({ file, tranche: entry.name, data: Bun.YAML.parse(await readFile(path, "utf8")) as Evidence }); }
@@ -334,7 +336,7 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       const configured = STAGES.filter(name => policy.stages[name]), before = configured.at(-2), closing = configured.at(-1);
       const earlier = before && entry.data.reviews.filter(review => review.stage === before).at(-1);
       if (earlier && earlier.verdict === "approve" && closing && !(await git(absolute, ["cat-file", "-e", `${earlier.sha}^{commit}`])).code) {
-        const changedSince = (await git(absolute, ["diff", "--no-renames", "--name-only", earlier.sha, entry.data.approved_sha!, "--", ".", `:(exclude)${policy.root}`])).out.split("\n").filter(Boolean);
+        const changedSince = (await git(absolute, ["diff", "--no-renames", "--name-only", earlier.sha, entry.data.approved_sha!, "--", ":(top)", `:(exclude)${policy.root}`])).out.split("\n").filter(Boolean);
         if (changedSince.length) findings.push(finding("delivery.stages-complete", entry.file, `${changedSince.slice(0, 5).join(", ")}${changedSince.length > 5 ? ` and ${changedSince.length - 5} more` : ""} changed after ${before} approved ${earlier.sha.slice(0, 7)}, and only ${closing} reviewed the change; a code change goes back through ${before}`));
       }
     }

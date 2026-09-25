@@ -582,3 +582,24 @@ test("V2: every review retains its own report, as a regular file", async () => {
     expect((await evidence(dir)).filter(e => e.includes("is not a regular file"))).toHaveLength(4);
   });
 });
+
+// Round 5 of PR #19 (GLM, 7804950; approved with two low findings).
+
+test("GLM V1: a symlinked tranche folder is reported, never skipped unread", async () => {
+  await withRepo({ "atdd-bun.yaml": ADOPT, "stash/evidence.yaml": record(FULL, { status: "ready", approved_sha: "3333333" }) }, async dir => {
+    await mkdir(join(dir, "delivery"), { recursive: true });
+    await Bun.$`ln -s ../stash ${join(dir, "delivery/x")}`;
+    expect(await evidence(dir)).toEqual(["delivery/x is a symlink; a tranche folder is a real folder holding its own evidence.yaml"]);
+  });
+});
+
+test("GLM V2: the check after code_review covers the whole repository, whatever the scan root", async () => {
+  await tranche(async (dir, commit) => {
+    const green = await commit("green", { "svc/api/src/app.ts": "export const a = 2;\n" });
+    const later = await commit("elsewhere", { "svc/web/x.ts": "export const x = 1;\n" });
+    await writeFile(join(dir, "svc/api/atdd-bun.yaml"), ADOPT);
+    const reviews = FULL.map(r => ({ ...r, sha: r.stage === "final_review" ? later : green, report: `delivery/api/${r.stage}.json` }));
+    await commit("evidence", { "svc/api/delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL.map(r => [`svc/api/delivery/api/${r.stage}.json`, "{}"])) });
+    expect((await validateDelivery(join(dir, "svc/api"), { gate: false })).map(f => f.evidence)).toEqual([expect.stringContaining("svc/web/x.ts changed after code_review approved")]);
+  });
+});
