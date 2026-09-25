@@ -134,12 +134,17 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   // On a push, the generated CI passes the pre-push tip (github.event.before) as ATDD_BASE_REF, so a multi-commit push
   // is judged as a whole: [docs, security] → no list → [docs] in one push cannot read as a first adoption.
   const ref = base || process.env.ATDD_BASE_REF || (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
-  const resolves = !/^0+$/.test(ref) && !(await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).code;
-  if (!resolves && !push) return [];
-  let against = resolves ? (await git(root, ["merge-base", "HEAD", ref])).out : "";
-  // A push with no usable before-SHA (a new branch, a force push) or whose base is its own head: judge the pushed
-  // commit against its parent.
-  if (push && (!against || against === (await git(root, ["rev-parse", "HEAD"])).out)) against = (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
+  const newBranch = /^0+$/.test(ref), resolved = newBranch ? "" : (await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).out;
+  let against: string;
+  if (push) {
+    // A push is judged against the tip it replaced, directly, never a merge base: after a force push the merge base
+    // can predate the policy being removed. A new branch has no previous tip and is judged against its parent.
+    if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the pre-push tip ${ref.slice(0, 7)} to judge this push against; fetch it (fetch-depth: 0)`, restore: "git fetch origin && re-run the check" }];
+    against = resolved && resolved !== (await git(root, ["rev-parse", "HEAD"])).out ? resolved : (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
+  } else {
+    if (!resolved) return [];
+    against = (await git(root, ["merge-base", "HEAD", ref])).out;
+  }
   if (!against) return [];
   const read = async (text: string | null) => (text ? Bun.YAML.parse(text) ?? {} : {}) as Partial<HookPolicy>;
   const before = await git(root, ["show", `${against}:atdd-bun.yaml`]), path = join(root, "atdd-bun.yaml");

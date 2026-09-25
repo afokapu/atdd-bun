@@ -114,7 +114,24 @@ test("8, pushed: a multi-commit direct push [docs, security] → no list → [do
     // Judged one commit deep, the push reads as a first adoption; judged from the pre-push tip, it drops security.
     expect(policy(await checkIntegrity({ root, base: "", push: true }))).toEqual([]);
     expect(policy(await checkIntegrity({ root, base: before, push: true }))).toEqual([expect.stringContaining("profiles drops security")]);
-    // No usable before-SHA (a new branch or a force push): falls back to the parent, as before.
+    // A new branch (all-zero before-SHA) has no previous tip: judged against its parent, as before.
     expect(policy(await checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: true }))).toEqual([]);
+    // A before-SHA that cannot be resolved fails closed rather than skipping the check.
+    expect(policy(await checkIntegrity({ root, base: "1234567890abcdef1234567890abcdef12345678", push: true }))).toEqual([expect.stringContaining("cannot resolve the pre-push tip")]);
+  });
+});
+
+test("8, force-pushed: a rewritten history is judged against the tip it replaced, not a merge base", async () => {
+  const { checkIntegrity } = await import("../src/integrity");
+  // P (no list) → A ([docs, security]) is the pushed tip; a force push replaces it with P → B (no list) → C ([docs]).
+  await brownfield("max_staged_files: 20\n", async root => {
+    await git(root, "checkout", "-q", "base"); const p = (await Bun.$`git -C ${root} rev-parse HEAD`.text()).trim();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs, security]\n"); await git(root, "commit", "-qam", "A", "--no-verify");
+    const a = (await Bun.$`git -C ${root} rev-parse HEAD`.text()).trim();
+    await git(root, "reset", "-q", "--hard", p);
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 30\n"); await git(root, "commit", "-qam", "B", "--no-verify");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n"); await git(root, "commit", "-qam", "C", "--no-verify");
+    const findings = (await checkIntegrity({ root, base: a, push: true })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
+    expect(findings).toEqual([expect.stringContaining("profiles drops security")]);
   });
 });
