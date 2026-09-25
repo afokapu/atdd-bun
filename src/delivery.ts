@@ -152,7 +152,7 @@ export type EvidenceFile = { file: string; tranche: string; data: Evidence | nul
  * or code would otherwise sit in a folder no other profile judges. Loose files directly under the root count too. */
 export async function strayFiles(root: string, policy: DeliveryPolicy): Promise<string[]> {
   const dir = join(root, policy.root), out: string[] = [];
-  if (!existsSync(dir)) return out;
+  if (!isFolder(dir)) return out;
   const walk = async (path: string, depth: number): Promise<void> => {
     for (const entry of await readdir(path, { withFileTypes: true })) {
       const child = join(path, entry.name), rel = `${policy.root}/${child.slice(dir.length + 1).replaceAll("\\", "/")}`;
@@ -169,7 +169,7 @@ export async function strayFiles(root: string, policy: DeliveryPolicy): Promise<
 /** Data files inside tranche folders (depth 1 and below, other than evidence.yaml): candidate reports. */
 async function dataFiles(root: string, policy: DeliveryPolicy): Promise<string[]> {
   const dir = join(root, policy.root), out: string[] = [];
-  if (!existsSync(dir)) return out;
+  if (!isFolder(dir)) return out;
   const walk = async (path: string, depth: number): Promise<void> => {
     for (const entry of await readdir(path, { withFileTypes: true })) {
       const child = join(path, entry.name);
@@ -185,7 +185,7 @@ async function dataFiles(root: string, policy: DeliveryPolicy): Promise<string[]
 /** Every tranche folder under the delivery root with its parsed evidence, or why it has none. */
 export async function loadEvidence(root: string, policy: DeliveryPolicy): Promise<EvidenceFile[]> {
   const dir = join(root, policy.root);
-  if (!existsSync(dir)) return [];
+  if (!isFolder(dir)) return [];
   const out: EvidenceFile[] = [];
   for (const entry of (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory() || entry.isSymbolicLink()).sort((a, b) => a.name.localeCompare(b.name))) {
     // A symlinked tranche folder could point anywhere, and would otherwise be skipped unread.
@@ -371,8 +371,10 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null : null;
   // At the gate, like records, a stray the change does not touch was there when it merged and is not judged again.
   // A data file belongs only as a report some record in its tranche names; an unnamed one is authored content by another name.
-  const reported = new Set(files.flatMap(entry => namedReports(entry.data)));
+  // Per tranche: a data file is a report only when a record in its own tranche names it.
+  const reported = new Set(files.flatMap(entry => namedReports(entry.data).filter(report => report.startsWith(`${policy.root}/${entry.tranche}/`))));
   const unnamed = (await dataFiles(absolute, policy)).filter(path => !reported.has(path));
+  if (existsSync(join(absolute, policy.root)) && !isFolder(join(absolute, policy.root))) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a file, not a folder; the records cannot be read`));
   for (const path of [...await strayFiles(absolute, policy), ...unnamed].sort()) if (!onBase || (await git(absolute, ["diff", "--quiet", onBase, "--", path])).code) findings.push(finding("delivery.evidence-schema", path, `${path} is neither a tranche's evidence.yaml nor a report a record in its tranche names (a data file: ${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}); the records folder holds only records and their reports`));
   for (const entry of files) {
     if (onBase && existsSync(join(absolute, entry.file)) && !(await git(absolute, ["diff", "--quiet", onBase, "--", `${policy.root}/${entry.tranche}`])).code) continue;

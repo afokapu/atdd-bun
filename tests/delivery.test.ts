@@ -803,3 +803,14 @@ test("a malformed record is a schema finding, never a crash, and a file named de
   });
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery": "#!/bin/sh\necho deliver\n" }, async dir => expect(await rules(dir)).toEqual([]));
 });
+
+// Round 5 of #23 (GLM: U1, U2 low).
+
+test("a root that is a file is a finding, not a crash; a report named from another tranche does not exempt a data file", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: ops/records\n", "ops/records": "not a folder\n" }, async dir => {
+    expect(await evidence(dir)).toEqual(["delivery.root ops/records is a file, not a folder; the records cannot be read"]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record([]), "delivery/api/smuggle.md": "# authored\n", "delivery/ui/evidence.yaml": record([{ ...FULL[0], report: "delivery/api/smuggle.md" }], { tranche: "ui" }) }, async dir => {
+    expect((await validateDelivery(dir, { gate: false })).filter(f => f.file === "delivery/api/smuggle.md").map(f => f.rule_id)).toEqual(["delivery.evidence-schema"]);
+  });
+});
