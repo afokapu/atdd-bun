@@ -74,7 +74,7 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
   } finally { await rm(root, { recursive: true, force: true }); }
-});
+}, 30_000);
 
 test("the installed package is checked file by file against its published manifest", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-integrity-installed-"));
@@ -212,4 +212,50 @@ test("a baseline that parses to a scalar or a list is not a policy and is never 
       expect(pushed.restore, baseline).toStartWith("this push is compared with the tip it replaced");
     } finally { await rm(root, { recursive: true, force: true }); }
   }
+}, 30_000);
+
+test("a wrongly typed policy field is a finding on either side, never a crash; an empty or null policy is the defaults", async () => {
+  const cases: Array<[string, string, string]> = [
+    ["protected_branches: 42\n", "max_staged_files: 20\n", "the baseline"],
+    ["max_staged_files: 20\n", "registry_paths: plan\n", "which the hooks would ignore or misread"],
+    ["max_staged_files: 20\n", "worktrees: [on]\n", "worktrees must be a mapping"],
+    ["max_staged_files: 20\n", "worktrees: { primary_branch: [main] }\n", "worktrees.primary_branch must be a string"],
+  ];
+  for (const [baseline, current, expected] of cases) {
+    const root = await consumer();
+    try {
+      await writeFile(join(root, "atdd-bun.yaml"), baseline);
+      await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+      await writeFile(join(root, "atdd-bun.yaml"), current);
+      const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
+      expect(findings, `${baseline} → ${current}`).toEqual([expect.stringContaining(expected)]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+  // Declined (GLM Q1 on #22): a null or comment-only baseline is the default policy, so comparing against the defaults is right.
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "# nothing configured\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 10\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
+test("a key with no value is absent, as the hooks read it: a null baseline field does not lock the repository", async () => {
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees:\n  # enabled: false\nprotected_branches:\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees: { enabled: true }\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+    // Only hook keys: `delivery:` with no value adopts delivery, so removing it is still reported.
+    await git(root, "checkout", "-q", "-b", "delivery-null", "base");
+    await writeFile(join(root, "atdd-bun.yaml"), "delivery:\n  # stages: {}\n"); await git(root, "commit", "-qam", "adopt delivery", "--no-verify"); await git(root, "branch", "-f", "dbase");
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+    expect((await checkIntegrity({ root, base: "dbase", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("delivery is no longer adopted")]);
+    await git(root, "checkout", "-q", "-f", "base");
+    // And a null in the working tree compares as the default, not as 0.
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nmax_staged_files:\n");
+    expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);

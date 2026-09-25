@@ -125,9 +125,22 @@ docs/delivery/tranches/<tranche>/evidence.yaml     one tranche's review record (
 docs/delivery/tranches/<tranche>/*.json            the retained raw reviewer reports
 ```
 
-Where delivery is adopted, the docs profile leaves the records folder to the delivery profile: its
-YAML and reports are not authored documentation, and changing them needs no docs declaration. Every
-key is optional; these are the defaults:
+Where delivery is adopted, the docs profile leaves the records folder's records and data files to
+the delivery profile: they are not authored documentation, and changing them needs no docs
+declaration. AsciiDoc there stays documentation. Where the docs profile is active, the first tranche
+also brings `docs/index.adoc` and `docs/delivery/index.adoc`, each with `:doc-id:` and `:status:`,
+since every docs area needs an index.
+
+Upgrading from 0.8.0: records under `delivery/` are reported until `delivery.root: delivery` is set
+(a reported root change, approved once) or they are moved. A data file in an old tranche that no
+record there names is reported on local runs, not at the merge gate; removing it is a gate change a
+human approves, or a new tranche's record can name it.
+
+Upgrading from 0.9.0: an `atdd-bun.yaml` field with the wrong type (a quoted number, `yes`/`no`, a
+non-string list item, `.inf`) is now reported, and on the base branch it blocks every pull request,
+since the policy cannot be compared. Correct such fields on the base branch before upgrading.
+
+Every key is optional; these are the defaults:
 
 ```yaml
 delivery:

@@ -814,3 +814,30 @@ test("a root that is a file is a finding, not a crash; a report named from anoth
     expect((await validateDelivery(dir, { gate: false })).filter(f => f.file === "delivery/api/smuggle.md").map(f => f.rule_id)).toEqual(["delivery.evidence-schema"]);
   });
 });
+
+// Low findings from #23's last round (Claude V2, GLM V1).
+
+test("a symlinked root is reported as a symlink; the legacy and hidden-records probes follow symlinks", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: ops/records\n", "elsewhere/api/evidence.yaml": record([]) }, async dir => {
+    await mkdir(join(dir, "ops"), { recursive: true }); await Bun.$`ln -s ../elsewhere ${join(dir, "ops/records")}`;
+    expect(await evidence(dir)).toContainEqual("delivery.root ops/records is, or is reached through, a symlink; the delivery root must be a real folder, whose records Git tracks");
+  });
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "stash/api/evidence.yaml": record([]) }, async dir => {
+    await Bun.$`ln -s stash ${join(dir, "delivery")}`;
+    expect(await evidence(dir)).toContainEqual(expect.stringContaining("tranche records under delivery/ (api) are outside the root docs/delivery/tranches"));
+  });
+});
+
+test("a symlink anywhere on the way to the root is reported", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "real/tranches/api/evidence.yaml": record([]) }, async dir => {
+    await mkdir(join(dir, "docs"), { recursive: true }); await Bun.$`ln -s ../real ${join(dir, "docs/delivery")}`;
+    expect(await evidence(dir)).toContainEqual(expect.stringContaining("delivery.root docs/delivery/tranches is, or is reached through, a symlink"));
+  });
+});
+
+test("a compatibility symlink to the root is not records outside it", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": record([]) }, async dir => {
+    await Bun.$`ln -s docs/delivery/tranches ${join(dir, "delivery")}`;
+    expect((await evidence(dir)).filter(e => e.includes("outside the root"))).toEqual([]);
+  });
+});

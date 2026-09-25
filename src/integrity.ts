@@ -118,6 +118,36 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
  * its absent-means-all default is right for execution and wrong for deciding whether a policy was ever declared. */
 const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
 
+/** A policy with null-valued hook keys (and worktrees children) removed: YAML gives null for a key with no value, and the
+ * hooks read null as absent, so the comparison must too. Other keys keep their null: delivery and profiles are read by
+ * readers that tell null apart from absent (`delivery:` with no value adopts delivery). */
+function withoutNulls(config: Record<string, unknown>): Record<string, unknown> {
+  const out = Object.fromEntries(Object.entries(config).filter(([key, value]) => value !== null || !(key in defaultHookPolicy)));
+  const worktrees = out.worktrees;
+  if (typeof worktrees === "object" && worktrees !== null && !Array.isArray(worktrees)) out.worktrees = Object.fromEntries(Object.entries(worktrees).filter(([, value]) => value !== null));
+  return out;
+}
+
+/** The hook policy fields whose value has the wrong type. The comparison below would otherwise crash on them (a string
+ * where a list is expected) or compare them as the defaults. An empty or null document is the default policy, and fine. */
+export function policyShapeErrors(config: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"])
+    if (config[key] !== undefined && !(typeof config[key] === "number" && Number.isFinite(config[key]))) out.push(`${key} must be a finite number`);
+  for (const key of ["require_plan_reference", "require_traceability"]) if (config[key] !== undefined && typeof config[key] !== "boolean") out.push(`${key} must be true or false`);
+  for (const key of ["protected_branches", "registry_paths"]) if (config[key] !== undefined && !(Array.isArray(config[key]) && (config[key] as unknown[]).every(item => typeof item === "string"))) out.push(`${key} must be a list of strings`);
+  const worktrees = config.worktrees;
+  if (worktrees !== undefined) {
+    if (typeof worktrees !== "object" || worktrees === null || Array.isArray(worktrees)) out.push("worktrees must be a mapping");
+    else {
+      const layout = worktrees as Record<string, unknown>;
+      for (const key of ["enabled", "require_linked_worktree"]) if (layout[key] !== undefined && typeof layout[key] !== "boolean") out.push(`worktrees.${key} must be true or false`);
+      for (const key of ["root", "primary_directory", "primary_branch"]) if (layout[key] !== undefined && typeof layout[key] !== "string") out.push(`worktrees.${key} must be a string`);
+    }
+  }
+  return out;
+}
+
 /** Names of the policy fields in `current` that are looser than in `base`. */
 export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
@@ -174,11 +204,20 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   const unreadable = (why: string) => [{ file: "atdd-bun.yaml", detail: `the baseline atdd-bun.yaml at ${against.slice(0, 7)} ${why}, so the policy cannot be compared`, restore: push
     ? `this push is compared with the tip it replaced (${against.slice(0, 7)}), whose atdd-bun.yaml is broken; once the repaired atdd-bun.yaml is on the branch, the next push is compared with a readable tip`
     : `repair the atdd-bun.yaml on the base branch (git show ${against.slice(0, 7)}:atdd-bun.yaml) and land it there, which may need a maintainer; then bring that repair into this branch (rebase onto the base, or merge it in: a pull request is compared with its merge base) and re-run the check` }];
-  let baseline: Partial<HookPolicy>;
-  try { baseline = await read(before.code ? null : before.out); }
+  let baseline: Record<string, unknown>;
+  try { baseline = await read(before.code ? null : before.out) as Record<string, unknown>; }
   catch (error) { return unreadable(`could not be parsed (${String(error)})`); }
   if (typeof baseline !== "object" || baseline === null || Array.isArray(baseline)) return unreadable(`is not a policy mapping (${JSON.stringify(baseline)})`);
-  const loosened = loosenedPolicy(baseline, await read(existsSync(path) ? await readFile(path, "utf8") : null));
+  // A key with no value (or only commented-out children) parses to null; the hooks read it as absent, and so does this.
+  baseline = withoutNulls(baseline);
+  const baseShape = policyShapeErrors(baseline);
+  if (baseShape.length) return unreadable(`has wrongly typed fields (${baseShape.join("; ")})`);
+  const raw = await read(existsSync(path) ? await readFile(path, "utf8") : null);
+  const current = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? withoutNulls(raw) : raw;
+  // A wrongly typed field in the working tree is read by the hooks as its default, silently; it is reported instead.
+  const shape = typeof current === "object" && current !== null && !Array.isArray(current) ? policyShapeErrors(current) : ["the document is not a policy mapping"];
+  if (shape.length) return [{ file: "atdd-bun.yaml", detail: `has wrongly typed fields, which the hooks would ignore or misread: ${shape.join("; ")}`, restore: "correct the field types in atdd-bun.yaml, then re-run the check" }];
+  const loosened = loosenedPolicy(baseline, current);
   return loosened.length ? [{ file: "atdd-bun.yaml", detail: `loosens the policy of ${against.slice(0, 7)}: ${loosened.join("; ")}`, restore: `git checkout ${against.slice(0, 7)} -- atdd-bun.yaml` }] : [];
 }
 
