@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { instructionPaths } from "./agent";
+import { deliveryInstalled, deliverySkillFiles, instructionPaths } from "./agent";
 import { loosenedDelivery } from "./delivery";
 import { concreteProfiles } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
@@ -97,6 +97,7 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
   };
   await same(WORKFLOW, "templates/github/atdd-bun.yml", "bun run atdd-bun ci init --replace");
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
+  if (await deliveryInstalled(root)) for (const [path, template] of deliverySkillFiles) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {

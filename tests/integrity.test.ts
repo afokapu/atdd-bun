@@ -110,3 +110,21 @@ test("the CLI exits non-zero with the loud message, and the generated workflow r
     expect(workflow.indexOf("bun run atdd-bun integrity")).toBeLessThan(workflow.indexOf("bun run atdd-bun all"));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("the delivery skill is installed and protected only where the delivery profile is adopted", async () => {
+  const { agentInit, agentStatus } = await import("../src/agent");
+  const root = await consumer();
+  try {
+    const skill = join(root, ".agents/skills/delivery/SKILL.md"), review = join(root, ".claude/skills/delivery/review.md");
+    expect(await Bun.file(skill).exists()).toBeFalse();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, delivery]\n");
+    expect((await agentStatus(root)).ok).toBeFalse();
+    expect((await agentInit(root)).ok).toBeTrue();
+    expect(await readFile(skill, "utf8")).toStartWith("---\nname: delivery\n");
+    expect(await readFile(review, "utf8")).toContain("**Read only.**");
+    expect((await agentStatus(root)).ok).toBeTrue();
+    expect(await checkIntegrity({ root })).toEqual([]);
+    await writeFile(review, (await readFile(review, "utf8")).replace("**Read only.**", "Edit freely."));
+    expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/review.md"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
