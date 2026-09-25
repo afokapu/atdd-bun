@@ -113,6 +113,7 @@ key is optional; these are the defaults:
 delivery:
   root: delivery                     # one <tranche>/evidence.yaml per tranche, reports beside it
   require_record: true               # at the gate, a change outside the root needs a tranche record
+  multiplexer: herdr                 # the terminal multiplexer agents run in; any command name
   independence: fresh-process        # or different-model; overridable per stage
   stages:                            # models in preference order: the first, then recorded fallbacks
     plan_review:  { authors: [codex],       reviewers: [glm, claude] }

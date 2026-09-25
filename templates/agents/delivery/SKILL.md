@@ -13,11 +13,25 @@ A **tranche** is one independently mergeable piece of the program, on its own br
 Its job is throughput: every worker slot busy, every tranche moving. It never implements, repairs tests, reviews, or merges a tranche.
 
 1. Split the program into tranches with explicit dependencies. Activate a tranche as soon as its own dependencies have merged; do not wait for a whole wave. A tranche whose dependencies are still open may run PLAN and `plan_review` but nothing after; revalidate its plan once they merge.
-2. For each active tranche, create a worktree from the owning repository's workspace and start a driver in it through the multiplexer (Herdr by default; cmux or tmux the same way). Send the mandate, press Enter, wait 4–6 s, and read the pane: a working indicator or agent output means it landed; an empty prompt or placeholder means retry before waiting on anything.
-3. Wait on native events, not polling loops, and on every driver at once. When a slot frees, give it to the next ready tranche or to planning ahead.
+2. For each active tranche, create a worktree from the owning repository's workspace and start a driver in it through the multiplexer (see Multiplexer). Send the mandate, submit it, wait 4–6 s, and read the pane: a working indicator or agent output means it landed; an empty prompt or placeholder means retry before waiting on anything.
+3. Wait on the multiplexer's events, not polling loops, and on every driver at once. When a slot frees, give it to the next ready tranche or to planning ahead.
 4. Keep provider health for the whole program. When a driver reports a model unavailable, tell every driver to go straight to the next model in its lists until it recovers, so no tranche spends time rediscovering an outage.
 5. Intervene when a tranche is not BLOCKED yet no worker has run for a while, or when two hours pass with deliverable-shaped changes and no commit: tell the driver to commit, push and open its PR.
 6. A `BLOCKED disputed-finding` goes to the human with both sides. `BLOCKED provider-unavailable` frees the slot for other work.
+
+## Multiplexer
+
+Agents run in panes of the terminal multiplexer named in `delivery.multiplexer` (default `herdr`); say which one you are using when you start. Do not assume its commands: before the first dispatch, read its own help (`<multiplexer> --help`, then `<multiplexer> <group> --help`, and any schema it publishes) and map each operation below to a command. If one is missing, report it instead of scripting around it.
+
+| Operation | herdr |
+|---|---|
+| create a worktree under the owning repository's workspace | `herdr worktree create --workspace <repo-ws> --branch <b> --base <sha> --path <p> --label <tranche> --no-focus` |
+| start an agent in a pane with a working directory | `herdr agent start <name> --cwd <worktree> --workspace <ws> --no-focus -- codex` |
+| send text, then submit it | `herdr agent send <name> "<text>"`, then `herdr pane send-keys <pane> Enter` (send does not press Enter) |
+| read recent output | `herdr agent read <pane> --source recent-unwrapped --lines 12` |
+| wait for one pane's status or output | `herdr wait agent-status <pane> --status idle`, `herdr wait output <pane> --match "PROGRAM_EVENT" --regex` |
+| wait on every pane at once | the socket API's `events.subscribe` (`herdr api schema --json`): `pane_agent_status_changed`, `pane_exited`, `pane_output_changed` |
+| inspect a pane's process | `herdr pane process-info --pane <pane>` |
 
 ## Driver
 

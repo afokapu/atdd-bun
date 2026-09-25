@@ -27,10 +27,11 @@ export type DeliveryPolicy = {
   fallback: { after_failures: number; within_minutes: number; when_exhausted: "block" | "wait" };
   commands: Record<string, { author?: string; review?: string }>;
   require_record: boolean;
+  multiplexer: string;
 };
 
 type RawStage = { authors?: string[]; reviewers: string[]; independence?: Independence };
-type RawDelivery = { root?: string; require_record?: boolean; independence?: Independence; stages?: Partial<Record<Stage, RawStage>>; fallback?: Partial<DeliveryPolicy["fallback"]>; commands?: DeliveryPolicy["commands"] };
+type RawDelivery = { root?: string; require_record?: boolean; multiplexer?: string; independence?: Independence; stages?: Partial<Record<Stage, RawStage>>; fallback?: Partial<DeliveryPolicy["fallback"]>; commands?: DeliveryPolicy["commands"] };
 
 const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
   plan_review: { authors: ["codex"], reviewers: ["glm", "claude"] },
@@ -62,7 +63,7 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
     if (!given) continue;
     stages[stage] = { authors: given.authors ?? DEFAULT_STAGES[stage].authors, reviewers: given.reviewers, independence: (given as RawStage).independence ?? independence };
   }
-  return { root: canonicalRoot(raw.root ?? "delivery"), independence, stages, fallback: { ...DEFAULT_FALLBACK, ...raw.fallback }, commands: raw.commands ?? {}, require_record: raw.require_record ?? true };
+  return { root: canonicalRoot(raw.root ?? "delivery"), independence, stages, fallback: { ...DEFAULT_FALLBACK, ...raw.fallback }, commands: raw.commands ?? {}, require_record: raw.require_record ?? true, multiplexer: raw.multiplexer ?? "herdr" };
 }
 
 /** One spelling per root, so filesystem discovery, Git pathspecs and drift filtering agree ("delivery/" is "delivery"). */

@@ -15,6 +15,11 @@
       "type": "boolean",
       "description": "At the gate, a change outside the delivery root needs a tranche record in the same change. Default: true; turning it off is a loosening."
     },
+    "multiplexer": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The terminal multiplexer the coordinator drives agents through, named by its command. Default: herdr. Any other name is accepted; the agent learns its commands from the multiplexer's own help."
+    },
     "independence": { "$ref": "#/definitions/independence" },
     "stages": {
       "type": "object",

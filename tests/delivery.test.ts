@@ -46,6 +46,13 @@ test("a complete, independent record in progress is clean", async () => {
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
+test("the multiplexer is named in the policy, herdr by default, any command name accepted", async () => {
+  expect(deliveryPolicy({}).multiplexer).toBe("herdr");
+  expect(deliveryPolicy({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  multiplexer: zellij\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  multiplexer: Herdr CLI\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+});
+
 test("a malformed policy is reported and the evidence is judged against the defaults", async () => {
   await withRepo({ "atdd-bun.yaml": "delivery:\n  stages:\n    code_review: { reviewers: [] }\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
     expect(await rules(dir)).toEqual(["delivery.config-schema"]);
