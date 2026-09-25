@@ -135,11 +135,22 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
   const root = await consumer();
   try {
     const workflow = join(root, ".github/workflows/atdd-bun.yml");
-    expect(await readFile(workflow, "utf8")).toContain("branches: [main, master]");
+    expect(await readFile(workflow, "utf8")).toContain('branches: ["main", "master"]');
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
     expect(files(await checkIntegrity({ root }))).toEqual([".github/workflows/atdd-bun.yml"]);
     expect((await ciInit(root, true)).ok).toBeTrue();
-    expect(await readFile(workflow, "utf8")).toContain("branches: [develop, main]");
+    expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
     expect(await checkIntegrity({ root })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("W1: a protected branch name cannot change the generated workflow's structure", async () => {
+  const { renderWorkflow } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    const hostile = ["main", "master", "x]\n  push:\n    branches: [never] #", "*", "it's \"quoted\"", "a # comment"];
+    await writeFile(join(root, "atdd-bun.yaml"), `protected_branches: ${JSON.stringify(hostile)}\n`);
+    const parsed = Bun.YAML.parse((await renderWorkflow(root)).replace(/\$\{\{[^}]*\}\}/g, "x")) as { on: { push: { branches: string[] } } };
+    expect(parsed.on.push.branches).toEqual(hostile);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
