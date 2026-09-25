@@ -4,7 +4,7 @@ kind: rule
 status: active
 name: Authors and reviewers are allowed models, and every fallback says why
 statement: >-
-  Each review's author and reviewer model appears in that stage's authors and reviewers lists; a model after the first is used only with a recorded fallback from each model before it, stating the kind of unavailability (outage, rate_limit, no_report, timeout), the failures observed, at least delivery.fallback.after_failures, and the reason (REQUIRED).
+  Each review's author and reviewer model appears in that stage's authors and reviewers lists; a model after the first is used only with a recorded fallback from each model before it, stating the kind of unavailability (outage, rate_limit, no_report, timeout), the failures observed (at least delivery.fallback.after_failures) within a window no longer than delivery.fallback.within_minutes, and the reason (REQUIRED).
 terms:
 - term_id: fallback
   text: >-
@@ -18,7 +18,7 @@ content:
     Record the fallback on the review:
 
       fallback:
-        - { role: reviewer, from: glm, kind: rate_limit, failures: 3, reason: "429 on 3 attempts in 10 minutes" }
+        - { role: reviewer, from: glm, kind: rate_limit, failures: 3, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" }, reason: "429 on 3 attempts in 10 minutes" }
 
     or use a model the stage lists.
   exceptions:

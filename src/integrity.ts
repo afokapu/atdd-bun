@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { deliveryInstalled, deliverySkillFiles, instructionPaths } from "./agent";
+import { renderWorkflow } from "./ci";
 import { loosenedDelivery } from "./delivery";
 import { concreteProfiles } from "./enforce";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
@@ -95,7 +96,10 @@ async function checkGenerated(root: string, packageRoot: string): Promise<Integr
     if (!existsSync(path)) return findings.push({ file, detail: "is missing", restore });
     if (unstamp(await readFile(path, "utf8")) !== unstamp(await readFile(join(packageRoot, template), "utf8"))) findings.push({ file, detail: "was edited; it must match what the package generates", restore });
   };
-  await same(WORKFLOW, "templates/github/atdd-bun.yml", "bun run atdd-bun ci init --replace");
+  // The workflow is rendered per repository (its protected branches), so it is compared with that rendering.
+  const workflow = join(root, WORKFLOW);
+  if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
+  else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
   if (await deliveryInstalled(root)) for (const [path, template] of deliverySkillFiles) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");

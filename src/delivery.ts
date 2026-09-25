@@ -1,4 +1,5 @@
 import Ajv, { type ValidateFunction } from "ajv";
+import addFormats from "ajv-formats";
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -83,6 +84,10 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
     for (const role of ["reviewers", "authors"] as const) {
       const added = c[role].filter(model => !b[role].includes(model));
       if (added.length) out.push(`delivery.stages.${stage}.${role} adds ${added.join(", ")}`);
+      // The lists are preference orders: moving a model earlier, by reordering or removing one before it, makes a
+      // fallback model usable without the fallback.
+      const promoted = c[role].filter(model => b[role].includes(model) && c[role].indexOf(model) < b[role].indexOf(model));
+      if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
     }
   }
   // Moving the root hides every earlier record from the validator and the gate.
@@ -100,7 +105,9 @@ async function readConfig(root: string): Promise<{ data: Record<string, unknown>
 }
 
 async function schema(name: string): Promise<ValidateFunction> {
-  return new Ajv({ allErrors: true, strict: false }).compile(JSON.parse(await readFile(join(packageRoot, "planner-schemas", name), "utf8")));
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  addFormats(ajv);
+  return ajv.compile(JSON.parse(await readFile(join(packageRoot, "planner-schemas", name), "utf8")));
 }
 
 const git = async (cwd: string, args: string[]) => {
@@ -111,7 +118,7 @@ const git = async (cwd: string, args: string[]) => {
 };
 
 type Actor = { model: string; run: string };
-type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Array<{ role?: "author" | "reviewer"; from: string; kind: string; failures: number; reason: string }>; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
+type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Array<{ role?: "author" | "reviewer"; from: string; kind: string; failures: number; window: { from: string; to: string }; reason: string }>; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
 type Finding = { id: string; severity: string; rebuttal?: string; outcome?: "fixed" | "withdrawn" | "human"; decision?: string };
 type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; approved_sha?: string; reviews: Review[] };
 export type EvidenceFile = { file: string; tranche: string; data: Evidence | null; error?: string };
@@ -131,10 +138,15 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
 }
 
 /** Models must come from the stage's list; a model after the first needs a recorded fallback from each one before it. */
-function checkModels(file: string, review: Review, policy: StagePolicy, at: string, threshold: number): PlanFinding[] {
+function checkModels(file: string, review: Review, policy: StagePolicy, at: string, fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
   const out: PlanFinding[] = [];
-  // The count is the driver's claim, but it is an explicit one: a fallback below the policy's threshold is out of policy.
-  for (const entry of review.fallback ?? []) if (entry.failures < threshold) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' after ${entry.failures} failure(s); the policy requires ${threshold} (delivery.fallback.after_failures)`));
+  // The count and window are the driver's claims, but explicit ones: a fallback outside the policy is out of policy.
+  for (const entry of review.fallback ?? []) {
+    if (entry.failures < fallback.after_failures) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' after ${entry.failures} failure(s); the policy requires ${fallback.after_failures} (delivery.fallback.after_failures)`));
+    const span = (Date.parse(entry.window.to) - Date.parse(entry.window.from)) / 60_000;
+    if (!(span >= 0)) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' has a window that ends before it starts`));
+    else if (span > fallback.within_minutes) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' counts failures over ${Math.round(span)} minutes; the policy allows ${fallback.within_minutes} (delivery.fallback.within_minutes)`));
+  }
   const role = (name: "author" | "reviewer", actor: Actor | undefined, list: string[]) => {
     if (!actor) return;
     const index = list.indexOf(actor.model);
@@ -159,7 +171,7 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
     const at = `reviews[${index}] (${review.stage} @ ${review.sha})`, stage = policy.stages[review.stage];
     if (!stage) { out.push(finding("delivery.evidence-schema", file, `${at}: ${review.stage} is not a configured stage in delivery.stages`)); return; }
     if (!review.author) out.push(finding("delivery.evidence-schema", file, `${at}: names no author; the reviewer's independence cannot be judged without one`));
-    out.push(...checkModels(file, review, stage, at, policy.fallback.after_failures));
+    out.push(...checkModels(file, review, stage, at, policy.fallback));
     if (authorRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also authored in this tranche; a reviewer that edits becomes an author`));
     if (reviewerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' already reviewed reviews[${reviewerRuns.get(review.reviewer.run)}]; every review is a fresh process`));
     else reviewerRuns.set(review.reviewer.run, index);
@@ -258,6 +270,10 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       continue;
     }
     if (entry.data.tranche !== entry.tranche) findings.push(finding("delivery.evidence-schema", entry.file, `tranche '${entry.data.tranche}' does not match its folder '${entry.tranche}'`));
+    // A report lives in its tranche's folder: a report path is exempt from drift, so it may never name other files.
+    const folder = `${policy.root}/${entry.tranche}/`;
+    for (const [index, review] of entry.data.reviews.entries()) if (review.report !== undefined && !(review.report.startsWith(folder) && review.report !== entry.file && review.report.split("/").every(part => part && part !== "." && part !== "..")))
+      findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] report ${review.report} must be a file inside ${folder}, other than evidence.yaml`));
     findings.push(...checkEvidence(entry.file, entry.data, policy));
     if (entry.data.status === "ready") {
       ready.push(entry);
@@ -286,6 +302,10 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, out: PlanFinding[] = [];
   const deleted = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=D", ...span, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
   for (const path of deleted) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} deletes ${path}; records are append-only, and deleting one would escape its findings and the gate`));
+  // Under the root, only records and the reports a changed record names may change: anything else is unbound.
+  const named = new Set(changed.flatMap(path => files.find(file => file.file === path)?.data?.reviews?.flatMap(review => review.report ? [review.report] : []) ?? []));
+  for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !path.endsWith("/evidence.yaml") && !named.has(path)))
+    out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only records and their reports live there`));
   if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   for (const path of changed) {
     const entry = files.find(file => file.file === path);

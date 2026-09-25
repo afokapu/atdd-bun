@@ -37,10 +37,10 @@ Agents run in panes of the terminal multiplexer named in `delivery.multiplexer` 
 
 1. Run each stage's author and each review as a separate headless process, a review in its own pane so its output is retained. Build the command from `delivery.commands` or the defaults below, in the tranche worktree.
 2. Give every reviewer `.agents/skills/delivery/review.md`, the stage and the exact SHA. The reviewer only reads and proposes; it never edits. A reviewer that edits becomes an author and needs a fresh reviewer.
-3. Fallback: after `fallback.after_failures` failures within `fallback.within_minutes` (outage, rate limit, no auditable report), use the next model in the stage's list and record it with its `kind` (`outage`, `rate_limit`, `no_report`, `timeout`) and `failures`. REQUEST CHANGES is never a failure. With the list exhausted, `when_exhausted: block` emits `BLOCKED provider-unavailable`; `wait` keeps retrying the last model.
+3. Fallback: after `fallback.after_failures` failures within `fallback.within_minutes` (outage, rate limit, no auditable report), use the next model in the stage's list and record it with its `kind` (`outage`, `rate_limit`, `no_report`, `timeout`), `failures`, and the `window` from the first to the last counted failure. REQUEST CHANGES is never a failure. With the list exhausted, `when_exhausted: block` emits `BLOCKED provider-unavailable`; `wait` keeps retrying the last model.
 4. For each finding of a REQUEST CHANGES review, either have the author fix it, or write one rebuttal with evidence (a test result, a rule id, file:line). Then run a fresh review of the same stage. If that reviewer upholds a disputed finding, emit `BLOCKED disputed-finding`; never dispute it a second time.
 5. Any commit, regenerated file, conflict fix or rebase after an approval cancels it. A change to the code goes back through `code_review`, then `final_review`.
-6. Append every review to `<root>/<tranche>/evidence.yaml` as it happens; never edit an earlier entry, only add each finding's `outcome` (`fixed`, `withdrawn`, or `human` with the `decision`). Keep the raw reviewer output next to it and name it in `report`. When `final_review` approves, set `status: ready` and `approved_sha` to that SHA, commit the evidence and reports alone, push, and merge with a merge commit once CI is green. A squash or rebase merge writes a commit no reviewer saw, and CI fails it after the merge.
+6. Append every review to `<root>/<tranche>/evidence.yaml` as it happens; never edit an earlier entry, only add each finding's `outcome` (`fixed`, `withdrawn`, or `human` with the `decision`). Keep the raw reviewer output inside the tranche's folder and name it in `report`; nothing else goes in that folder. When `final_review` approves, set `status: ready` and `approved_sha` to that SHA, commit the evidence and reports alone, push, and merge with a merge commit once CI is green. A squash or rebase merge writes a commit no reviewer saw, and CI fails it after the merge.
 7. Emit events the coordinator can wait on, one line each: `PROGRAM_EVENT <tranche> <PLAN|RED|COMMIT <sha>|WORKER_START <role> <model> <sha>|WORKER_END <role> <model> <verdict>|FALLBACK <role> <from>→<to> <reason>|PLAN_REVIEW <sha>|TEST_REVIEW <sha>|CODE_REVIEW <sha>|FINAL_REVIEW <sha>|PR_OPENED <url>|MERGED <sha>|BLOCKED <reason>|HEARTBEAT>`.
 
 ```yaml
@@ -54,7 +54,7 @@ reviews:
     sha: a4c0f11
     author:   { model: glm,    run: glm-green-1 }
     reviewer: { model: claude, run: claude-code-1 }
-    fallback: [{ role: reviewer, from: glm, kind: rate_limit, failures: 3, reason: "429 from the provider on 3 attempts in 10 minutes" }]
+    fallback: [{ role: reviewer, from: glm, kind: rate_limit, failures: 3, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" }, reason: "429 from the provider on 3 attempts in 10 minutes" }]
     verdict: request_changes
     checked: [ACC-API-001, src/wagons/api, coder.bun.error-response-*]
     findings:

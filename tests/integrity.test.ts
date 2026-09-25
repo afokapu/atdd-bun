@@ -66,11 +66,12 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
     expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 5000\nrequire_traceability: false\nprotected_branches: [develop]\n");
-    const [finding] = await checkIntegrity({ root, base: "base", push: false });
-    expect(finding.file).toBe("atdd-bun.yaml");
+    // The workflow's push branches follow protected_branches, so it is reported as stale too.
+    const loosened = await checkIntegrity({ root, base: "base", push: false }), finding = loosened.find(f => f.file === "atdd-bun.yaml")!;
+    expect(files(loosened)).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     for (const text of ["max_staged_changed_lines 300 → 5000", "require_traceability true → false", "protected_branches drops main, master"]) expect(finding.detail).toContain(text);
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
-    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual(["atdd-bun.yaml"]);
+    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -126,5 +127,19 @@ test("the delivery skill is installed and protected only where the delivery prof
     expect(await checkIntegrity({ root })).toEqual([]);
     await writeFile(review, (await readFile(review, "utf8")).replace("**Read only.**", "Edit freely."));
     expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/review.md"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("R5: the generated workflow runs on pushes to the repository's protected branches, and integrity compares that rendering", async () => {
+  const { ciInit } = await import("../src/ci");
+  const root = await consumer();
+  try {
+    const workflow = join(root, ".github/workflows/atdd-bun.yml");
+    expect(await readFile(workflow, "utf8")).toContain("branches: [main, master]");
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
+    expect(files(await checkIntegrity({ root }))).toEqual([".github/workflows/atdd-bun.yml"]);
+    expect((await ciInit(root, true)).ok).toBeTrue();
+    expect(await readFile(workflow, "utf8")).toContain("branches: [develop, main]");
+    expect(await checkIntegrity({ root })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

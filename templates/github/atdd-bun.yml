@@ -4,7 +4,7 @@ on:
   pull_request:
   merge_group:
   push:
-    branches: [main, master]
+    branches: [{{PROTECTED_BRANCHES}}]
 jobs:
   atdd-bun:
     name: atdd-bun

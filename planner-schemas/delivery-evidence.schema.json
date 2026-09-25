@@ -29,13 +29,20 @@
     },
     "fallback": {
       "type": "object",
-      "required": ["from", "kind", "failures", "reason"],
+      "required": ["from", "kind", "failures", "window", "reason"],
       "additionalProperties": false,
       "properties": {
         "role": { "enum": ["author", "reviewer"], "description": "Which actor fell back. Default: reviewer." },
         "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "kind": { "enum": ["outage", "rate_limit", "no_report", "timeout"], "description": "Why the model counts as unavailable. A verdict is never one of these." },
         "failures": { "type": "integer", "minimum": 1, "description": "Failures observed before falling back; at least delivery.fallback.after_failures." },
+        "window": {
+          "type": "object",
+          "required": ["from", "to"],
+          "additionalProperties": false,
+          "description": "When the first and last counted failures happened; the span is at most delivery.fallback.within_minutes.",
+          "properties": { "from": { "type": "string", "format": "date-time" }, "to": { "type": "string", "format": "date-time" } }
+        },
         "reason": { "type": "string", "minLength": 10, "description": "Why the preferred model was unavailable: outage, rate limit, or no auditable report. Never a verdict." }
       }
     },
@@ -68,7 +75,7 @@
         "verdict": { "enum": ["approve", "request_changes"] },
         "checked": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "description": "Everything the reviewer went through, not only what failed." },
         "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
-        "report": { "type": "string", "minLength": 1, "description": "Path of the retained raw reviewer output." }
+        "report": { "type": "string", "minLength": 1, "description": "Path of the retained raw reviewer output, inside the tranche's folder." }
       },
       "if": { "required": ["verdict"], "properties": { "verdict": { "const": "request_changes" } } },
       "then": { "required": ["findings"], "properties": { "findings": { "minItems": 1 } } }

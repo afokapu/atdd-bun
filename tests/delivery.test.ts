@@ -31,6 +31,7 @@ const FULL = [
   review("final_review", "3333333", ["codex", "driver"], ["codex", "r4"]),
 ];
 const record = (reviews: Review[], extra: Record<string, unknown> = {}) => JSON.stringify({ tranche: "api", status: "open", base_sha: "0abcdef", reviews, ...extra });
+const WINDOW = { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" };
 const FINDING = { id: "F1", severity: "high", evidence: "handler.ts:42 returns a bare string", invariant: "coded error bodies", proposed_fix: "return a coded body" };
 
 test("the capability is inert until adopted in atdd-bun.yaml", async () => {
@@ -74,10 +75,10 @@ test("a fallback model needs a recorded reason for every model it skipped, in li
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(skipped) }, async dir => {
     expect(await evidence(dir)).toEqual([expect.stringContaining("no fallback from 'glm'")]);
   });
-  const recorded = [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", kind: "rate_limit", failures: 3, reason: "rate limit: 3 failures in 10 minutes" }] }), FULL[3]];
+  const recorded = [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", kind: "rate_limit", failures: 3, window: WINDOW, reason: "rate limit: 3 failures in 10 minutes" }] }), FULL[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(recorded) }, async dir => expect(await rules(dir)).toEqual([]));
   // An author fallback is recorded under its own role: a reviewer fallback does not excuse it.
-  const author = [...FULL.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", kind: "outage", failures: 3, reason: "provider outage since 09:00" }] }), FULL[3]];
+  const author = [...FULL.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", kind: "outage", failures: 3, window: WINDOW, reason: "provider outage since 09:00" }] }), FULL[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(author) }, async dir => {
     expect(await evidence(dir)).toEqual([expect.stringContaining("author 'claude' is a fallback"), expect.stringContaining("reviewer fallback from 'glm' does not precede 'glm'")]);
   });
@@ -244,7 +245,7 @@ test("F3: moving the root, adding an author, or making fallback easier is a loos
 });
 
 test("F4: a fallback states a kind of unavailability and at least the policy's failure count", async () => {
-  const fallback = (entry: Record<string, unknown>) => [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", reason: "the reviewer requested changes", ...entry }] }), FULL[3]];
+  const fallback = (entry: Record<string, unknown>) => [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", reason: "the reviewer requested changes", window: WINDOW, ...entry }] }), FULL[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ kind: "request_changes", failures: 3 })) }, async dir => {
     expect(await rules(dir)).toEqual(["delivery.evidence-schema"]);
   });
@@ -317,7 +318,9 @@ test("GLM F5: a file under the delivery root that the record does not name is dr
   await tranche(async (dir, commit) => {
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
     await commit("chore: evidence", { ...tranchePR("api", sha), "delivery/api/module.ts": "export const hidden = 1;\n" });
-    expect(await gate(dir)).toEqual([expect.stringContaining("changes delivery/api/module.ts after approved_sha")]);
+    const found = await gate(dir);
+    expect(found).toContain("the branch changes delivery/api/module.ts under delivery/, and no record it changes names it as a report; only records and their reports live there");
+    expect(found).toContainEqual(expect.stringContaining("changes delivery/api/module.ts after approved_sha"));
   });
 });
 
@@ -348,4 +351,45 @@ test("GLM F9: the default claude review command allows only gates, never a writi
   const review = skill.split("\n").find(line => line.startsWith("| claude |"))!.split("|")[3];
   expect(review).not.toContain("atdd-bun:*");
   expect(review).toContain("--disallowedTools Edit Write NotebookEdit");
+});
+
+// Regressions from the Codex re-review of PR #19 (059c1ae).
+
+test("R1: a change under the delivery root that no changed record names fails the gate, even with the record already on base", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/smuggle");
+    await commit("feat: hidden", { "delivery/api/module.ts": "export const hidden = 1;\n" });
+    expect(await gate(dir)).toEqual([expect.stringContaining("changes delivery/api/module.ts under delivery/, and no record it changes names it")]);
+  });
+});
+
+test("R2: a report lives in its tranche's folder, so it cannot exempt a source file from drift", async () => {
+  await withRepo({ "atdd-bun.yaml": ADOPT, "src/app.ts": "x", "delivery/api/evidence.yaml": record(FULL.map(r => ({ ...r, report: "src/app.ts" }))) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.includes("must be a file inside delivery/api/"))).toHaveLength(4);
+  });
+  for (const report of ["delivery/api/../../src/app.ts", "delivery/api/evidence.yaml", "delivery/other/r.json"])
+    await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL.map((r, i) => i ? r : { ...r, report })) }, async dir => {
+      expect(await evidence(dir), report).toEqual([expect.stringContaining(`report ${report} must be a file inside delivery/api/`)]);
+    });
+});
+
+test("R3: reordering or removing a model so a fallback becomes primary is a loosening", () => {
+  const stages = deliveryPolicy({}).stages, base = { delivery: {} };
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, code_review: { reviewers: ["claude", "glm"] } } } })).toEqual(["delivery.stages.code_review.reviewers [glm, claude] → [claude, glm] promotes claude"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, code_review: { reviewers: ["claude"] } } } })).toEqual(["delivery.stages.code_review.reviewers [glm, claude] → [claude] promotes claude"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, code_review: { reviewers: ["glm"] } } } })).toEqual([]);
+});
+
+test("R4: a fallback's failures fall within the policy's window", async () => {
+  const fallback = (window: Record<string, string>) => [...FULL.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", kind: "rate_limit", failures: 3, window, reason: "429 on 3 attempts" }] }), FULL[3]];
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ from: "2026-06-01T09:00:00Z", to: "2026-09-25T09:00:00Z" })) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("the policy allows 10 (delivery.fallback.within_minutes)")]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ from: "2026-09-25T09:10:00Z", to: "2026-09-25T09:00:00Z" })) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("window that ends before it starts")]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(fallback({ from: "yesterday", to: "today" })) }, async dir => expect(await rules(dir)).toEqual(["delivery.evidence-schema", "delivery.evidence-schema"]));
 });
