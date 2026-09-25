@@ -21,9 +21,7 @@ content:
     Create or repair `<root>/<tranche>/evidence.yaml`; the finding names the schema path at fault. A request-changes review carries at least one finding; every review carries its `checked` list.
   exceptions:
   - >-
-    The default root, docs/delivery/tranches, sits in the docs profile's delivery area beside the program's reasoning (docs/delivery/index.adoc); the docs profile leaves the records folder to this profile.
-  - >-
-    Files other than evidence.yaml inside a tranche folder (retained raw reviewer reports) are not judged.
+    The default root, docs/delivery/tranches, sits in the docs profile's delivery area beside the program's reasoning (docs/delivery/index.adoc); the docs profile leaves the folder's record and data files to this profile, and AsciiDoc there stays documentation.
 metadata:
   aliases:
   - DELIVERY-EVIDENCE-SCHEMA-001
