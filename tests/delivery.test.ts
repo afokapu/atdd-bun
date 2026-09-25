@@ -492,3 +492,24 @@ test("GLM T2: the skill's example record is a state the profile accepts", async 
   const example = Bun.YAML.parse(skill.split("```yaml\n")[1].split("```")[0]) as Record<string, unknown>;
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(example) }, async dir => expect(await rules(dir)).toEqual([]));
 });
+
+// Round 4 of PR #19 (Codex, 6779137).
+
+test("U1: a record or report already on the base branch is final; editing it cannot exempt a report from drift", async () => {
+  await tranche(async (dir, commit) => {
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    await sh(dir, "git", "checkout", "-qb", "tranche/abuse");
+    const old = await Bun.file(join(dir, "delivery/api/evidence.yaml")).text();
+    await commit("abuse", { "delivery/api/final_review.json": "{\"allow\": \"everyone\"}\n", "delivery/api/evidence.yaml": old.replace('"status":"ready"', '"status":"ready","pr":"touched"') });
+    const found = await gate(dir);
+    expect(found).toContain("the branch modifies delivery/api/evidence.yaml, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche");
+    expect(found).toContain("the branch modifies delivery/api/final_review.json, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche");
+  });
+});
+
+test("U2: an explicit `delivery: null` is validated as written, not read as an empty block", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery: null\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
+});

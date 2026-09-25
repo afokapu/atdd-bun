@@ -269,7 +269,7 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const absolute = resolve(root), config = await readConfig(absolute);
   if (config.error) return [finding("delivery.config-schema", "atdd-bun.yaml", `atdd-bun.yaml could not be parsed, so the delivery policy cannot be read: ${config.error}`)];
   if (!deliveryAdopted(config.data)) return [];
-  const findings: PlanFinding[] = [], validConfig = await schema("delivery-config.schema.json"), block = config.data!.delivery ?? {};
+  const findings: PlanFinding[] = [], validConfig = await schema("delivery-config.schema.json"), block = "delivery" in config.data! ? config.data!.delivery : {};
   let policy = deliveryPolicy(block);
   if (!validConfig(block)) {
     for (const error of validConfig.errors ?? []) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery${error.instancePath.replaceAll("/", ".")} ${error.message ?? error.keyword}`));
@@ -332,6 +332,10 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   const inRange = new Set((await git(root, ["diff", "--name-only", ...span])).out.split("\n").filter(Boolean));
   const deleted = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=D", ...span, "--", policy.root])).out.split("\n").filter(path => path.endsWith("/evidence.yaml"));
   for (const path of deleted) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} deletes ${path}; records are append-only, and deleting one would escape its findings and the gate`));
+  // A record or report already on the base branch is final: editing an old record would make its reports "named by a
+  // changed record" and so exempt from drift. A later change to a tranche is a new tranche with its own record.
+  const final = (await git(root, ["diff", "--relative", "--name-only", "--diff-filter=MRTC", ...span, "--", policy.root])).out.split("\n").filter(Boolean);
+  for (const path of final) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} modifies ${path}, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche`));
   // Under the root, only records and the reports a changed record names may change: anything else is unbound.
   const named = new Set(changed.flatMap(path => files.find(file => file.file === path)?.data?.reviews?.flatMap(review => review.report ? [review.report] : []) ?? []));
   for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !isRecord(path) && !named.has(path)))
