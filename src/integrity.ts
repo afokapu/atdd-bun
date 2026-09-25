@@ -130,6 +130,14 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
 }
 
 /** atdd-bun.yaml is not looser than on the branch being merged into. */
+/** How to recover a baseline that cannot be resolved. A replaced tip is reachable from no branch, so only a fetch by its
+ * full object id brings it back (SHA-1 or SHA-256, any case); an abbreviated id cannot be fetched; a ref name can. */
+export function baselineRestore(ref: string): string {
+  if (/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(ref)) return `git fetch origin ${ref}, then re-run the check (a replaced tip is reachable from no branch, so a plain fetch does not bring it)`;
+  if (/^[0-9a-f]{4,63}$/i.test(ref)) return `set ATDD_BASE_REF to the full SHA of ${ref} (an abbreviated SHA cannot be fetched), fetch it with git fetch origin <full SHA>, then re-run the check`;
+  return `git fetch origin, then re-run the check`;
+}
+
 async function checkPolicy(root: string, base?: string, push = process.env.GITHUB_EVENT_NAME === "push"): Promise<IntegrityFinding[]> {
   // On a push, the generated CI passes the pre-push tip (github.event.before) as ATDD_BASE_REF, so a multi-commit push
   // is judged as a whole: [docs, security] → no list → [docs] in one push cannot read as a first adoption.
@@ -137,7 +145,7 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   const newBranch = /^0+$/.test(ref), resolved = newBranch ? "" : (await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).out;
   let against: string;
   // An explicit baseline (the pre-push tip, the merge queue's target) that cannot be resolved fails closed.
-  if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the policy baseline ${ref.slice(0, 7)} to judge this change against; fetch it (fetch-depth: 0)`, restore: "git fetch origin && re-run the check" }];
+  if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the policy baseline ${ref} to judge this change against`, restore: baselineRestore(ref) }];
   if (push) {
     // A push is judged against the tip it replaced, directly, never a merge base: after a force push the merge base
     // can predate the policy being removed. A new branch has no previous tip and is judged against its parent.
