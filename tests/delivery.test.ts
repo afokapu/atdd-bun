@@ -20,7 +20,9 @@ async function withRepo(files: Record<string, string>, body: (dir: string) => Pr
 const rules = async (dir: string, gate = false) => (await validateDelivery(dir, { gate, base: "main" })).map(f => f.rule_id);
 const evidence = async (dir: string) => (await validateDelivery(dir, { gate: false })).map(f => f.evidence);
 
-const ADOPT = "profiles: [delivery]\n";
+// Most tests exercise the rules, not the default location, so they pin the short root `delivery`; the default
+// (docs/delivery/tranches) has its own tests below.
+const ADOPT = "profiles: [delivery]\ndelivery:\n  root: delivery\n";
 type Review = Record<string, unknown>;
 const review = (stage: string, sha: string, author: [string, string], reviewer: [string, string], extra: Review = {}): Review =>
   ({ stage, sha, author: { model: author[0], run: author[1] }, reviewer: { model: reviewer[0], run: reviewer[1] }, verdict: "approve", checked: ["ACC-001"], ...extra });
@@ -50,18 +52,18 @@ test("a complete, independent record in progress is clean", async () => {
 test("the multiplexer is named in the policy, herdr by default, any command name accepted", async () => {
   expect(deliveryPolicy({}).multiplexer).toBe("herdr");
   expect(deliveryPolicy({ multiplexer: "tmux" }).multiplexer).toBe("tmux");
-  await withRepo({ "atdd-bun.yaml": "delivery:\n  multiplexer: zellij\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
-  await withRepo({ "atdd-bun.yaml": "delivery:\n  multiplexer: Herdr CLI\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  multiplexer: zellij\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  multiplexer: Herdr CLI\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
 });
 
 test("a malformed policy is reported and the evidence is judged against the defaults", async () => {
-  await withRepo({ "atdd-bun.yaml": "delivery:\n  stages:\n    code_review: { reviewers: [] }\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: delivery\n  stages:\n    code_review: { reviewers: [] }\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
     expect(await rules(dir)).toEqual(["delivery.config-schema"]);
   });
 });
 
 test("stages the policy omits are not required, and a review of one is out of policy", async () => {
-  const policy = "delivery:\n  stages:\n    code_review: { reviewers: [claude] }\n";
+  const policy = "delivery:\n  root: delivery\n  stages:\n    code_review: { reviewers: [claude] }\n";
   await withRepo({ "atdd-bun.yaml": policy, "delivery/api/code.json": "{}", "delivery/api/evidence.yaml": record([review("code_review", "3333333", ["glm", "a"], ["claude", "r"], { report: "delivery/api/code.json" })], { status: "ready", approved_sha: "3333333" }) }, async dir => {
     expect((await rules(dir)).filter(id => id !== "delivery.approved-sha-resolves")).toEqual([]);
   });
@@ -90,7 +92,7 @@ test("independence: a fresh process per review, never an author, and a different
   const selfReview = [...FULL.slice(0, 3), review("final_review", "3333333", ["codex", "driver"], ["codex", "driver"])];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(selfReview) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("also authored")]));
   // GLM reviewing GLM passes under fresh-process and fails once code_review asks for a different model.
-  const strict = "delivery:\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n";
+  const strict = "delivery:\n  root: delivery\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n";
   await withRepo({ "atdd-bun.yaml": strict, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("code_review requires a different model")]));
 });
 
@@ -230,7 +232,7 @@ test("F1: a change outside the delivery root with no tranche record fails the ga
   await tranche(async (dir, commit) => {
     await commit("feat: sneaks past", { "src/app.ts": "export const a = 9;\n" });
     expect(await gate(dir)).toEqual([expect.stringContaining("changes src/app.ts with no tranche record under delivery/")]);
-    await commit("chore: opt out", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  require_record: false\n" });
+    await commit("chore: opt out", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: delivery\n  require_record: false\n" });
     expect(await gate(dir)).toEqual([]);
   });
   expect(loosenedDelivery({ delivery: {} }, { delivery: { require_record: false } })).toEqual(["delivery.require_record true → false"]);
@@ -245,7 +247,7 @@ test("F2: an approving review cannot carry a critical or high finding", async ()
 
 test("F3: moving the root, adding an author, or making fallback easier is a loosening", () => {
   const base = { delivery: {} };
-  expect(loosenedDelivery(base, { delivery: { root: "unused" } })).toEqual(["delivery.root delivery → unused"]);
+  expect(loosenedDelivery(base, { delivery: { root: "unused" } })).toEqual(["delivery.root docs/delivery/tranches → unused"]);
   expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, plan_review: { authors: ["codex", "gpt"], reviewers: ["glm", "claude"] } } } })).toEqual(["delivery.stages.plan_review.authors adds gpt"]);
   expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 1, within_minutes: 60 } } })).toEqual(["delivery.fallback.after_failures 3 → 1", "delivery.fallback.within_minutes 10 → 60"]);
   expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 5, within_minutes: 5 } } })).toEqual([]);
@@ -411,7 +413,7 @@ test("GLM R1: tightening the policy later does not fail every change on a record
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
     await commit("chore: evidence", tranchePR("api", sha));   // code_review: glm reviewed glm, legal under fresh-process
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
-    await commit("chore: tighten", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n" });
+    await commit("chore: tighten", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: delivery\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n" });
     await sh(dir, "git", "checkout", "-qb", "tranche/next");
     const next = await commit("feat: next", { "src/app.ts": "export const a = 3;\n" });
     const record = tranchePR("next", next);
@@ -487,16 +489,16 @@ test("T4: every stage approves a real commit in the approved history, in lifecyc
 // Round 3 of PR #19 (GLM, 64a07fb).
 
 test("GLM T1: a wrong-typed policy value is a config finding, never a crash, in the validator and the integrity check", async () => {
-  for (const policy of ["delivery:\n  root: 123\n", "delivery:\n  stages:\n    code_review: { reviewers: glm }\n", "delivery:\n  fallback: { after_failures: many }\n", "delivery: 7\n"])
+  for (const policy of ["delivery:\n  root: 123\n", "delivery:\n  root: delivery\n  stages:\n    code_review: { reviewers: glm }\n", "delivery:\n  root: delivery\n  fallback: { after_failures: many }\n", "delivery: 7\n"])
     await withRepo({ "atdd-bun.yaml": policy, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir), policy).toContain("delivery.config-schema"));
   expect(() => loosenedDelivery({ delivery: {} }, { delivery: { root: 123, stages: { code_review: { reviewers: "glm" } } } })).not.toThrow();
-  expect(deliveryPolicy({ root: 123 }).root).toBe("delivery");
+  expect(deliveryPolicy({ root: 123 }).root).toBe("docs/delivery/tranches");
 });
 
 test("GLM T2: the skill's example record is a state the profile accepts", async () => {
   const skill = await Bun.file(new URL("../templates/agents/delivery/SKILL.md", import.meta.url)).text();
   const example = Bun.YAML.parse(skill.split("```yaml\n")[1].split("```")[0]) as Record<string, unknown>;
-  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(example) }, async dir => expect(await rules(dir)).toEqual([]));
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": JSON.stringify(example) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
 // Round 4 of PR #19 (Codex, 6779137).
@@ -516,8 +518,8 @@ test("U1: a record or report already on the base branch is final; editing it can
 });
 
 test("U2: an explicit `delivery: null` is validated as written, not read as an empty block", async () => {
-  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery: null\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
-  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\ndelivery: null\n", "docs/delivery/tranches/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual(["delivery.config-schema"]));
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
 // Round 4 of PR #19 (GLM, 6779137).
@@ -615,7 +617,7 @@ test("GLM V2: the check after code_review covers the whole repository, whatever 
 test("GLM W1: the freshness check follows code_review, so a reduced stage set can still become ready", async () => {
   await tranche(async (dir, commit) => {
     const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), code = await commit("code", { "src/app.ts": "export const a = 3;\n" });
-    const stages = (names: string[]) => `delivery:\n  stages:\n${names.map(n => `    ${n}: { reviewers: [${n === "test_review" || n === "final_review" ? "codex" : "glm"}, claude] }`).join("\n")}\n`;
+    const stages = (names: string[]) => `delivery:\n  root: delivery\n  stages:\n${names.map(n => `    ${n}: { reviewers: [${n === "test_review" || n === "final_review" ? "codex" : "glm"}, claude] }`).join("\n")}\n`;
     const check = async (names: string[], shas: Record<string, string>, approved: string) => {
       const reviews = FULL.filter(r => names.includes(r.stage as string)).map(r => ({ ...r, sha: shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
       await mkdir(join(dir, "delivery/api"), { recursive: true });
@@ -667,4 +669,43 @@ test("GLM W4 and W5: changed commands and when_exhausted are loosening; a remove
   expect(loosenedDelivery({ profiles: ["delivery"] }, { profiles: ["delivery"], delivery: { commands: { claude: { review: "claude -p --dangerously-skip-permissions" } } } })).toEqual(["delivery.commands.claude.review overrides the default"]);
   expect(loosenedDelivery({ delivery: {} }, { delivery: { fallback: { when_exhausted: "wait" } } })).toEqual(["delivery.fallback.when_exhausted block → wait"]);
   expect(loosenedPolicy({ profiles: ["delivery", "docs"] }, {}).filter(line => line.includes("delivery"))).toEqual(["profiles becomes implicit: the explicit list [delivery, docs] was removed"]);
+});
+
+// The default root: records live in the docs profile's delivery area, which leaves the records folder to this profile.
+
+test("by default, tranche records live under docs/delivery/tranches", async () => {
+  expect(deliveryPolicy({}).root).toBe("docs/delivery/tranches");
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": record(FULL, { tranche: "web" }) }, async dir => {
+    expect(await evidence(dir)).toEqual(["tranche 'web' does not match its folder 'api'"]);
+  });
+});
+
+test("where delivery is adopted, the docs profile leaves the records folder to it, and only that folder", async () => {
+  const { scanDocumentation, declarationViolations } = await import("../src/docs-capability");
+  const files = {
+    "docs/index.adoc": "= Docs\n:doc-id: docs\n:status: current\n",
+    "docs/delivery/index.adoc": "= Program\n:doc-id: program\n:status: current\n",
+    "docs/delivery/tranches/api/code_review.md": "# raw reviewer output\n",
+    "docs/delivery/notes.md": "# authored markdown outside the records folder\n",
+  };
+  const markdown = async (dir: string) => (await scanDocumentation(dir)).filter(v => v.rule_id === "planner.docs.asciidoc-only").map(v => v.file).sort();
+  await withRepo({ ...files, "atdd-bun.yaml": "profiles: [docs, delivery]\n" }, async dir => expect(await markdown(dir)).toEqual(["docs/delivery/notes.md"]));
+  await withRepo({ ...files, "atdd-bun.yaml": "profiles: [docs]\n" }, async dir => expect(await markdown(dir)).toEqual(["docs/delivery/notes.md", "docs/delivery/tranches/api/code_review.md"]));
+  // A change to a record needs no docs declaration; a change to the program's reasoning still does.
+  const records = (path: string) => path.startsWith("docs/delivery/tranches/");
+  const undeclared = declarationViolations({ impact: "none", artifacts: [] } as never, ["docs/delivery/tranches/api/evidence.yaml", "docs/delivery/index.adoc"], records).map(v => v.file);
+  expect(undeclared).toEqual(["docs/delivery/index.adoc"]);
+  // The same through checkDocumentation, which finds the records folder from atdd-bun.yaml.
+  const { checkDocumentation } = await import("../src/docs-capability");
+  await withRepo({ ...files, "atdd-bun.yaml": "profiles: [docs, delivery]\n" }, async dir => {
+    const check = await checkDocumentation({ root: dir, declaration: { impact: "change", artifacts: [{ action: "modify", path: "docs/index.adoc" }] } as never, changeSet: ["docs/delivery/tranches/api/evidence.yaml", "docs/delivery/index.adoc"], render: async () => ({ findings: [] }) });
+    expect(check.findings.filter(f => f.rule_id === "planner.docs.undeclared-change").map(f => (f as { file: string }).file)).toEqual(["docs/delivery/index.adoc"]);
+  });
+});
+
+test("records left under delivery/, the 0.8.0 default, are reported rather than silently unseen", async () => {
+  await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "delivery/api/evidence.yaml": record(FULL) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("tranche records under delivery/ (api) are outside the default root docs/delivery/tranches")]);
+  });
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));   // root pinned
 });

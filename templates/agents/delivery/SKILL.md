@@ -12,7 +12,7 @@ A **tranche** is one independently mergeable piece of the program, on its own br
 
 Its job is throughput: every worker slot busy, every tranche moving. It never implements, repairs tests, reviews, or merges a tranche.
 
-1. Split the program into tranches with explicit dependencies. Activate a tranche as soon as its own dependencies have merged; do not wait for a whole wave. A tranche whose dependencies are still open may run PLAN and `plan_review` but nothing after; revalidate its plan once they merge.
+1. Split the program into tranches with explicit dependencies, and write why the program exists, its scope and how it was split in `docs/delivery/index.adoc` (a docs-profile document). Activate a tranche as soon as its own dependencies have merged; do not wait for a whole wave. A tranche whose dependencies are still open may run PLAN and `plan_review` but nothing after; revalidate its plan once they merge.
 2. For each active tranche, create a worktree from the owning repository's workspace and start a driver in it through the multiplexer (see Multiplexer). Send the mandate, submit it, wait 4–6 s, and read the pane: a working indicator or agent output means it landed; an empty prompt or placeholder means retry before waiting on anything.
 3. Wait on the multiplexer's events, not polling loops, and on every driver at once. When a slot frees, give it to the next ready tranche or to planning ahead.
 4. Keep provider health for the whole program. When a driver reports a model unavailable, tell every driver to go straight to the next model in its lists until it recovers, so no tranche spends time rediscovering an outage.
@@ -40,11 +40,11 @@ Agents run in panes of the terminal multiplexer named in `delivery.multiplexer` 
 3. Fallback: after `fallback.after_failures` failures within `fallback.within_minutes` (outage, rate limit, no auditable report), use the next model in the stage's list and record it with its `kind` (`outage`, `rate_limit`, `no_report`, `timeout`), `failures`, and the `window` from the first to the last counted failure. REQUEST CHANGES is never a failure. With the list exhausted, `when_exhausted: block` emits `BLOCKED provider-unavailable`; `wait` keeps retrying the last model.
 4. For each finding of a REQUEST CHANGES review, either have the author fix it, or write one rebuttal with evidence (a test result, a rule id, file:line). Then run a fresh review of the same stage. If that reviewer upholds a disputed finding, emit `BLOCKED disputed-finding`; never dispute it a second time.
 5. Any commit, regenerated file, conflict fix or rebase after an approval cancels it. A change to the code goes back through `code_review`, then `final_review`.
-6. Append every review to `<root>/<tranche>/evidence.yaml` as it happens; never edit an earlier entry, only add each finding's `outcome` (`fixed`, `withdrawn`, or `human` with the `decision`). Keep the raw reviewer output inside the tranche's folder and name it in `report`; nothing else goes in that folder. When `final_review` approves, set `status: ready` and `approved_sha` to that SHA, commit the evidence and reports alone, push, and merge with a merge commit once CI is green. A squash or rebase merge writes a commit no reviewer saw, and CI fails it after the merge.
+6. Append every review to `<root>/<tranche>/evidence.yaml` (`delivery.root`, default `docs/delivery/tranches`) as it happens; never edit an earlier entry, only add each finding's `outcome` (`fixed`, `withdrawn`, or `human` with the `decision`). Keep the raw reviewer output inside the tranche's folder and name it in `report`; nothing else goes in that folder. When `final_review` approves, set `status: ready` and `approved_sha` to that SHA, commit the evidence and reports alone, push, and merge with a merge commit once CI is green. A squash or rebase merge writes a commit no reviewer saw, and CI fails it after the merge.
 7. Emit events the coordinator can wait on, one line each: `PROGRAM_EVENT <tranche> <PLAN|RED|COMMIT <sha>|WORKER_START <role> <model> <sha>|WORKER_END <role> <model> <verdict>|FALLBACK <role> <from>→<to> <reason>|PLAN_REVIEW <sha>|TEST_REVIEW <sha>|CODE_REVIEW <sha>|FINAL_REVIEW <sha>|PR_OPENED <url>|MERGED <sha>|BLOCKED <reason>|HEARTBEAT>`.
 
 ```yaml
-# <root>/<tranche>/evidence.yaml
+# docs/delivery/tranches/<tranche>/evidence.yaml
 tranche: api
 status: open            # ready once final_review approves
 base_sha: 3f2a91c
@@ -59,7 +59,7 @@ reviews:
     checked: [ACC-API-001, src/wagons/api, coder.bun.error-response-*]
     findings:
       - { id: F1, severity: high, evidence: "src/wagons/api/handler.ts:42", invariant: "coded error bodies", affects: [ui], proposed_fix: "return { code: 'API_NOT_FOUND' }" }   # outcome added once a fresh code_review confirms the fix
-    report: delivery/api/code_review-1.json
+    report: docs/delivery/tranches/api/code_review-1.json
 ```
 
 ## Default commands

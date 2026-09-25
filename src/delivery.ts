@@ -39,6 +39,9 @@ const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
   code_review: { authors: ["glm", "claude"], reviewers: ["glm", "claude"] },
   final_review: { authors: ["codex"], reviewers: ["codex", "claude"] },
 };
+/** Tranche records live with the program's reasoning, under the docs profile's delivery area; the docs profile leaves
+ * this folder to the delivery profile (records are YAML and data, never authored AsciiDoc). */
+export const DEFAULT_ROOT = "docs/delivery/tranches";
 const DEFAULT_FALLBACK: DeliveryPolicy["fallback"] = { after_failures: 3, within_minutes: 10, when_exhausted: "block" };
 const packageRoot = resolve(import.meta.dir, "..");
 
@@ -71,14 +74,14 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
   }
   const fallback = record(raw.fallback) ?? {};
   return {
-    root: canonicalRoot(text(raw.root, "delivery")), independence, stages,
+    root: canonicalRoot(text(raw.root, DEFAULT_ROOT)), independence, stages,
     fallback: { after_failures: count(fallback.after_failures, DEFAULT_FALLBACK.after_failures), within_minutes: count(fallback.within_minutes, DEFAULT_FALLBACK.within_minutes), when_exhausted: fallback.when_exhausted === "wait" ? "wait" : "block" },
     commands: (record(raw.commands) ?? {}) as DeliveryPolicy["commands"], require_record: raw.require_record === false ? false : true, multiplexer: text(raw.multiplexer, "herdr"),
   };
 }
 
 /** One spelling per root, so filesystem discovery, Git pathspecs and drift filtering agree ("delivery/" is "delivery"). */
-export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split("/").filter(part => part && part !== ".").join("/") || "delivery";
+export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split("/").filter(part => part && part !== ".").join("/") || DEFAULT_ROOT;
 
 /** Why `current` enforces less than `base`, for the integrity check's loosening report. Tightening is silent. */
 export function loosenedDelivery(base: unknown, current: unknown): string[] {
@@ -296,7 +299,13 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const overlap = owned.find(other => policy.root === other || policy.root.startsWith(`${other}/`) || other.startsWith(`${policy.root}/`));
   if (overlap) {
     findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} overlaps the ${overlap} root; the delivery root holds only records and reports`));
-    policy = { ...policy, root: "delivery" };
+    policy = { ...policy, root: DEFAULT_ROOT };
+  }
+  // 0.8.0 kept records under delivery/ by default. Records left there after the default moved would be silently unseen.
+  const configuredRoot = record(block)?.root;
+  if (configuredRoot === undefined && policy.root === DEFAULT_ROOT && existsSync(join(absolute, "delivery"))) {
+    const legacy = (await readdir(join(absolute, "delivery"), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, "delivery", entry.name, "evidence.yaml")));
+    if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the default root ${DEFAULT_ROOT}, where 0.8.0 kept them; move them there, or set delivery.root: delivery`));
   }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
