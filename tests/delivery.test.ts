@@ -276,7 +276,7 @@ test("F6: a ready record retains every review's raw report", async () => {
     expect((await evidence(dir)).filter(e => e.includes("report"))).toEqual([
       "status is ready, but reviews[0] (plan_review) retains no report",
       "status is ready, but reviews[1] (test_review) retains no report",
-      "status is ready, but reviews[2] (code_review) names report delivery/api/gone.json, which does not exist",
+      "status is ready, but reviews[2] (code_review) names report delivery/api/gone.json, which is not a regular file",
     ]);
   });
 });
@@ -372,11 +372,11 @@ test("R1: a change under the delivery root that no changed record names fails th
 
 test("R2: a report lives in its tranche's folder, so it cannot exempt a source file from drift", async () => {
   await withRepo({ "atdd-bun.yaml": ADOPT, "src/app.ts": "x", "delivery/api/evidence.yaml": record(FULL.map(r => ({ ...r, report: "src/app.ts" }))) }, async dir => {
-    expect((await evidence(dir)).filter(e => e.includes("must be a file inside delivery/api/"))).toHaveLength(4);
+    expect((await evidence(dir)).filter(e => e.includes("inside delivery/api/, other than evidence.yaml"))).toHaveLength(4);
   });
   for (const report of ["delivery/api/../../src/app.ts", "delivery/api/evidence.yaml", "delivery/other/r.json"])
     await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL.map((r, i) => i ? r : { ...r, report })) }, async dir => {
-      expect(await evidence(dir), report).toEqual([expect.stringContaining(`report ${report} must be a file inside delivery/api/`)]);
+      expect(await evidence(dir), report).toEqual([expect.stringContaining(`report ${report} must be a data file`)]);
     });
 });
 
@@ -558,5 +558,27 @@ test("GLM U3: code changed after code_review cannot merge on an appended final_r
     const reviews = FULL.map(r => ({ ...r, sha: r.stage === "final_review" ? later : green, report: `delivery/api/${r.stage}.json` }));
     await commit("evidence", { "delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL.map(r => [`delivery/api/${r.stage}.json`, "{}"])) });
     expect((await validateDelivery(dir, { gate: false })).map(f => f.evidence)).toEqual([`src/app.ts changed after code_review approved ${green.slice(0, 7)}, and only final_review reviewed the change; a code change goes back through code_review`]);
+  });
+});
+
+// Round 5 of PR #19 (Codex, 7804950).
+
+test("V1: the delivery root may not overlap a plan, source, test, e2e or telemetry root, and reports are data files", async () => {
+  for (const root of ["src", "src/wagons", "src/wagons/delivery", "plan", "tests/wagons/x"])
+    await withRepo({ "atdd-bun.yaml": `delivery:\n  root: ${root}\n` }, async dir => expect(await evidence(dir), root).toContainEqual(expect.stringContaining(`delivery.root ${root} overlaps`)));
+  await withRepo({ "atdd-bun.yaml": "delivery:\n  root: ops/delivery\n" }, async dir => expect(await rules(dir)).toEqual([]));
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL.map((r, i) => i ? r : { ...r, report: "delivery/api/new.ts" })) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("report delivery/api/new.ts must be a data file")]);
+  });
+});
+
+test("V2: every review retains its own report, as a regular file", async () => {
+  const same = FULL.map(r => ({ ...r, report: "delivery/api/report.json" }));
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/report.json": "{}", "delivery/api/evidence.yaml": record(same, { status: "ready", approved_sha: "3333333" }) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.includes("reuses report"))).toHaveLength(3);
+  });
+  const dirs = FULL.map(r => ({ ...r, report: `delivery/api/${r.stage}.json` }));
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(dirs, { status: "ready", approved_sha: "3333333" }), ...Object.fromEntries(FULL.map(r => [`delivery/api/${r.stage}.json/inner.txt`, "x"])) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.includes("is not a regular file"))).toHaveLength(4);
   });
 });

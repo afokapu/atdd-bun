@@ -1,9 +1,10 @@
 import Ajv, { type ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
-import { existsSync } from "node:fs";
+import { existsSync, lstatSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { PlanFinding } from "./planner-kernel";
+import { topologyFor } from "./topology";
 
 /** The delivery profile: the record a tranche leaves of its reviews, checked against the policy in atdd-bun.yaml.
  *
@@ -169,6 +170,10 @@ function checkModels(file: string, review: Review, policy: StagePolicy, at: stri
   return out;
 }
 
+/** Reports are data, never code: a report path is exempt from drift, so it must not be able to name a source file. */
+const REPORT_EXTENSION = /\.(json|jsonl|yaml|yml|txt|md|log)$/;
+const regularFile = (path: string) => { try { return lstatSync(path).isFile(); } catch { return false; } };
+
 /** Two spellings of one commit: an abbreviated SHA is a prefix of the full one. */
 const sameCommit = (a: string, b: string) => a.length <= b.length ? b.startsWith(a) : a.startsWith(b);
 
@@ -275,6 +280,14 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     for (const error of validConfig.errors ?? []) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery${error.instancePath.replaceAll("/", ".")} ${error.message ?? error.keyword}`));
     policy = deliveryPolicy({});
   }
+  // The root is an evidence namespace only. Overlapping a plan, source, test, e2e or telemetry root would let a product
+  // file be labelled a report and escape review; such a root is reported, and the default is used instead.
+  const topology = await topologyFor(absolute), owned = [topology.planRoot, topology.sourceRoot, topology.testRoot, topology.e2eRoot, topology.telemetryRoot];
+  const overlap = owned.find(other => policy.root === other || policy.root.startsWith(`${other}/`) || other.startsWith(`${policy.root}/`));
+  if (overlap) {
+    findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} overlaps the ${overlap} root; the delivery root holds only records and reports`));
+    policy = { ...policy, root: "delivery" };
+  }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
   // At the gate, a record the change does not touch was judged when it merged. It is not judged again, against a
@@ -292,12 +305,19 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
     if (entry.data.tranche !== entry.tranche) findings.push(finding("delivery.evidence-schema", entry.file, `tranche '${entry.data.tranche}' does not match its folder '${entry.tranche}'`));
     // A report lives in its tranche's folder: a report path is exempt from drift, so it may never name other files.
     const folder = `${policy.root}/${entry.tranche}/`;
-    for (const [index, review] of entry.data.reviews.entries()) if (review.report !== undefined && !(review.report.startsWith(folder) && review.report !== entry.file && review.report.split("/").every(part => part && part !== "." && part !== "..")))
-      findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] report ${review.report} must be a file inside ${folder}, other than evidence.yaml`));
+    const seen = new Map<string, number>();
+    for (const [index, review] of entry.data.reviews.entries()) {
+      if (review.report === undefined) continue;
+      if (!(review.report.startsWith(folder) && review.report !== entry.file && review.report.split("/").every(part => part && part !== "." && part !== "..") && REPORT_EXTENSION.test(review.report)))
+        findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] report ${review.report} must be a data file (${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}) inside ${folder}, other than evidence.yaml`));
+      // Each review retains its own raw output: one file cannot stand for several reviews.
+      if (seen.has(review.report)) findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] reuses report ${review.report} from reviews[${seen.get(review.report)}]; every review retains its own report`));
+      else seen.set(review.report, index);
+    }
     findings.push(...checkEvidence(entry.file, entry.data, policy));
     if (entry.data.status === "ready") {
       // Ready means auditable: every review's raw output is retained and named.
-      for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !existsSync(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which does not exist` : "retains no report"}`));
+      for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !regularFile(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which is not a regular file` : "retains no report"}`));
       if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`)); continue; }
       // Every stage's approval names a real commit in the approved history, in lifecycle order.
       let previous: { stage: Stage; sha: string } | null = null;
