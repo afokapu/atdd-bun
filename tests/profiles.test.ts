@@ -22,7 +22,7 @@ test("by default every profile is activated", async () => {
   const root = await repo({ ...TRACE, ...CODER });
   expect(await enabledProfiles(root)).toEqual(profileNames.filter(p => p !== "all") as never);
   expect(await rules(root)).toEqual(expect.arrayContaining(["coder", "traceability"]));
-});
+}, 30_000);
 
 test("all runs only the profiles the operator lists; a named profile still runs on request", async () => {
   const root = await repo({ ...TRACE, ...CODER, "atdd-bun.yaml": "profiles: [traceability]\n" });

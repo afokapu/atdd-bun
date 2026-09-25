@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { journeyDocs, journeyDocsApply } from "./journey-docs";
+import { DEFAULT_ROOT, deliveryAdopted, deliveryPolicy } from "./delivery";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
@@ -50,6 +51,23 @@ export function parseAttributes(text: string): { attrs: Record<string, string>; 
   return { attrs, lines };
 }
 
+/** The delivery profile's records folder, when it is adopted: tranche records and reports are YAML and data, judged by
+ * that profile, never authored documentation. The docs profile leaves the folder (by default docs/delivery/tranches) to
+ * it; the rest of docs/delivery, the program's reasoning, stays documentation. */
+async function deliveryRecords(root: string): Promise<(path: string) => boolean> {
+  const file = join(root, "atdd-bun.yaml");
+  try {
+    const data = existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown> | null : null;
+    if (!deliveryAdopted(data)) return () => false;
+    // Only the one folder the delivery profile may use under docs/; a root configured anywhere else in docs/ is a delivery
+    // finding and exempts nothing here.
+    if (deliveryPolicy(data!.delivery).root !== DEFAULT_ROOT) return () => false;
+    // Records and data only: AsciiDoc there stays documentation, judged by every docs rule (the delivery profile also
+    // reports it as a file that does not belong in the records folder).
+    return path => path.startsWith(`${DEFAULT_ROOT}/`) && !path.endsWith(".adoc");
+  } catch { return () => false; }
+}
+
 async function documents(root: string): Promise<Document[]> {
   const paths = await walk(join(root, DOCS), ".adoc");
   return Promise.all(paths.filter(path => !generated(relative(root, path).replaceAll("\\", "/"))).map(async path => {
@@ -87,8 +105,8 @@ function adrViolations(docs: Document[]): DocumentationViolation[] {
 }
 
 export async function scanDocumentation(root: string): Promise<DocumentationViolation[]> {
-  const absolute = resolve(root), docs = await documents(absolute), output: DocumentationViolation[] = [];
-  for (const path of await walk(join(absolute, DOCS), ".md")) { const file = relative(absolute, path).replaceAll("\\", "/"); if (!generated(file)) output.push(violation("planner.docs.asciidoc-only", file, 1, `authored markdown beneath docs/: ${file}. AsciiDoc is the only authored format; convert it, and convert a historical document INTO docs/archive/ rather than into a current area.`, lineAt(await readFile(path, "utf8"), 1))); }
+  const absolute = resolve(root), docs = await documents(absolute), output: DocumentationViolation[] = [], records = await deliveryRecords(absolute);
+  for (const path of await walk(join(absolute, DOCS), ".md")) { const file = relative(absolute, path).replaceAll("\\", "/"); if (!generated(file) && !records(file)) output.push(violation("planner.docs.asciidoc-only", file, 1, `authored markdown beneath docs/: ${file}. AsciiDoc is the only authored format; convert it, and convert a historical document INTO docs/archive/ rather than into a current area.`, lineAt(await readFile(path, "utf8"), 1))); }
   for (const doc of docs) { const missing = ["doc-id", "status"].filter(name => !doc.attrs[name]); if (missing.length) output.push(violation("planner.docs.identity-required", doc.path, 1, `document declares no ${missing.map(name => `:${name}:`).join(" and no ")}. Identity and currency are both required: an id with no status is a node whose currency is unknown, a status with no id is a claim nothing can reference.`, lineAt(doc.text, 1))); }
   const byId = new Map<string, Document[]>(); for (const doc of docs) if (doc.attrs["doc-id"]) byId.set(doc.attrs["doc-id"], [...(byId.get(doc.attrs["doc-id"]) ?? []), doc]);
   for (const [id, group] of byId) if (group.length > 1) for (const doc of group) { const line = doc.lines["doc-id"] ?? 1; output.push(violation("planner.docs.doc-id-unique", doc.path, line, `doc-id ${JSON.stringify(id)} is declared by ${group.length} documents: ${group.map(d => d.path).join(", ")}. Resolution needs exactly one target per id.`, lineAt(doc.text, line))); }
@@ -106,12 +124,12 @@ async function journeyViewViolations(root: string): Promise<DocumentationViolati
   return result.stale.map(file => violation("planner.docs.journey-view-current", file, 1, `${file} does not match what plan/ generates, so the journey documentation no longer shows the plan. Regenerate it with \`atdd-bun docs journeys\` and commit the result; never edit it by hand.`));
 }
 
-export function declarationViolations(declaration: DocumentationDeclaration | null, changeSet?: string[]): DocumentationViolation[] {
+export function declarationViolations(declaration: DocumentationDeclaration | null, changeSet?: string[], records: (path: string) => boolean = () => false): DocumentationViolation[] {
   if (!declaration) return [];
   const artifacts = Array.isArray(declaration.artifacts) ? declaration.artifacts : []; const output: DocumentationViolation[] = [];
   if (declaration.impact !== "change" && declaration.impact !== "none") output.push(violation("planner.docs.artifact-path-shape", "<declaration>", 1, `declaration carries impact=${JSON.stringify(declaration.impact)}; the two total forms are ["change", "none"]. A malformed declaration is reported, never treated as nothing-to-check.`));
   for (const [index, artifact] of artifacts.entries()) { const path = artifact.path ?? "", problems: string[] = []; if (!path) problems.push("declares no path"); else { if (!path.startsWith("docs/")) problems.push(`path ${JSON.stringify(path)} is outside the canonical tree (must begin "docs/")`); if (!path.endsWith(".adoc")) problems.push(`path ${JSON.stringify(path)} is not AsciiDoc (must end ".adoc")`); if (artifact.action === "archive" && !path.startsWith("docs/archive/")) problems.push(`archive destination ${JSON.stringify(path)} is outside "docs/archive/" — archiving must preserve history, never promote it into a current area`); } if (problems.length) output.push(violation("planner.docs.artifact-path-shape", path || "<declaration>", 1, `declared artifact[${index}] (action: ${artifact.action || "unset"}): ${problems.join("; ")}`)); }
-  if (changeSet) { const covered = new Set(artifacts.flatMap(a => [a.path, a.from]).filter((p): p is string => Boolean(p))); for (const path of [...new Set(changeSet)].sort()) if (path.startsWith("docs/") && !generated(path) && !covered.has(path)) output.push(violation("planner.docs.undeclared-change", path, 1, `the change set touches ${path} and no declared artifact covers it. Declare it at RATIFY; if the change was not planned, the declaration was wrong at RATIFY and re-ratifying is the honest correction.`)); }
+  if (changeSet) { const covered = new Set(artifacts.flatMap(a => [a.path, a.from]).filter((p): p is string => Boolean(p))); for (const path of [...new Set(changeSet)].sort()) if (path.startsWith("docs/") && !generated(path) && !records(path) && !covered.has(path)) output.push(violation("planner.docs.undeclared-change", path, 1, `the change set touches ${path} and no declared artifact covers it. Declare it at RATIFY; if the change was not planned, the declaration was wrong at RATIFY and re-ratifying is the honest correction.`)); }
   return output;
 }
 
@@ -152,7 +170,7 @@ export async function renderDocumentation(root: string, timeoutMs = 120_000): Pr
 async function checkDocumentationInner(input: { root: string; declaration: DocumentationDeclaration | null; changeSet: string[] | null; render?: () => Promise<DocumentationRender> }): Promise<DocumentationCheck> {
   if (input.declaration?.impact === "none") return { verdict: "NOT_APPLICABLE", findings: [], checked: [] };
   const corpus = await scanDocumentation(input.root); const findings: DocumentationCheck["findings"] = [...corpus]; const checked = (await documents(resolve(input.root))).map(d => d.path); let definite = corpus.length > 0;
-  if (input.declaration) { const declarationFindings = declarationViolations(input.declaration, input.changeSet ?? undefined); findings.push(...declarationFindings); definite ||= declarationFindings.length > 0; checked.push("<declaration>"); if (input.declaration.impact === "change") for (const artifact of input.declaration.artifacts ?? []) if (["create", "modify"].includes(artifact.action ?? "") && artifact.path && !existsSync(join(input.root, artifact.path))) { findings.push(violation("planner.docs.artifact-path-shape", artifact.path, 1, `declared artifact ${JSON.stringify(artifact.path)} (action: ${artifact.action}) is not in the tree, so it was never examined; a declared document that was never written has not discharged the obligation.`)); definite = true; } } else findings.push({ rule_id: null, where: "<declaration>", message: "core supplied no documentation declaration, so no declaration-dependent rule could be evaluated. This is COULD_NOT_CHECK and it BLOCKS." });
+  if (input.declaration) { const declarationFindings = declarationViolations(input.declaration, input.changeSet ?? undefined, await deliveryRecords(resolve(input.root))); findings.push(...declarationFindings); definite ||= declarationFindings.length > 0; checked.push("<declaration>"); if (input.declaration.impact === "change") for (const artifact of input.declaration.artifacts ?? []) if (["create", "modify"].includes(artifact.action ?? "") && artifact.path && !existsSync(join(input.root, artifact.path))) { findings.push(violation("planner.docs.artifact-path-shape", artifact.path, 1, `declared artifact ${JSON.stringify(artifact.path)} (action: ${artifact.action}) is not in the tree, so it was never examined; a declared document that was never written has not discharged the obligation.`)); definite = true; } } else findings.push({ rule_id: null, where: "<declaration>", message: "core supplied no documentation declaration, so no declaration-dependent rule could be evaluated. This is COULD_NOT_CHECK and it BLOCKS." });
   if (input.declaration && input.changeSet === null) findings.push({ rule_id: null, where: "<change_set>", message: "core supplied no change set, so whether this diff touches docs/ without declaring it could not be established. This is COULD_NOT_CHECK and it BLOCKS." });
   const rendered = await (input.render ?? (() => renderDocumentation(input.root)))(); findings.push(...rendered.findings); definite ||= rendered.findings.length > 0; if (rendered.couldNotCheck) findings.push({ rule_id: "planner.docs.reference-integrity", file: "docs/", line: 1, col: 1, evidence: rendered.couldNotCheck, source_line: "" }); else checked.push("<render:asciidoctor>");
   // Fail closed on any rule id this capability does not declare, however it was built (a renderer can return anything).

@@ -39,6 +39,12 @@ const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
   code_review: { authors: ["glm", "claude"], reviewers: ["glm", "claude"] },
   final_review: { authors: ["codex"], reviewers: ["codex", "claude"] },
 };
+/** Tranche records live with the program's reasoning, under the docs profile's delivery area; the docs profile leaves
+ * this folder to the delivery profile (records are YAML and data, never authored AsciiDoc). */
+export const DEFAULT_ROOT = "docs/delivery/tranches";
+/** The default before 0.9.0. */
+const LEGACY_ROOT = "delivery";
+const inDocs = (root: string) => root === "docs" || root.startsWith("docs/");
 const DEFAULT_FALLBACK: DeliveryPolicy["fallback"] = { after_failures: 3, within_minutes: 10, when_exhausted: "block" };
 const packageRoot = resolve(import.meta.dir, "..");
 
@@ -71,14 +77,14 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
   }
   const fallback = record(raw.fallback) ?? {};
   return {
-    root: canonicalRoot(text(raw.root, "delivery")), independence, stages,
+    root: canonicalRoot(text(raw.root, DEFAULT_ROOT)), independence, stages,
     fallback: { after_failures: count(fallback.after_failures, DEFAULT_FALLBACK.after_failures), within_minutes: count(fallback.within_minutes, DEFAULT_FALLBACK.within_minutes), when_exhausted: fallback.when_exhausted === "wait" ? "wait" : "block" },
     commands: (record(raw.commands) ?? {}) as DeliveryPolicy["commands"], require_record: raw.require_record === false ? false : true, multiplexer: text(raw.multiplexer, "herdr"),
   };
 }
 
 /** One spelling per root, so filesystem discovery, Git pathspecs and drift filtering agree ("delivery/" is "delivery"). */
-export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split("/").filter(part => part && part !== ".").join("/") || "delivery";
+export const canonicalRoot = (root: string) => root.replaceAll("\\", "/").split("/").filter(part => part && part !== ".").join("/") || DEFAULT_ROOT;
 
 /** Why `current` enforces less than `base`, for the integrity check's loosening report. Tightening is silent. */
 export function loosenedDelivery(base: unknown, current: unknown): string[] {
@@ -102,7 +108,9 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
       if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
     }
   }
-  // Moving the root hides every earlier record from the validator and the gate.
+  // Moving the root hides every earlier record from the validator and the gate. No exception, not even pinning the 0.8.0
+  // default: from the config alone it cannot be told apart from moving a 0.9 repository's records out of view, so a
+  // human approves it.
   if (before.root !== after.root) out.push(`delivery.root ${before.root} → ${after.root}`);
   if (before.require_record && !after.require_record) out.push("delivery.require_record true → false");
   if (before.fallback.when_exhausted === "block" && after.fallback.when_exhausted === "wait") out.push("delivery.fallback.when_exhausted block → wait");
@@ -140,10 +148,44 @@ type Finding = { id: string; severity: string; rebuttal?: string; outcome?: "fix
 type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; approved_sha?: string; reviews: Review[] };
 export type EvidenceFile = { file: string; tranche: string; data: Evidence | null; error?: string };
 
+/** Files in the records folder that are neither a tranche's evidence.yaml nor a data file (a report): authored documents
+ * or code would otherwise sit in a folder no other profile judges. Loose files directly under the root count too. */
+export async function strayFiles(root: string, policy: DeliveryPolicy): Promise<string[]> {
+  const dir = join(root, policy.root), out: string[] = [];
+  if (!isFolder(dir)) return out;
+  const walk = async (path: string, depth: number): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name), rel = `${policy.root}/${child.slice(dir.length + 1).replaceAll("\\", "/")}`;
+      if (entry.isSymbolicLink() && depth === 0) continue; // a symlinked tranche folder is reported by loadEvidence
+      if (entry.isSymbolicLink()) { out.push(rel); continue; } // a symlinked file points outside what any rule judges
+      if (entry.isDirectory()) await walk(child, depth + 1);
+      else if (depth === 0 || !(entry.name === "evidence.yaml" && depth === 1 || REPORT_EXTENSION.test(entry.name))) out.push(rel);
+    }
+  };
+  await walk(dir, 0);
+  return out.sort();
+}
+
+/** Data files inside tranche folders (depth 1 and below, other than evidence.yaml): candidate reports. */
+async function dataFiles(root: string, policy: DeliveryPolicy): Promise<string[]> {
+  const dir = join(root, policy.root), out: string[] = [];
+  if (!isFolder(dir)) return out;
+  const walk = async (path: string, depth: number): Promise<void> => {
+    for (const entry of await readdir(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) await walk(child, depth + 1);
+      else if (depth >= 1 && !(entry.name === "evidence.yaml" && depth === 1) && REPORT_EXTENSION.test(entry.name)) out.push(`${policy.root}/${child.slice(dir.length + 1).replaceAll("\\", "/")}`);
+    }
+  };
+  await walk(dir, 0);
+  return out;
+}
+
 /** Every tranche folder under the delivery root with its parsed evidence, or why it has none. */
 export async function loadEvidence(root: string, policy: DeliveryPolicy): Promise<EvidenceFile[]> {
   const dir = join(root, policy.root);
-  if (!existsSync(dir)) return [];
+  if (!isFolder(dir)) return [];
   const out: EvidenceFile[] = [];
   for (const entry of (await readdir(dir, { withFileTypes: true })).filter(entry => entry.isDirectory() || entry.isSymbolicLink()).sort((a, b) => a.name.localeCompare(b.name))) {
     // A symlinked tranche folder could point anywhere, and would otherwise be skipped unread.
@@ -181,6 +223,13 @@ function checkModels(file: string, review: Review, policy: StagePolicy, at: stri
 
 /** Reports are data, never code: a report path is exempt from drift, so it must not be able to name a source file. */
 const REPORT_EXTENSION = /\.(json|jsonl|yaml|yml|txt|md|log)$/;
+/** The reports a record names, read defensively: this runs before schema validation, so a malformed record (reviews not
+ * a list, an entry not a mapping, a report not a string) names nothing and is left to the schema rule to report. */
+const namedReports = (data: unknown): string[] => {
+  const reviews = record(data)?.reviews;
+  return Array.isArray(reviews) ? reviews.flatMap(review => { const report = record(review)?.report; return typeof report === "string" && report ? [report] : []; }) : [];
+};
+const isFolder = (path: string) => { try { return lstatSync(path).isDirectory(); } catch { return false; } };
 const regularFile = (path: string) => { try { return lstatSync(path).isFile(); } catch { return false; } };
 
 /** Two spellings of one commit: an abbreviated SHA is a prefix of the full one. */
@@ -296,7 +345,22 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const overlap = owned.find(other => policy.root === other || policy.root.startsWith(`${other}/`) || other.startsWith(`${policy.root}/`));
   if (overlap) {
     findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} overlaps the ${overlap} root; the delivery root holds only records and reports`));
-    policy = { ...policy, root: "delivery" };
+    policy = { ...policy, root: DEFAULT_ROOT };
+  } else if (inDocs(policy.root) && policy.root !== DEFAULT_ROOT) {
+    // The docs profile gives up exactly one folder under docs/; any other root there would take authored documentation
+    // out of its rules.
+    findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is inside docs/; the only delivery root there is ${DEFAULT_ROOT}, the one folder the docs profile leaves to delivery`));
+    policy = { ...policy, root: DEFAULT_ROOT };
+  }
+  // 0.8.0 kept records under delivery/ by default. Records left there under any other effective root would be unseen.
+  if (policy.root !== LEGACY_ROOT && isFolder(join(absolute, LEGACY_ROOT))) {
+    const legacy = (await readdir(join(absolute, LEGACY_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, LEGACY_ROOT, entry.name, "evidence.yaml")));
+    if (legacy.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under delivery/ (${legacy.map(entry => entry.name).join(", ")}) are outside the root ${policy.root}; 0.8.0 kept them there by default; set delivery.root: delivery (a root change the integrity check reports for a human to approve once), or move them there, which rewrites merged records and so needs a human-supervised merge`));
+  }
+  // The other direction: records under the default root while another root is configured are outside what is judged.
+  if (policy.root !== DEFAULT_ROOT && isFolder(join(absolute, DEFAULT_ROOT))) {
+    const hidden = (await readdir(join(absolute, DEFAULT_ROOT), { withFileTypes: true })).filter(entry => entry.isDirectory() && existsSync(join(absolute, DEFAULT_ROOT, entry.name, "evidence.yaml")));
+    if (hidden.length) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `tranche records under ${DEFAULT_ROOT} (${hidden.map(entry => entry.name).join(", ")}) are outside the configured root ${policy.root}; move them there, or remove delivery.root`));
   }
   const validEvidence = await schema("delivery-evidence.schema.json"), files = await loadEvidence(absolute, policy);
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
@@ -305,6 +369,13 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   // fail every later change. Outside the gate every record is judged. The gate itself still rejects any change to
   // an untouched record's folder (mergeGate).
   const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null : null;
+  // At the gate, like records, a stray the change does not touch was there when it merged and is not judged again.
+  // A data file belongs only as a report some record in its tranche names; an unnamed one is authored content by another name.
+  // Per tranche: a data file is a report only when a record in its own tranche names it.
+  const reported = new Set(files.flatMap(entry => namedReports(entry.data).filter(report => report.startsWith(`${policy.root}/${entry.tranche}/`))));
+  const unnamed = (await dataFiles(absolute, policy)).filter(path => !reported.has(path));
+  if (existsSync(join(absolute, policy.root)) && !isFolder(join(absolute, policy.root))) findings.push(finding("delivery.config-schema", "atdd-bun.yaml", `delivery.root ${policy.root} is a file, not a folder; the records cannot be read`));
+  for (const path of [...await strayFiles(absolute, policy), ...unnamed].sort()) if (!onBase || (await git(absolute, ["diff", "--quiet", onBase, "--", path])).code) findings.push(finding("delivery.evidence-schema", path, `${path} is neither a tranche's evidence.yaml nor a report a record in its tranche names (a data file: ${REPORT_EXTENSION.source.slice(3, -2).replaceAll("|", ", ")}); the records folder holds only records and their reports`));
   for (const entry of files) {
     if (onBase && existsSync(join(absolute, entry.file)) && !(await git(absolute, ["diff", "--quiet", onBase, "--", `${policy.root}/${entry.tranche}`])).code) continue;
     if (!entry.data) { findings.push(finding("delivery.evidence-schema", entry.file, entry.error ?? "evidence is missing")); continue; }
@@ -376,9 +447,16 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   // A record or report already on the base branch is final: editing an old record would make its reports "named by a
   // changed record" and so exempt from drift. A later change to a tranche is a new tranche with its own record.
   const final = (await git(root, ["diff", "--no-renames", "--relative", "--name-only", "--diff-filter=MRTC", ...span, "--", policy.root])).out.split("\n").filter(Boolean);
+  // Records 0.8.0 kept under delivery/ stay append-only after the root moves: deleting or editing one is reported even
+  // though it is outside the current root. Only exact <tranche>/evidence.yaml paths, so an unrelated delivery/ folder
+  // in the project is not touched.
+  if (policy.root !== LEGACY_ROOT) {
+    const legacy = (await git(root, ["diff", "--no-renames", "--relative", "--name-only", "--diff-filter=DMRTC", ...span, "--", LEGACY_ROOT])).out.split("\n").filter(path => /^delivery\/[^/]+\/evidence\.yaml$/.test(path));
+    for (const path of legacy) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} ${existsSync(join(root, path)) ? "modifies" : "deletes"} ${path}, a record 0.8.0 kept under delivery/; records stay append-only when the root moves`));
+  }
   for (const path of final) out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} modifies ${path}, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche`));
   // Under the root, only records and the reports a changed record names may change: anything else is unbound.
-  const named = new Set(changed.flatMap(path => files.find(file => file.file === path)?.data?.reviews?.flatMap(review => review.report ? [review.report] : []) ?? []));
+  const named = new Set(changed.flatMap(path => namedReports(files.find(file => file.file === path)?.data)));
   for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !isRecord(path) && !named.has(path)))
     out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only <tranche>/evidence.yaml records and their reports live there`));
   if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
