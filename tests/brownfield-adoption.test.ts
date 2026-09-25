@@ -117,7 +117,7 @@ test("8, pushed: a multi-commit direct push [docs, security] → no list → [do
     // A new branch (all-zero before-SHA) has no previous tip: judged against its parent, as before.
     expect(policy(await checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: true }))).toEqual([]);
     // A before-SHA that cannot be resolved fails closed rather than skipping the check.
-    expect(policy(await checkIntegrity({ root, base: "1234567890abcdef1234567890abcdef12345678", push: true }))).toEqual([expect.stringContaining("cannot resolve the pre-push tip")]);
+    expect(policy(await checkIntegrity({ root, base: "1234567890abcdef1234567890abcdef12345678", push: true }))).toEqual([expect.stringContaining("cannot resolve the policy baseline")]);
   });
 });
 
@@ -133,5 +133,19 @@ test("8, force-pushed: a rewritten history is judged against the tip it replaced
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n"); await git(root, "commit", "-qam", "C", "--no-verify");
     const findings = (await checkIntegrity({ root, base: a, push: true })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
     expect(findings).toEqual([expect.stringContaining("profiles drops security")]);
+  });
+});
+
+test("the merge queue is judged against its target, not the default branch; an unresolvable baseline fails closed", async () => {
+  const { checkIntegrity } = await import("../src/integrity");
+  const workflow = await readFile(resolve(import.meta.dir, "../templates/github/atdd-bun.yml"), "utf8");
+  expect(workflow).toContain("github.event_name == 'merge_group' && github.event.merge_group.base_sha");
+  // The queue's target already governs [docs, security]; the queued result narrows it to [docs].
+  await brownfield("profiles: [docs, security]\n", async root => {
+    const target = (await Bun.$`git -C ${root} rev-parse base`.text()).trim();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n"); await git(root, "commit", "-qam", "queued", "--no-verify");
+    const policy = async (base: string) => (await checkIntegrity({ root, base, push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail);
+    expect(await policy(target)).toEqual([expect.stringContaining("profiles drops security")]);
+    expect(await policy("1234567890abcdef1234567890abcdef12345678")).toEqual([expect.stringContaining("cannot resolve the policy baseline")]);
   });
 });

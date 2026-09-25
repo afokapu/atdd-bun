@@ -136,10 +136,11 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   const ref = base || process.env.ATDD_BASE_REF || (process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : "origin/HEAD");
   const newBranch = /^0+$/.test(ref), resolved = newBranch ? "" : (await git(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`])).out;
   let against: string;
+  // An explicit baseline (the pre-push tip, the merge queue's target) that cannot be resolved fails closed.
+  if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the policy baseline ${ref.slice(0, 7)} to judge this change against; fetch it (fetch-depth: 0)`, restore: "git fetch origin && re-run the check" }];
   if (push) {
     // A push is judged against the tip it replaced, directly, never a merge base: after a force push the merge base
     // can predate the policy being removed. A new branch has no previous tip and is judged against its parent.
-    if (!newBranch && !resolved && (base || process.env.ATDD_BASE_REF)) return [{ file: "atdd-bun.yaml", detail: `cannot resolve the pre-push tip ${ref.slice(0, 7)} to judge this push against; fetch it (fetch-depth: 0)`, restore: "git fetch origin && re-run the check" }];
     against = resolved && resolved !== (await git(root, ["rev-parse", "HEAD"])).out ? resolved : (await git(root, ["rev-parse", "--verify", "--quiet", "HEAD~1"])).out;
   } else {
     if (!resolved) return [];
