@@ -101,7 +101,7 @@ export async function undeclaredEmissions(implementation: string, violations: Pi
 
 export async function runImplementation(
   implementation: string,
-  config: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">>,
+  config: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">> & { profiles?: ConcreteProfile[] },
 ): Promise<Violation[]> {
   const detector = join(detectorRoot, implementation, "detect.mjs");
   const scratch = await mkdtemp(join(tmpdir(), "atdd-bun-"));
@@ -119,6 +119,9 @@ export async function runImplementation(
         ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
         ATDD_PLAN_ROOT: topology.planRoot,
         ATDD_VIOLATIONS_REPORT: report,
+        // The profiles this run selected, so a detector shared by several profiles can tell a planning run from
+        // one that has reached RED or GREEN. Absent on a direct call, where detectors keep their full behaviour.
+        ...(config.profiles ? { ATDD_PROFILES: JSON.stringify(config.profiles) } : {}),
       },
     });
     const exitCode = await child.exited;
@@ -147,7 +150,7 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   const requested = config.profiles ?? ["all"], enabled = await enabledProfiles(root);
   const selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...enabled])] : requested;
   const results = await Promise.all(
-    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes })),
+    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes, profiles: selected as ConcreteProfile[] })),
   );
   return results.flat().sort((left, right) =>
     left.rule_id.localeCompare(right.rule_id) || left.file.localeCompare(right.file) || left.line - right.line,

@@ -52,7 +52,7 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | Profile | Checks |
 |---|---|
 | `traceability` | acceptance → Bun test → source closure: every acceptance tested, every binding and `Tested-By` resolving |
-| `topology` | feature decomposition and the plan, source, test and E2E locations |
+| `topology` | feature decomposition and the plan, source, test and E2E locations. Missing source, tests and E2E suites are reported only when a run also selects `coder` or `tester`, so a repository in the PLAN stage can enforce `planner` and `topology` before RED |
 | `planner` | schemas for every plan artifact, graph integrity, the scoped planner rules |
 | `telemetry` | the telemetry tracking plan: item shape, path-mirrored identity and versioning under `telemetry/`, wagon ownership of logical artifacts, the per-acceptance telemetry decision, metric label cardinality, source `Telemetry:` references, raw-string and forbidden-property emission, the vendor-SDK boundary around the TelemetryPort, and telemetry tests that bind the acceptance and item, assert the exact identity on a captured sink, cover every required item, and exercise declared timing semantics |
 | `delivery` | the review record of each tranche under `docs/delivery/tranches/`: allowed author and reviewer models with recorded fallbacks, reviewer independence, every finding fixed, withdrawn after one dispute or ruled on by a human, every configured stage approved, and, at the gate, no change without a record and a merged head that contains exactly the approved commit. Inert until adopted |
