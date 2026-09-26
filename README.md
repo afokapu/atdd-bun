@@ -173,7 +173,9 @@ behind); it does not verify them
 cryptographically.
 
 The hooks enforce protected-branch blocking, micro-commit limits, mass-delete approval and
-validation of the affected area. Git can bypass them, so CI is the authority.
+validation of the affected area. Git can bypass them, so CI is the authority. The changed-line
+limit counts a moved file by the edits it carries, so relocating a directory is not measured as
+rewriting it; mass-delete and registry-removal approval still count a move in full.
 
 ## Agents and integrity
 

@@ -111,3 +111,19 @@ test("worktree policy requires a main primary checkout and linked feature worktr
     expect(existsSync(feature)).toBeFalse();
   } finally { await cleanup(layout.container); }
 }, 30_000);
+
+test("the line cap counts a moved file by the edits it carries, not by its whole body twice", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    const body = Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n";
+    await mkdir(join(root, "notes/old_place"), { recursive: true }); await writeFile(join(root, "notes/old_place/big.md"), body);
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "seed", "--no-verify"]);
+    // A pure move: 400 lines on each side under --no-renames, zero edits.
+    await mkdir(join(root, "notes/new-place"), { recursive: true }); await git(root, ["mv", "notes/old_place/big.md", "notes/new-place/big.md"]);
+    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    // A move that also rewrites the file is still measured by what it changes.
+    await writeFile(join(root, "notes/new-place/big.md"), body.replaceAll("line", "changed")); await git(root, ["add", "-A"]);
+    expect((await runHook("pre-commit", root)).message).toContain("exceed 350");
+  } finally { await cleanup(root); }
+}, 30_000);
+
