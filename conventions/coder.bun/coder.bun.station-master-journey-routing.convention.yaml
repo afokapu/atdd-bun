@@ -36,6 +36,8 @@ content:
     declared journey document and dispatch it through JourneyRunner.
   exceptions:
     - Journeys with entrypoint.exposed:false are intentionally not Station-Master-reachable.
+    - Consumers with no Station Master composition root yet (a repository in the PLAN stage) carry no
+      reachability obligation, as for exposed interlockings.
 metadata:
   aliases:
     - BUN-STATION-MASTER-JOURNEY-ROUTING-001

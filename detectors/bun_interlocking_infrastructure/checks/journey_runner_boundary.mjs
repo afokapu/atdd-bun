@@ -6,6 +6,7 @@ import {
   parseJsonEnv,
   readText,
   findConsumerRoots,
+  appFile,
   runtimeFiles,
   referencesToken,
   importsWagon,
@@ -87,6 +88,8 @@ for (const scanRoot of roots) {
       .filter(item => /\bclass\s+JourneyRunner\b/.test(maskComments(item.text)));
 
     if (modules.length === 0) {
+      // As interlocking-runner-exists: the runner is owed once a Station Master exists to call it, not before.
+      if (!appFile(croot)) continue;
       violations.push(mk(
         RULE,
         `${PLAN_ROOT}/_journeys`,

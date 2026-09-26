@@ -58,3 +58,32 @@ test("a browser spec cannot replace the Bun execution proof for a backend-only j
     ]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a planning run checks where artifacts live but does not demand evidence RED and GREEN produce", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-topology-plan-stage-"));
+  const write = async (path: string, content: string) => { await mkdir(join(path, ".."), { recursive: true }); await writeFile(path, content); };
+  try {
+    await write(join(root, "plan/orders/_orders.yaml"), "urn: wagon:orders\nwmbt:\n  total: 1\nfeatures:\n  - urn: feature:orders:place-order\n");
+    await write(join(root, "plan/orders/place-order.yaml"), "urn: feature:orders:place-order\nwagon: wagon:orders\nwmbts: [wmbt:orders:E001]\n");
+    await write(join(root, "plan/orders/E001.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity:\n      urn: acc:orders:E001-UNIT-001\n");
+    await write(join(root, "plan/_trains/orders/batch.yaml"), "train_id: train:orders:batch\n");
+    await write(join(root, "plan/_trains/_interlockings/batch.yaml"), "interlocking_id: interlocking:batch\nentrypoint:\n  exposed: true\n  surfaces: [backend]\nroutes:\n  - route_id: nominal\n    train_id: train:orders:batch\n");
+    await write(join(root, "plan/_journeys/batch.yaml"), "journey_id: journey:batch\nentrypoint:\n  interlocking_id: interlocking:batch\n  exposed: true\n  surfaces: [backend]\ncontinuations: []\n");
+    const due = ["atdd-bun.topology.feature-source-coverage", "atdd-bun.topology.feature-test-coverage", "atdd-bun.topology.e2e-location"];
+    const rules = async (profiles: any[]) => new Set((await enforce({ root, profiles })).map(item => item.rule_id));
+    for (const planning of [["planner"], ["topology"], ["planner", "topology", "docs"]]) {
+      const found = await rules(planning);
+      expect(due.filter(rule => found.has(rule))).toEqual([]);
+    }
+    // A misplaced artifact is still a planning finding.
+    await write(join(root, "plan/orders/features/misplaced.yaml"), "urn: feature:orders:misplaced\nwagon: wagon:orders\nwmbts: []\n");
+    expect((await rules(["topology"])).has("atdd-bun.topology.plan-location")).toBeTrue();
+    // Once a run reaches RED or GREEN, the missing evidence is due again.
+    for (const building of [["topology", "tester"], ["coder"]]) {
+      const found = await rules(building);
+      expect(due.filter(rule => found.has(rule)).sort()).toEqual([...due].sort());
+    }
+    // A direct detector call names no profiles and keeps the fail-closed behaviour.
+    expect(new Set((await runImplementation("atdd_topology", { scanRoots: [root], excludes: [] })).map(item => item.rule_id))).toContain("atdd-bun.topology.feature-test-coverage");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

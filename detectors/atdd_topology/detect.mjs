@@ -12,6 +12,12 @@ const slug = "[a-z][a-z0-9-]*";
 const componentUrn = new RegExp(`^component:(${slug}):(${slug}):[A-Za-z0-9.]+:(frontend|backend):(domain|application|integration|presentation)$`);
 const testUrn = new RegExp(`^test:(${slug}):(${slug}):([A-Za-z0-9][A-Za-z0-9._-]*)$`);
 const violations = [];
+// Missing evidence is due only when a run asks for the stages that produce it. A planning run (planner or
+// topology alone) still checks where every artifact lives and how every existing test binds, but it does not
+// demand source, tests or E2E suites the lifecycle has not reached: RED writes the tests and GREEN the source.
+// A run that names no profiles (a direct call) keeps the old, fail-closed behaviour.
+const requestedProfiles = process.env.ATDD_PROFILES ? JSON.parse(process.env.ATDD_PROFILES) : null;
+const evidenceDue = !Array.isArray(requestedProfiles) || requestedProfiles.some(profile => ["coder", "tester", "all"].includes(profile));
 const rel = (root, path) => relative(root, path).split(sep).join("/");
 const read = path => { try { return readFileSync(path, "utf8"); } catch { return ""; } };
 const text = (data, key) => data && typeof data === "object" && !Array.isArray(data) && typeof data[key] === "string" ? data[key] : "";
@@ -104,8 +110,8 @@ for (const root of roots) {
   }
   for (const feature of features) if (list(feature.data, "wmbts").length) {
     const key = `${feature.wagon}:${feature.slug}`;
-    if (!sourceByFeature.get(key)?.length) add("atdd-bun.topology.feature-source-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no source component beneath ${cfg.source_root}/${feature.wagon}/features/${feature.slug}/`);
-    if (!testByFeature.get(key)?.length) add("atdd-bun.topology.feature-test-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no test bound to one of its acceptances`);
+    if (evidenceDue && !sourceByFeature.get(key)?.length) add("atdd-bun.topology.feature-source-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no source component beneath ${cfg.source_root}/${feature.wagon}/features/${feature.slug}/`);
+    if (evidenceDue && !testByFeature.get(key)?.length) add("atdd-bun.topology.feature-test-coverage", root, feature.path, `${feature.urn} owns WMBTs but has no test bound to one of its acceptances`);
   }
   const e2eRoot = join(root, cfg.e2e_root);
   // A browser test is the E2E proof for a frontend behavior. It deliberately
@@ -148,7 +154,7 @@ for (const root of roots) {
       const expected = join(e2eRoot, "interlockings", id, `${routeId}.routes.test.ts`);
       interlockingRoutes.add(rel(root, expected));
       const browserEligible = frontendInterlockings.has(text(interlocking.data, "interlocking_id"));
-      if (!existsSync(expected) && !(browserEligible && browserTrains.has(text(route, "train_id")))) add("atdd-bun.topology.e2e-location", root, interlocking.path, browserEligible
+      if (evidenceDue && !existsSync(expected) && !(browserEligible && browserTrains.has(text(route, "train_id")))) add("atdd-bun.topology.e2e-location", root, interlocking.path, browserEligible
         ? `${text(interlocking.data, "interlocking_id")} route ${routeId} requires ${rel(root, expected)} or a Playwright E2E spec bound to Train: ${text(route, "train_id")}`
         : `${text(interlocking.data, "interlocking_id")} route ${routeId} is not on an exposed frontend journey and requires ${rel(root, expected)}`);
     }
@@ -157,7 +163,7 @@ for (const root of roots) {
     const entry = journey.data.entrypoint, id = text(journey.data, "journey_id").slice(8), path = join(e2eRoot, "journeys", `${id}.journey.test.ts`);
     const reachable = journeyReachability(journey), journeyTrains = new Set([...reachable].flatMap(interlockingId => list(interlockings.get(interlockingId)?.data, "routes").map(route => text(route, "train_id")).filter(Boolean)));
     const browserEligible = entry && typeof entry === "object" && hasFrontendSurface(entry);
-    if (entry && typeof entry === "object" && entry.exposed === true && !existsSync(path) && !(browserEligible && browserJourneys.has(`journey:${id}`))) add("atdd-bun.topology.e2e-location", root, journey.path, browserEligible
+    if (evidenceDue && entry && typeof entry === "object" && entry.exposed === true && !existsSync(path) && !(browserEligible && browserJourneys.has(`journey:${id}`))) add("atdd-bun.topology.e2e-location", root, journey.path, browserEligible
       ? `exposed journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts or a Playwright E2E spec bound to Journey: journey:${id}`
       : `exposed backend journey:${id} requires ${cfg.e2e_root}/journeys/${id}.journey.test.ts`);
     else if (entry && typeof entry === "object" && entry.exposed === true && existsSync(path)) {

@@ -62,17 +62,9 @@ for (const scanRoot of roots) {
     if (journeys.length === 0) continue;
 
     const app = appFile(croot);
-    if (!app) {
-      for (const journey of journeys) violations.push(mk(
-        RULE,
-        journey.file,
-        1,
-        0,
-        "journey-station-missing: exposed journey has no server.ts Station Master composition root",
-        "",
-      ));
-      continue;
-    }
+    // As for interlockings: with no Station Master composition root yet (a repository in the PLAN stage),
+    // there is nothing to route through, so reachability is not yet due.
+    if (!app) continue;
 
     const text = readText(app);
     const appPath = relative(croot, app).replaceAll("\\", "/");

@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { validateStaticPlannerConventions } from "../src/planner-validators";
+import { enforce } from "../src/enforce";
 
 async function write(root: string, path: string, content: string) {
   const file = join(root, path);
@@ -243,4 +244,22 @@ terminals:
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test("journey runner and Station Master routing are owed once a composition root exists, not in the PLAN stage", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-journey-plan-stage-"));
+  const rules = async () => new Set((await enforce({ root, profiles: ["interlocking"] })).map(item => item.rule_id));
+  try {
+    await write(root, "plan/_trains/orders/batch.yaml", "train_id: train:orders:batch\n");
+    await write(root, "plan/_trains/_interlockings/batch.yaml", "interlocking_id: interlocking:batch\nentrypoint:\n  exposed: true\n  actions: [run_batch]\n  reason: null\n  surfaces: [backend]\nroutes:\n  - route_id: nominal\n    train_id: train:orders:batch\n");
+    await write(root, "plan/_journeys/batch.yaml", "journey_id: journey:batch\nentrypoint:\n  interlocking_id: interlocking:batch\n  exposed: true\n  actions: [run_batch]\n  reason: null\n  surfaces: [backend]\ncontinuations: []\nterminals:\n  - from: { interlocking_id: interlocking:batch, route_id: nominal }\n    outcome: the batch ran\n");
+    const planning = await rules();
+    expect(planning.has("coder.bun.journey-runner-boundary")).toBeFalse();
+    expect(planning.has("coder.bun.station-master-journey-routing")).toBeFalse();
+    // A Station Master that routes nothing: both obligations are due again.
+    await write(root, "src/server.ts", "export const JOURNEY_MAP = {};\n");
+    const built = await rules();
+    expect(built.has("coder.bun.journey-runner-boundary")).toBeTrue();
+    expect(built.has("coder.bun.station-master-journey-routing")).toBeTrue();
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
