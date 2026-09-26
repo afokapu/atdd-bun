@@ -42,6 +42,8 @@ content:
     calls, and train.sequence executor loops from JourneyRunner.
   exceptions:
     - Consumers with no plan/_journeys topology carry no JourneyRunner obligation.
+    - Consumers with no Station Master composition root yet (a repository in the PLAN stage) carry no
+      JourneyRunner obligation, as coder.bun.interlocking-runner-exists owes no InterlockingRunner before one.
 metadata:
   aliases:
     - BUN-JOURNEY-RUNNER-BOUNDARY-001
