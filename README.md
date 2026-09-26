@@ -176,6 +176,9 @@ The hooks enforce protected-branch blocking, micro-commit limits, mass-delete ap
 validation of the affected area. Git can bypass them, so CI is the authority. The changed-line
 limit counts a moved file by the edits it carries, so relocating a directory is not measured as
 rewriting it; mass-delete and registry-removal approval still count a move in full.
+The journey view `atdd-bun docs journeys` generates is exempt from the size caps, since its index
+alone can exceed them, and never from the `docs` profile, which refuses a copy that is not exactly
+what the plan generates.
 
 ## Agents and integrity
 

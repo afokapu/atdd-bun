@@ -127,3 +127,29 @@ test("the line cap counts a moved file by the edits it carries, not by its whole
   } finally { await cleanup(root); }
 }, 30_000);
 
+
+test("the generated journey view is exempt from the size caps but never from the docs check", async () => {
+  const { journeyDocs } = await import("../src/journey-docs");
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n");
+    const write = async (path: string, content: string) => { await mkdir(join(root, path, ".."), { recursive: true }); await writeFile(join(root, path), content); };
+    await write("plan/_trains/orders/batch.yaml", "train_id: train:orders:batch\ntitle: Batch\ndescription: A batch runs.\nsequence:\n  - step: 1\n    intent: run\n    from: user:operator\n    to: wagon:orders\n    artifact: orders:batch\n");
+    await write("plan/_trains/_interlockings/batch.yaml", "interlocking_id: interlocking:batch\ntitle: Batch\nentrypoint:\n  exposed: true\n  actions: [run_batch]\n  reason: null\n  surfaces: [backend]\nroutes:\n  - route_id: nominal\n    category: nominal\n    train_id: train:orders:batch\n    train_path: plan/_trains/orders/batch.yaml\n");
+    await write("docs/index.adoc", "= Docs\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "seed", "--no-verify"]);
+    // A hand-written 400-line page where the view belongs passes the size cap and is refused by the docs check.
+    await write("docs/purpose/journeys/index.adoc", Array.from({ length: 400 }, (_, i) => `line ${i}`).join("\n") + "\n");
+    await git(root, ["add", "-A"]);
+    const handwritten = await runHook("pre-commit", root);
+    expect(handwritten.message).not.toContain("exceed");
+    expect(handwritten.message).toContain("planner.docs.journey-view-current");
+    // What the plan generates is accepted whatever its size.
+    await rm(join(root, "docs/purpose/journeys"), { recursive: true, force: true });
+    await journeyDocs({ root });
+    await git(root, ["add", "-A"]);
+    const generated = await runHook("pre-commit", root);
+    expect(generated.message).not.toContain("exceed");
+    expect(generated.message).not.toContain("planner.docs.journey-view-current");
+  } finally { await cleanup(root); }
+}, 60_000);
