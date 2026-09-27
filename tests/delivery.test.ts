@@ -859,11 +859,20 @@ test("the final review answers for red, green and refactor: a model that wrote a
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
-test("a ready record names who wrote every written stage; a review of a stage without reviewers is out of policy", async () => {
-  const noRefactor = JSON.parse(record(FULL.map(r => ({ ...r, report: `delivery/api/${r.stage}.json` })), { status: "ready", approved_sha: "3333333" }));
-  noRefactor.work = noRefactor.work.filter((entry: { stage: string }) => entry.stage !== "refactor");
-  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/plan.json": "{}", "delivery/api/final.json": "{}", "delivery/api/evidence.yaml": JSON.stringify(noRefactor) }, async dir => {
-    expect((await evidence(dir)).filter(e => e.startsWith("status is ready"))).toEqual(["status is ready, but refactor records no work; name who wrote it"]);
+test("a stage with nothing written records nothing; a plan-only final review is still independent of the plan's writer", async () => {
+  // A plan-only tranche: codex wrote the plan, nothing was written in red, green or refactor.
+  const planOnly = (finalReviewer: string, extra: Record<string, unknown> = {}) => {
+    const data = JSON.parse(record([FULL[0], review("final", "1111111", null, [finalReviewer, "r4"], extra)].map(r => ({ ...r, report: `delivery/api/${r.stage}.json` })), { status: "ready", approved_sha: "1111111" }));
+    data.work = data.work.filter((entry: { stage: string }) => entry.stage === "plan");
+    return JSON.stringify(data);
+  };
+  const files = { "atdd-bun.yaml": ADOPT, "delivery/api/plan.json": "{}", "delivery/api/final.json": "{}" };
+  await withRepo({ ...files, "delivery/api/evidence.yaml": planOnly("glm", { fallback: [{ from: "codex", kind: "outage", failures: 3, window: WINDOW, reason: "provider outage since 09:00" }] }) }, async dir => {
+    expect((await evidence(dir)).filter(e => !e.includes("is not a commit"))).toEqual([]);
+  });
+  // With nothing written since the plan review, the final review answers for the plan: codex may not review codex's plan.
+  await withRepo({ ...files, "delivery/api/evidence.yaml": planOnly("codex") }, async dir => {
+    expect((await evidence(dir)).filter(e => !e.includes("is not a commit"))).toEqual([expect.stringContaining("final requires a different model, but 'codex' reviewed work its own model wrote")]);
   });
   const reviewedRed = [...FULL, review("red", "2222222", null, ["codex", "r9"])];
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(reviewedRed) }, async dir => {
