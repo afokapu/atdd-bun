@@ -6,6 +6,8 @@ description: Use before writing or changing code, tests, or plan/ files in this 
 
 Conventions live in `node_modules/@afokapu/atdd-bun/` (`planner-nodes/nodes/`, `conventions/`). Read the ones a stage names; do not restate them. Finish each stage by passing its gate before starting the next.
 
+Technology and architecture choices already made are the accepted ADRs listed in `docs/architecture/decisions/index.adoc`. Follow them in PLAN and GREEN; a new choice gets its own ADR under `docs/architecture/decisions/` (`planner.docs.*`).
+
 1. PLAN — Decompose the intent into wagon → WMBT → acceptance → train/interlocking → journey → contract under `plan/`, following `planner.decomposition.*`; every WMBT declares a SMOKE acceptance. Gate: `bun run atdd-bun planner`.
 2. RED — For each acceptance, write a test headed `// URN: test:{wagon}:{feature}:{ACC-ID}` and `// Phase: RED` that fails for the missing behaviour (`tester.bun.red-*`). Gate: `bun run atdd-bun tester`.
 3. GREEN — Write the least code that passes; each source file carries `URN: component:{wagon}:{feature}:{Name}:{side}:{layer}` and a `Tested-By:` block (`coder.bun.green-*`). Gate: `bun test`.

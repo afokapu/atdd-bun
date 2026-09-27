@@ -4,23 +4,23 @@ kind: policy
 status: active
 name: What each review establishes, and how a reviewer works
 statement: >-
-  A reviewer is a fresh, read-only process for one stage of one tranche, given the stage, the base SHA, the SHA and the RED commit. It reviews the change between the base and the SHA, working through its stage's checklist systematically, systemically and adversarially, and returns one review entry with verdict, checked and findings.
+  A reviewer is a fresh, read-only process for one stage of one tranche, given the stage, the base SHA, the SHA and the RED commit. It reviews the change between the base and the SHA, working through its stage's checklist systematically, systemically, adversarially and economically, and returns one review entry with verdict, checked and findings.
 terms:
 - term_id: plan
   text: >-
-    Are we building the right thing? The plan files the change adds or modifies: the decomposition (wagon, WMBT, acceptance, train, journey, contract) covers the intent; every acceptance is testable with one observable outcome and every WMBT has a SMOKE acceptance; edge cases, migrations, security and architecture constraints are represented; the acceptances can prove the feature; owned files do not overlap other tranches.
+    Are we building the right thing? The plan files the change adds or modifies: the decomposition (wagon, WMBT, acceptance, train, journey, contract) covers the intent; every acceptance is testable with one observable outcome and every WMBT has a SMOKE acceptance; edge cases, migrations, security and architecture constraints are represented; the acceptances can prove the feature; the plan builds on the wagons, contracts and components that already exist wherever they fit, and plans no machinery outside the tranche's scope; it follows the accepted architecture decisions (docs/architecture/decisions/index.adoc), and a new technology choice comes with its own ADR; owned files do not overlap other tranches.
 - term_id: final
   text: >-
-    Does the change satisfy the approved plan? The tests, implementation and refactoring the change brings are read together. Every acceptance the plan names has a test bound by URN that asserts the behaviour, not a mock; each acceptance test differs from its RED commit only by the removed RED marker and Phase header, and any other change is justified; behaviour is correct on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point; nothing drifts from the plan.
+    Does the change satisfy the approved plan? The tests, implementation and refactoring the change brings are read together. Every acceptance the plan names has a test bound by URN that asserts the behaviour, not a mock; each acceptance test differs from its RED commit only by the removed RED marker and Phase header, and any other change is justified; behaviour is correct on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point; the change reuses what the codebase already has, duplicates nothing, and adds no machinery beyond what the plan needs; it uses what the accepted ADRs chose and brings in no alternative to them; nothing drifts from the plan.
 - term_id: red
   text: >-
     Where the policy gives red a reviewer. Every acceptance has a RED test bound by URN that fails for the missing behaviour and would still fail for a wrong implementation, asserting observable output rather than mocks.
 - term_id: green_refactor
   text: >-
-    Where the policy gives green or refactor a reviewer. Every behaviour is correct against its acceptance on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point.
+    Where the policy gives green or refactor a reviewer. Every behaviour is correct against its acceptance on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound, reuses what exists and duplicates nothing; SMOKE runs through the real entry point.
 - term_id: method
   text: >-
-    Systematic, the whole checklist, with everything checked listed in checked, not only what failed. Systemic, from the change to what it affects (callers, contracts, other tranches, downstream owners), named in affects; code the change does not touch or affect is out of scope. Adversarial, assuming the change is wrong and proving it; a finding needs a file and line, a failing command or a counter-example. A small change gets a short review.
+    Systematic, the whole checklist, with everything checked listed in checked, not only what failed. Systemic, from the change to what it affects (callers, contracts, other tranches, downstream owners), named in affects; code the change does not touch or affect is out of scope. Adversarial, assuming the change is wrong and proving it; a finding needs a file and line, a failing command or a counter-example. Economical, the change does its job with the least new machinery: it reuses what exists, duplicates nothing, and adds no framework, abstraction, configuration, tooling or meta machinery (machinery for building or checking machinery) beyond the tranche's scope; such a finding names the existing piece to reuse or the part to remove. Economy never trades away effectiveness: a smaller change that no longer satisfies an acceptance is not an improvement. A small change gets a short review.
 content:
   summary: >-
     The two default reviews carry the judgement no gate can: the plan before RED, and the whole change at its head. The gates between them are deterministic.
