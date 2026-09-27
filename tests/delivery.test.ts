@@ -466,8 +466,8 @@ test("GLM R1: tightening the policy later does not fail every change on a record
     record["delivery/next/evidence.yaml"] = record["delivery/next/evidence.yaml"].replace('"run":"a2"}', '"run":"a2"}').replace('"reviewer":{"model":"glm","run":"r1"}', '"reviewer":{"model":"claude-opus","run":"r1"}');
     await commit("chore: evidence", record);
     expect(await validateDelivery(dir, { gate: true, base: "main" })).toEqual([]);
-    // Outside the gate the old record is judged against today's policy, so the history stays visible.
-    expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.model-allowed delivery/api/evidence.yaml"]);
+    // Outside the gate too, the old record is judged by the policy it was approved under.
+    expect(await validateDelivery(dir, { gate: false })).toEqual([]);
   });
 });
 
@@ -873,5 +873,24 @@ test("a ready record names who wrote every written stage; a review of a stage wi
   const stranger = JSON.parse(record(FULL)); stranger.work[1].writer.model = "gpt";
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(stranger) }, async dir => {
     expect(await evidence(dir)).toEqual([expect.stringContaining("writer model 'gpt' is not in red.writer")]);
+  });
+});
+
+test("a ready record is judged by the policy at its approved_sha: dropping a writer later does not retro-fail merged records", async () => {
+  await tranche(async (dir, commit) => {
+    // Merged under the default policy: codex wrote the plan.
+    const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
+    await commit("chore: evidence", tranchePR("api", sha));
+    await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
+    // The operator drops codex as a plan writer; the old record still validates everywhere.
+    const writers = { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] };
+    const noCodex = { plan: { writer: ["claude-opus"], reviewer: ["glm", "claude-opus", "codex"] }, red: writers, green: writers, refactor: writers, final: { reviewer: ["codex", "glm", "claude-opus"] } };
+    await commit("chore: no codex for plans", { "atdd-bun.yaml": `profiles: [delivery]\ndelivery:\n  root: delivery\n  stages: ${JSON.stringify(noCodex)}\n` });
+    expect(await validateDelivery(dir, { gate: false })).toEqual([]);
+    // A new record is judged by the new policy: a codex plan is out of policy there.
+    await sh(dir, "git", "checkout", "-qb", "tranche/next");
+    const next = await commit("feat: next", { "src/app.ts": "export const a = 3;\n" });
+    await commit("chore: evidence", tranchePR("next", next));
+    expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.model-allowed delivery/next/evidence.yaml"]);
   });
 });
