@@ -11,7 +11,7 @@ terms:
     the identity of one process: a session id, a pane id with its start time, or the retained report. Two entries with the same run were produced by the same process.
 - term_id: independence
   text: >-
-    fresh-process: the reviewer is a new process that wrote nothing. different-model: additionally, its model wrote none of the work it reviews; the final review answers for red, green and refactor when none of them is reviewed.
+    fresh-process: the reviewer is a new process that wrote nothing. different-model: additionally, its model wrote none of the work it reviews; the final review answers for red, green and refactor when none of them is reviewed, and a review whose range recorded no work answers for the latest recorded work before it.
 content:
   summary: >-
     A reviewer that edits becomes a writer, and a reviewer that already saw an earlier round is anchored to it. Independence is what makes an approval evidence.

@@ -258,12 +258,17 @@ function checkFallbacks(file: string, at: string, fallbacks: Fallback[], fallbac
   return out;
 }
 
-/** The stages a review of `stage` answers for: its own, and every stage after the previous reviewed one. The final review
- * covers red, green and refactor when none of them is reviewed. */
-function coveredStages(stage: Stage, policy: DeliveryPolicy): Stage[] {
+/** The stages a review of `stage` answers for: its own, and every stage after the previous reviewed one (the final review
+ * covers red, green and refactor when none of them is reviewed). A stage with nothing written records nothing; when no
+ * work is recorded in that range, the review answers for the latest recorded work before it, so a plan-only final review
+ * is still independent of the plan's writer. */
+function coveredStages(stage: Stage, policy: DeliveryPolicy, work: Work[]): Stage[] {
   const position = STAGES.indexOf(stage);
   const previous = STAGES.slice(0, position).findLastIndex(name => (policy.stages[name]?.reviewer.length ?? 0) > 0);
-  return STAGES.slice(previous + 1, position + 1);
+  const range = STAGES.slice(previous + 1, position + 1);
+  if (work.some(entry => range.includes(entry.stage))) return range;
+  const latest = STAGES.slice(0, previous + 1).findLast(name => work.some(entry => entry.stage === name));
+  return latest ? [latest] : range;
 }
 
 /** Reports are data, never code: a report path is exempt from drift, so it must not be able to name a source file. */
@@ -303,7 +308,7 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
     out.push(...checkFallbacks(file, at, fallbacks, policy.fallback), ...checkModel(file, at, review.stage, "reviewer", review.reviewer, stage.reviewer, fallbacks, "reviewer", policy.fallback));
     if (review.author && stage.writer.length) out.push(...checkModel(file, at, review.stage, "writer", review.author, stage.writer, fallbacks, "reviewer", policy.fallback));
     // Independence is judged against everyone who wrote what this review answers for.
-    const covered = coveredStages(review.stage, policy), writers = [...work.filter(entry => covered.includes(entry.stage)).map(entry => entry.writer), ...(review.author ? [review.author] : [])];
+    const covered = coveredStages(review.stage, policy, work), writers = [...work.filter(entry => covered.includes(entry.stage)).map(entry => entry.writer), ...(review.author ? [review.author] : [])];
     if (!writers.length) out.push(finding("delivery.evidence-schema", file, `${at}: names no writer of the work it reviews (${covered.join(", ")}); record each stage's work, or the review's author, so independence can be judged`));
     if (writerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also wrote in this tranche; a reviewer that edits becomes a writer`));
     if (reviewerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' already reviewed reviews[${reviewerRuns.get(review.reviewer.run)}]; every review is a fresh process`));
@@ -339,9 +344,6 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
   if (evidence.status === "ready") {
     const configured = STAGES.filter(stage => policy.stages[stage]);
     for (const stage of configured) {
-      // A 0.9 record names writers as the authors of the reviews that covered their stages.
-      const written = work.some(entry => entry.stage === stage) || reviews.some(review => review.author && coveredStages(review.stage, policy).includes(stage));
-      if (policy.stages[stage]!.writer.length && !written) out.push(finding("delivery.stages-complete", file, `status is ready, but ${stage} records no work; name who wrote it`));
       if (!policy.stages[stage]!.reviewer.length) continue;
       const last = reviews.filter(review => review.stage === stage).at(-1);
       if (!last) out.push(finding("delivery.stages-complete", file, `status is ready, but ${stage} has no review`));

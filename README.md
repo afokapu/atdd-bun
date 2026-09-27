@@ -164,6 +164,9 @@ From 0.10.3 each ready record is judged by the delivery policy in `atdd-bun.yaml
 a later policy change (dropping or reordering a model, removing a review) never makes a merged record
 fail. Records in progress are judged by the current policy.
 
+From 0.10.4 a stage with nothing written (a plan-only or no-op tranche) records no work; a review
+whose range recorded none answers for the latest recorded work before it.
+
 Every key is optional; these are the defaults:
 
 ```yaml
