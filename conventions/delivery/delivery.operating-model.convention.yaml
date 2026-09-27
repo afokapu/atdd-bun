@@ -74,7 +74,7 @@ content:
   summary: >-
     The policy says who may write and review each stage; this convention says how the coordinator and drivers carry it out. The record they leave is what the delivery rules judge.
   normative_text: |
-    Tasks, results, review requests and verdicts travel on the board (delivery.board), each agent launched with its identity and topics. Agents run in panes of the multiplexer named in delivery.multiplexer (default herdr) only for humans to watch; learn its commands from its own help before the first dispatch. Never deliver work to an agent by typing into its pane.
+    With delivery.board set, tasks, results, review requests and verdicts travel on the board (delivery.board), each agent launched with its identity and topics. Without it, a task is the prompt an agent is launched with and its result is the run's output, which the driver keeps. Agents run in panes of the multiplexer named in delivery.multiplexer (default herdr) only for humans to watch; learn its commands from its own help before the first dispatch. Never deliver work to an agent by typing into its pane.
     Before a hosted model receives private repository content, confirm the user or organization authorized it.
     Never edit the delivery skill, these conventions, or loosen the delivery policy to get a tranche through. If the policy must change, stop and ask the human.
   fix_hint: |

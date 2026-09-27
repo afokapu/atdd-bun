@@ -12,12 +12,15 @@ export const DEFAULT_BOARD_URL = "http://127.0.0.1:2586";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const TOPIC_LIMIT = 64;
 
-/** The board's base URL: $ATDD_BOARD_URL, else delivery.board.url in atdd-bun.yaml, else the default. Only a local
- * address is accepted, so a wrong setting can never send a message to a public server. */
+/** The board is opt-in: on only when atdd-bun.yaml names delivery.board. Its URL is $ATDD_BOARD_URL, else
+ * delivery.board.url, else the default; the environment moves the board on one machine but never switches it on. Only a
+ * local address is accepted, so a wrong setting can never send a message to a public server. */
 export async function boardUrl(root = process.cwd(), env: Record<string, string | undefined> = process.env): Promise<string> {
-  let configured: unknown;
+  let board: unknown;
   const file = join(root, "atdd-bun.yaml");
-  if (existsSync(file)) try { configured = (Bun.YAML.parse(await readFile(file, "utf8")) as { delivery?: { board?: { url?: unknown } } } | null)?.delivery?.board?.url; } catch { /* reported by delivery.config-schema */ }
+  if (existsSync(file)) try { board = (Bun.YAML.parse(await readFile(file, "utf8")) as { delivery?: { board?: unknown } } | null)?.delivery?.board; } catch { /* reported by delivery.config-schema */ }
+  if (!board || typeof board !== "object" || Array.isArray(board)) throw new Error("the board is not enabled; add delivery.board to atdd-bun.yaml (for example board: { url: http://127.0.0.1:2586 }) to have agents talk through it");
+  const configured = (board as { url?: unknown }).url;
   return localUrl(env.ATDD_BOARD_URL || (typeof configured === "string" ? configured : DEFAULT_BOARD_URL));
 }
 

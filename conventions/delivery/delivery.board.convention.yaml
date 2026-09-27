@@ -4,7 +4,7 @@ kind: policy
 status: active
 name: Agents talk through a local board, one topic per conversation
 statement: >-
-  The coordinator, drivers, writers and reviewers talk through a local message board with atdd-bun chat, never by typing into another agent's pane: one topic for the program, one per tranche, one per review conversation, each agent launched with its identity and the only topics it may use, every message naming its sender and recipients. The board makes the work visible; the evidence record stays the only thing the delivery rules judge.
+  Where atdd-bun.yaml sets delivery.board, the coordinator, drivers, writers and reviewers talk through a local message board with atdd-bun chat, never by typing into another agent's pane: one topic for the program, one per tranche, one per review conversation, each agent launched with its identity and the only topics it may use, every message naming its sender and recipients. The board makes the work visible; the evidence record stays the only thing the delivery rules judge.
 terms:
 - term_id: topics
   text: >-
@@ -50,7 +50,7 @@ content:
     Derive the topic with atdd-bun chat topic, launch the agent with ATDD_AGENT and ATDD_TOPICS, and post with --to. To follow a thread in a terminal pane: atdd-bun chat show <topic>.
   exceptions:
   - >-
-    Without a delivery.board block the board is at http://127.0.0.1:2586; ATDD_BOARD_URL overrides it on one machine.
+    The board is opt-in: without a delivery.board block there is none, and atdd-bun chat refuses to post or read. With the block and no url it is at http://127.0.0.1:2586; ATDD_BOARD_URL moves it on one machine but never switches it on. Switching it on or off changes how agents talk, not what a record must prove, so it is not a loosening.
 metadata:
   aliases:
   - DELIVERY-BOARD-001

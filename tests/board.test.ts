@@ -28,8 +28,12 @@ const server = Bun.serve({
 afterAll(() => server.stop(true));
 const BOARD = `http://127.0.0.1:${server.port}`, cli = resolve(import.meta.dir, "../src/cli.ts");
 
-async function chat(env: Record<string, string>, args: string[], stdin = "") {
-  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], env: { ...process.env, ATDD_BOARD_URL: BOARD, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
+// Agents run in a repository that enables the board; ATDD_BOARD_URL points it at the stand-in.
+const enabled = await mkdtemp(join(tmpdir(), "atdd-board-on-"));
+await writeFile(join(enabled, "atdd-bun.yaml"), "profiles: [delivery]\ndelivery:\n  board: {}\n");
+afterAll(() => rm(enabled, { recursive: true, force: true }));
+async function chat(env: Record<string, string>, args: string[], stdin = "", cwd = enabled) {
+  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], cwd, env: { ...process.env, ATDD_BOARD_URL: BOARD, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
   return { code: await child.exited, out: await new Response(child.stdout).text(), err: await new Response(child.stderr).text() };
 }
 const as = (agent: string, ...topics: string[]) => ({ ATDD_AGENT: agent, ATDD_TOPICS: topics.join(",") });
@@ -56,6 +60,22 @@ test("the board is local only: a public or malformed address is refused, from th
     await writeFile(join(root, "atdd-bun.yaml"), "delivery:\n  board: { url: https://ntfy.sh }\n");
     expect(boardUrl(root, {})).rejects.toThrow("not local");
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("the board is opt-in: without delivery.board nothing is posted, even with ATDD_BOARD_URL set; topic names still work", async () => {
+  const off = await mkdtemp(join(tmpdir(), "atdd-board-off-"));
+  try {
+    await writeFile(join(off, "atdd-bun.yaml"), "profiles: [delivery]\ndelivery:\n  root: docs/delivery/tranches\n");
+    const topic = topicName("demo", "off"), before = log.length;
+    const refused = await chat(as("driver@off", topic), ["post", topic, "--to", "writer@off"], "should not be posted", off);
+    expect(refused.code).toBe(1);
+    expect(refused.err).toContain("the board is not enabled; add delivery.board to atdd-bun.yaml");
+    expect(log.length).toBe(before);
+    expect((await chat({}, ["topic", "demo", "off"], "", off)).out.trim()).toBe(topic);
+    await writeFile(join(off, "atdd-bun.yaml"), "profiles: [delivery]\n");
+    expect(boardUrl(off, { ATDD_BOARD_URL: BOARD })).rejects.toThrow("not enabled");
+    expect(await boardUrl(enabled, {})).toBe("http://127.0.0.1:2586");
+  } finally { await rm(off, { recursive: true, force: true }); }
 });
 
 test("a message carries its header, reaches its recipient, and a reply is never missed however fast it comes", async () => {

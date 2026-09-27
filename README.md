@@ -123,7 +123,8 @@ who reviews it; either may be absent. By default two stages are reviewed: the pl
 change at its head (final). Red, green and refactor are written and held by their gates. How the
 coordinator and drivers carry this out is the `delivery.operating-model` convention; what a reviewer
 checks is `delivery.review`; how agents talk, through a local ntfy board with one topic per program,
-tranche and review conversation (`atdd-bun chat`), is `delivery.board`. The skill only points to them.
+tranche and review conversation (`atdd-bun chat`), is `delivery.board`, used only when `delivery.board` is
+set. The skill only points to them.
 
 The records live with the program's reasoning, in the docs profile's `docs/delivery/` area:
 
@@ -162,7 +163,7 @@ delivery:
   root: docs/delivery/tranches       # one <tranche>/evidence.yaml per tranche, reports beside it
   require_record: true               # at the gate, a change outside the root (other than atdd-bun.yaml alone) needs a tranche record
   multiplexer: herdr                 # the terminal multiplexer humans watch agents in; any command name
-  board: { url: http://127.0.0.1:2586 }   # the local board agents talk through; $ATDD_BOARD_URL overrides
+  # board: { url: http://127.0.0.1:2586 }   # opt-in: agents talk through a local board; absent, there is none
   independence: different-model      # a reviewer's model wrote none of the work it reviews; or fresh-process
   stages:                            # models in preference order: the first, then recorded fallbacks
     plan:     { writer: [codex, claude-opus], reviewer: [glm, claude-opus, codex] }

@@ -9,7 +9,7 @@ Read these before acting; they are the operating model, this skill only points t
 - **Who writes and who reviews each stage** (plan, red, green, refactor, final): the `delivery:` block of `atdd-bun.yaml`. Read it; never hard-code models.
 - **Coordinator, driver, dispatch, fallback, repair, merge, default commands, an example record:** `conventions/delivery/delivery.operating-model.convention.yaml`.
 - **What a reviewer checks and how it answers:** `conventions/delivery/delivery.review.convention.yaml`.
-- **How agents talk (topics, identities, `atdd-bun chat`):** `conventions/delivery/delivery.board.convention.yaml`.
+- **When `delivery.board` is set in `atdd-bun.yaml`, how agents talk (topics, identities, `atdd-bun chat`):** `conventions/delivery/delivery.board.convention.yaml`. Without it there is no board.
 - **What the record must satisfy:** the other `conventions/delivery/*.convention.yaml` rules.
 
 Gate: `bun run atdd-bun delivery`. Never edit this skill or the conventions, and never loosen the policy to get a tranche through; if the policy must change, stop and ask the human.
