@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { runUi } from "./board-ui";
 
 /** The delivery board: a local ntfy server the coordinator, drivers, writers and reviewers talk through
  * (the delivery.board convention). One topic per level (program, tranche, review conversation); every message
@@ -11,6 +12,8 @@ import { join } from "node:path";
 export const DEFAULT_BOARD_URL = "http://127.0.0.1:2586";
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 const TOPIC_LIMIT = 64;
+/** The board's directory: one message per topic, its name, posted with the topic's first message. */
+export const DIRECTORY = "atdd-topics";
 
 /** The board is opt-in: on only when atdd-bun.yaml names delivery.board. Its URL is $ATDD_BOARD_URL, else
  * delivery.board.url, else the default; the environment moves the board on one machine but never switches it on. Only a
@@ -72,13 +75,19 @@ export function parseEnvelope(text: string): { header: Partial<Header>; body: st
 
 const addressedTo = (message: Message, agent: string) => [message.header.to ?? []].flat().includes(agent);
 
-/** Posts with a few retries (a busy or restarting board), then fails loudly: a message is never silently lost. */
+/** Posts with a few retries (a busy or restarting board), then fails loudly: a message is never silently lost. The first
+ * message on a topic also names the topic in the directory, so the board's view can list it. */
 export async function post(url: string, topic: string, header: Header, body: string): Promise<string> {
+  const first = await fetch(`${url}/${topic}/json?poll=1&since=latest`).then(res => res.ok ? res.text() : "x").then(text => !text.trim()).catch(() => false);
   let error = "";
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const res = await fetch(`${url}/${topic}`, { method: "POST", body: envelope(header, body), headers: { Title: `${header.from} -> ${header.to.join(", ")}` } });
-      if (res.ok) return (await res.json() as { id: string }).id;
+      if (res.ok) {
+        const id = (await res.json() as { id: string }).id;
+        if (first) await fetch(`${url}/${DIRECTORY}`, { method: "POST", body: topic }).catch(() => undefined);
+        return id;
+      }
       error = `${res.status} ${await res.text()}`;
     } catch (e) { error = String(e); }
     await Bun.sleep(250 * 2 ** attempt);
@@ -113,28 +122,20 @@ export function format(message: Message, withTopic = false): string {
   return `${withTopic ? `[${message.topic}] ` : ""}${time}  ${route}${tags ? `  (${tags})` : ""}  #${message.id}\n${message.body.trim()}\n`;
 }
 
-/** `atdd-bun chat <topic|post|read|wait|show> …`. Returns the exit code: 0 done, 1 error, 2 wait timed out. */
+/** `atdd-bun chat` opens the board's terminal view; `atdd-bun chat <topic|post|read|wait> …` is for agents.
+ * Returns the exit code: 0 done, 1 error, 2 wait timed out. */
 export async function chat(args: string[], env: Record<string, string | undefined> = process.env, root = process.cwd()): Promise<number> {
   const [command, ...rest] = args;
   const flag = (name: string) => { const i = rest.indexOf(`--${name}`); return i >= 0 ? rest[i + 1] : undefined; };
   const list = (value?: string) => (value ?? "").split(",").map(item => item.trim()).filter(Boolean);
-  const positional = rest.filter((arg, i) => !arg.startsWith("--") && !(i > 0 && rest[i - 1].startsWith("--") && !["--mine", "--once"].includes(rest[i - 1])));
+  const positional = rest.filter((arg, i) => !arg.startsWith("--") && !(i > 0 && rest[i - 1].startsWith("--") && rest[i - 1] !== "--mine"));
   const agent = () => { if (!env.ATDD_AGENT) throw new Error("ATDD_AGENT is not set: every agent is launched with its identity"); return env.ATDD_AGENT; };
   try {
     if (command === "topic") { console.log(topicName(positional[0], positional[1], positional[2], positional[3])); return 0; }
-    const url = await boardUrl(root, env), topics = list(positional[0]);
-    if (!topics.length) throw new Error(`usage: atdd-bun chat ${command ?? "<post|read|wait|show>"} <topic> …`);
-    if (command === "show") {
-      // A human's view; an agent sees only its own topics.
-      if (env.ATDD_AGENT) topics.forEach(topic => checkTopic(topic, env));
-      let since = "all";
-      for (;;) {
-        const messages = await read(url, topics, since).catch(() => []);
-        for (const message of messages) { since = message.id; console.log(format(message, topics.length > 1)); }
-        if (rest.includes("--once")) return 0;
-        await Bun.sleep(1000);
-      }
-    }
+    const url = await boardUrl(root, env);
+    if (command === undefined) return await runUi(url, env);
+    const topics = list(positional[0]);
+    if (!topics.length) throw new Error(`usage: atdd-bun chat ${command} <topic> …`);
     if (topics.length !== 1) throw new Error(`${command} takes one topic`);
     const topic = topics[0], me = agent();
     checkTopic(topic, env);
@@ -158,7 +159,7 @@ export async function chat(args: string[], env: Record<string, string | undefine
       console.log(format(message));
       return 0;
     }
-    throw new Error(`unknown chat command ${command}; use topic, post, read, wait or show`);
+    throw new Error(`unknown chat command ${command}; run atdd-bun chat alone for the board, or topic, post, read, wait`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     return 1;

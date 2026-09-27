@@ -2,7 +2,8 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { boardUrl, localUrl, topicName } from "../src/board";
+import { boardUrl, DIRECTORY, localUrl, parseEnvelope, topicName } from "../src/board";
+import { knownTopics, render } from "../src/board-ui";
 
 // A stand-in for ntfy's publish and poll endpoints, enough for atdd-bun chat: messages per topic, in order, with ids.
 type Stored = { id: string; time: number; topic: string; event: "message"; message: string };
@@ -19,8 +20,10 @@ const server = Bun.serve({
     }
     if (suffix === "json") {
       const topics = path.split(","), since = url.searchParams.get("since") ?? "all";
+      const mine = log.filter(m => topics.includes(m.topic));
       const after = since === "all" ? -1 : log.findIndex(m => m.id === since);
-      return new Response(log.filter((m, i) => i > after && topics.includes(m.topic)).map(m => JSON.stringify(m)).join("\n") + "\n");
+      const out = since === "latest" ? mine.slice(-1) : log.filter((m, i) => i > after && topics.includes(m.topic));
+      return new Response(out.map(m => JSON.stringify(m)).join("\n") + (out.length ? "\n" : ""));
     }
     return new Response("not found", { status: 404 });
   },
@@ -99,7 +102,7 @@ test("an agent uses only the topics it was launched with; a reviewer cannot read
   const tranche = topicName("demo", "iso"), review = topicName("demo", "iso", "final", 1);
   await chat(as("driver@iso", tranche), ["post", tranche, "--to", "writer@iso"], "private tranche detail");
   const reviewer = as("reviewer-codex@iso", review);
-  for (const args of [["read", tranche], ["wait", tranche, "--timeout", "1"], ["show", tranche, "--once"]]) {
+  for (const args of [["read", tranche], ["wait", tranche, "--timeout", "1"]]) {
     const denied = await chat(reviewer, args);
     expect(denied.code).toBe(1);
     expect(denied.err).toContain("is not one of this agent's topics");
@@ -117,4 +120,33 @@ test("wait is bounded: with nothing addressed to the agent it exits 2 and says h
   const waited = await chat(as("reviewer@quiet", review), ["wait", review, "--timeout", "1"]);
   expect(waited.code).toBe(2);
   expect(waited.err).toContain("wait again with --since");
+});
+
+test("the board lists its topics: each topic's first message names it once in the directory, and chat alone lists them", async () => {
+  const program = topicName("view"), tranche = topicName("view", "t1"), review = topicName("view", "t1", "final", 1);
+  const driver = as("driver@t1", program, tranche, review);
+  for (const [topic, to] of [[program, "coordinator"], [tranche, "writer@t1"], [tranche, "writer@t1"], [review, "reviewer@t1"]] as const)
+    expect((await chat(driver, ["post", topic, "--to", to], `to ${to}`)).code).toBe(0);
+  expect(log.filter(m => m.topic === DIRECTORY && m.message === tranche)).toHaveLength(1);
+  expect(await knownTopics(BOARD)).toEqual(expect.arrayContaining([program, tranche, review]));
+  // Without a terminal, `atdd-bun chat` prints each topic with its message count; an agent sees only its own topics.
+  const listed = await chat({}, []);
+  expect(listed.out).toContain(`${tranche}  2`);
+  expect(listed.out).toContain(`${review}  1`);
+  const reviewerView = await chat(as("reviewer@t1", review), []);
+  expect(reviewerView.out.trim().split("\n")).toEqual([`${review}  1`]);
+});
+
+test("the view nests topics program > tranche > review, highlights the selected one, and shows its conversation", () => {
+  const message = (topic: string, id: string, text: string) => ({ id, time: 0, topic, raw: text, ...parseEnvelope(`---\nfrom: "driver@t1"\nto: [writer@t1]\n---\n${text}`) });
+  const topics = ["atdd-p", "atdd-p-t1", "atdd-p-t1-final-1"];
+  const lines = render({ topics, selected: 1, scroll: 0, url: "http://127.0.0.1:2586", messages: new Map([["atdd-p", []], ["atdd-p-t1", [message("atdd-p-t1", "a", "write greet.ts")]], ["atdd-p-t1-final-1", []]]) }, 100, 12);
+  expect(lines[0]).toContain("3 topics");
+  const panel = lines.slice(2).map(line => line.split(" │ ")[0]);
+  expect(panel[0]).toStartWith("atdd-p ");
+  expect(panel[1]).toContain("\x1b[7m  t1");
+  expect(panel[2]).toStartWith("    final-1");
+  expect(lines.join("\n")).toContain("driver@t1 -> writer@t1");
+  expect(lines.join("\n")).toContain("write greet.ts");
+  expect(lines.at(-1)).toContain("atdd-p-t1");
 });

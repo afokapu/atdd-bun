@@ -28,12 +28,12 @@ terms:
     atdd-bun chat post writes the header: from, to, participants and conversation always; kind (task, result, review-request, verdict, rebuttal, status, blocked), stage, reply-to, repo, branch, worktree, goal, base and sha when they apply. The body carries the whole instruction or answer, however long: the thread is the history.
 - term_id: commands
   text: >-
-    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you, bounded by --timeout so a tool call ends (exit 2: nothing yet, wait again with --since the last id); show a thread live in a terminal pane.
+    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you, bounded by --timeout so a tool call ends (exit 2: nothing yet, wait again with --since the last id); and, for a human, atdd-bun chat alone opens the board: every topic on the left, the selected conversation on the right, live.
   values:
     post: atdd-bun chat post <topic> --to <agent> --kind <kind> [--reply-to <id>] < message.md
     read: atdd-bun chat read <topic> [--mine]
     wait: atdd-bun chat wait <topic> [--since <id>] --timeout 540
-    show: atdd-bun chat show <topic>[,<topic>...]
+    board: atdd-bun chat
 - term_id: server
   text: >-
     A local ntfy server, bound to the loopback address, keeping its messages in a cache file. Every agent on the machine reaches it from the same address, so ntfy's per-client limits are raised: requests, subscriptions, daily messages, and new topics (one topic per conversation creates many). With the defaults, ten parallel tranches exhaust them and posts are refused.
@@ -47,7 +47,7 @@ content:
     Agents use atdd-bun chat only. It refuses an address that is not local and a topic the agent was not given. Never call ntfy directly: in the ntfy client -u means credentials, and a topic without a server goes to the public ntfy.sh.
     A running session that must be woken is reached through its own channel (codex queue --thread <id>; --resume <session> for Claude and Pi), never by typing into its pane; its launch prompt tells it to wait on its topic between steps.
   fix_hint: |
-    Derive the topic with atdd-bun chat topic, launch the agent with ATDD_AGENT and ATDD_TOPICS, and post with --to. To follow a thread in a terminal pane: atdd-bun chat show <topic>.
+    Derive the topic with atdd-bun chat topic, launch the agent with ATDD_AGENT and ATDD_TOPICS, and post with --to. To follow the work, run atdd-bun chat in a terminal pane. ntfy cannot list its topics, so the first message on a topic also posts the topic's name to the directory topic atdd-topics, which the view reads.
   exceptions:
   - >-
     The board is opt-in: without a delivery.board block there is none, and atdd-bun chat refuses to post or read. With the block and no url it is at http://127.0.0.1:2586; ATDD_BOARD_URL moves it on one machine but never switches it on. Switching it on or off changes how agents talk, not what a record must prove, so it is not a loosening.
