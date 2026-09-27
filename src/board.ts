@@ -149,11 +149,11 @@ export async function chat(args: string[], env: Record<string, string | undefine
       return 0;
     }
     if (command === "read") {
-      for (const message of await read(url, [topic], flag("since") ?? "all")) if (!rest.includes("--mine") || addressedTo(message, me)) console.log(format(message));
+      for (const message of await read(url, [topic], flag("since") || "all")) if (!rest.includes("--mine") || addressedTo(message, me)) console.log(format(message));
       return 0;
     }
     if (command === "wait") {
-      const message = await waitFor(url, topic, me, flag("since") ?? "all", Number(flag("timeout") ?? 0));
+      const message = await waitFor(url, topic, me, flag("since") || "all", Number(flag("timeout") ?? 0));
       if (!message) { console.error(`no message for ${me} on ${topic} yet; wait again with --since to continue`); return 2; }
       console.log(format(message));
       return 0;

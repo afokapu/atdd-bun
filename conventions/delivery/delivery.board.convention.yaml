@@ -36,9 +36,9 @@ terms:
     show: atdd-bun chat show <topic>[,<topic>...]
 - term_id: server
   text: >-
-    A local ntfy server, bound to the loopback address, keeping its messages in a cache file. Every agent on the machine reaches it from the same address, so ntfy's per-client limits are raised; with the defaults, ten parallel tranches exhaust them and posts are refused.
+    A local ntfy server, bound to the loopback address, keeping its messages in a cache file. Every agent on the machine reaches it from the same address, so ntfy's per-client limits are raised: requests, subscriptions, daily messages, and new topics (one topic per conversation creates many). With the defaults, ten parallel tranches exhaust them and posts are refused.
   values:
-    docker: docker run -d --name atdd-board -p 127.0.0.1:2586:80 -v ~/.atdd-board:/var/cache/ntfy -e NTFY_CACHE_FILE=/var/cache/ntfy/cache.db -e NTFY_CACHE_DURATION=720h -e NTFY_MESSAGE_SIZE_LIMIT=64k -e NTFY_VISITOR_REQUEST_LIMIT_BURST=100000 -e NTFY_VISITOR_REQUEST_LIMIT_REPLENISH=1ms -e NTFY_VISITOR_SUBSCRIPTION_LIMIT=10000 -e NTFY_VISITOR_MESSAGE_DAILY_LIMIT=0 binwiederhier/ntfy serve
+    docker: docker run -d --name atdd-board -p 127.0.0.1:2586:80 -v ~/.atdd-board:/var/cache/ntfy -e NTFY_CACHE_FILE=/var/cache/ntfy/cache.db -e NTFY_CACHE_DURATION=720h -e NTFY_MESSAGE_SIZE_LIMIT=64k -e NTFY_VISITOR_REQUEST_LIMIT_BURST=100000 -e NTFY_VISITOR_REQUEST_LIMIT_REPLENISH=1ms -e NTFY_VISITOR_SUBSCRIPTION_LIMIT=10000 -e NTFY_VISITOR_MESSAGE_DAILY_LIMIT=0 -e NTFY_VISITOR_TOPIC_CREATION_LIMIT_BURST=0 binwiederhier/ntfy serve
 content:
   summary: >-
     Typing into an agent's pane loses messages to startup screens, busy prompts and cut pastes. A board with one topic per conversation delivers every message, keeps the history, and lets a human follow any thread.
