@@ -33,12 +33,17 @@ export type DeliveryPolicy = {
 };
 
 
-const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
+/** The models each stage falls back to when the policy configures the stage but omits a list. */
+const STAGE_MODELS: Record<Stage, Omit<StagePolicy, "independence">> = {
   plan_review: { authors: ["codex"], reviewers: ["glm", "claude"] },
   test_review: { authors: ["glm", "claude"], reviewers: ["codex", "claude"] },
   code_review: { authors: ["glm", "claude"], reviewers: ["glm", "claude"] },
   final_review: { authors: ["codex"], reviewers: ["codex", "claude"] },
 };
+/** Two semantic reviews by default: the plan before RED, and the whole change at its head. Between them the lifecycle's
+ * gates (RED, GREEN, SMOKE, REFACTOR, TRACE) are deterministic; test_review and code_review remain available to a
+ * policy that names them. */
+const DEFAULT_STAGES: Stage[] = ["plan_review", "final_review"];
 /** Tranche records live with the program's reasoning, under the docs profile's delivery area; the docs profile leaves
  * this folder to the delivery profile (records are YAML and data, never authored AsciiDoc). */
 export const DEFAULT_ROOT = "docs/delivery/tranches";
@@ -71,9 +76,9 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
   const count = (value: unknown, fallback: number) => (Number.isInteger(value) ? value as number : fallback);
   const independence = mode(raw.independence, "fresh-process"), given = record(raw.stages), stages: DeliveryPolicy["stages"] = {};
   for (const stage of STAGES) {
-    const entry = given ? record(given[stage]) : DEFAULT_STAGES[stage];
+    const entry = given ? record(given[stage]) : DEFAULT_STAGES.includes(stage) ? STAGE_MODELS[stage] : null;
     if (!entry) continue;
-    stages[stage] = { authors: models(entry.authors, DEFAULT_STAGES[stage].authors), reviewers: models(entry.reviewers, DEFAULT_STAGES[stage].reviewers), independence: mode((entry as Record<string, unknown>).independence, independence) };
+    stages[stage] = { authors: models(entry.authors, STAGE_MODELS[stage].authors), reviewers: models(entry.reviewers, STAGE_MODELS[stage].reviewers), independence: mode((entry as Record<string, unknown>).independence, independence) };
   }
   const fallback = record(raw.fallback) ?? {};
   return {
@@ -470,7 +475,10 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   const named = new Set(changed.flatMap(path => namedReports(files.find(file => file.file === path)?.data)));
   for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !isRecord(path) && !named.has(path)))
     out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only <tranche>/evidence.yaml records and their reports live there`));
-  if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
+  // A change to the policy alone needs no tranche: the integrity check reports any loosening for a human to approve,
+  // and a tightening needs no review. A policy change that comes with anything else is reviewed with it.
+  const reviewable = outside.filter(path => path !== "atdd-bun.yaml");
+  if (policy.require_record && reviewable.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   // Every changed ready record, its reports, and the approved SHAs that may cover each other's files.
   const readyChanged = changed.map(path => files.find(file => file.file === path)!).filter(entry => entry.data?.status === "ready");
   const siblings = readyChanged.map(entry => entry.data!.approved_sha!).filter(Boolean);

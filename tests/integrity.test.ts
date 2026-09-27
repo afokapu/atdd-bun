@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { checkInstalledPackage, checkIntegrity, formatIntegrity, loosenedPolicy, writeManifest } from "../src/integrity";
 import { initializeRepository } from "../src/setup";
 
@@ -116,17 +116,21 @@ test("the delivery skill is installed and protected only where the delivery prof
   const { agentInit, agentStatus } = await import("../src/agent");
   const root = await consumer();
   try {
-    const skill = join(root, ".agents/skills/delivery/SKILL.md"), review = join(root, ".claude/skills/delivery/review.md");
+    const skill = join(root, ".agents/skills/delivery/SKILL.md"), claude = join(root, ".claude/skills/delivery/SKILL.md");
     expect(await Bun.file(skill).exists()).toBeFalse();
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, delivery]\n");
     expect((await agentStatus(root)).ok).toBeFalse();
+    // A review contract an earlier version installed is removed: the skill's Reviewer section replaces it.
+    const retired = join(root, ".claude/skills/delivery/review.md");
+    await mkdir(dirname(retired), { recursive: true }); await writeFile(retired, "old contract\n");
     expect((await agentInit(root)).ok).toBeTrue();
+    expect(await Bun.file(retired).exists()).toBeFalse();
     expect(await readFile(skill, "utf8")).toStartWith("---\nname: delivery\n");
-    expect(await readFile(review, "utf8")).toContain("**Read only.**");
+    expect(await readFile(claude, "utf8")).toContain("delivery.review.convention.yaml");
     expect((await agentStatus(root)).ok).toBeTrue();
     expect(await checkIntegrity({ root })).toEqual([]);
-    await writeFile(review, (await readFile(review, "utf8")).replace("**Read only.**", "Edit freely."));
-    expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/review.md"]);
+    await writeFile(claude, (await readFile(claude, "utf8")).replace("delivery.review.convention.yaml", "anything"));
+    expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/SKILL.md"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

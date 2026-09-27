@@ -113,9 +113,14 @@ release: { enabled: false }
 
 For programs delivered as tranches by a coordinator and persistent drivers, with headless authors
 and independent reviewers. Adopt it by naming `delivery` in `profiles:` (or, with no list, by adding
-a `delivery:` block); `agent init` then installs the delivery skill and its review contract. The
-adopting pull request is itself governed: it changes files outside the delivery root, so it carries
-its own tranche record, reviewed and `ready` like any other.
+a `delivery:` block); `agent init` then installs the delivery skill. The adopting pull request is
+itself governed: the skill and workflow it brings are outside the delivery root, so it carries its
+own tranche record, reviewed and `ready` like any other. A later change to `atdd-bun.yaml` alone
+needs no record: the integrity check reports any loosening for a human to approve.
+
+Each tranche has two reviews by default: `plan_review` after PLAN, and `final_review` of the whole
+change at its head. Between them the lifecycle's gates hold RED, GREEN, SMOKE, REFACTOR and TRACE.
+A policy that wants more names `test_review` (after RED) and `code_review` (after TRACE) too.
 
 The records live with the program's reasoning, in the docs profile's `docs/delivery/` area:
 
@@ -145,14 +150,14 @@ Every key is optional; these are the defaults:
 ```yaml
 delivery:
   root: docs/delivery/tranches       # one <tranche>/evidence.yaml per tranche, reports beside it
-  require_record: true               # at the gate, a change outside the root needs a tranche record
+  require_record: true               # at the gate, a change outside the root (other than atdd-bun.yaml alone) needs a tranche record
   multiplexer: herdr                 # the terminal multiplexer agents run in; any command name
   independence: fresh-process        # or different-model; overridable per stage
   stages:                            # models in preference order: the first, then recorded fallbacks
-    plan_review:  { authors: [codex],       reviewers: [glm, claude] }
-    test_review:  { authors: [glm, claude], reviewers: [codex, claude] }
-    code_review:  { authors: [glm, claude], reviewers: [glm, claude] }
-    final_review: { authors: [codex],       reviewers: [codex, claude] }
+    plan_review:  { authors: [codex], reviewers: [glm, claude] }
+    final_review: { authors: [codex], reviewers: [codex, claude] }
+    # optional: test_review  { authors: [glm, claude], reviewers: [codex, claude] }
+    #           code_review  { authors: [glm, claude], reviewers: [glm, claude] }
   fallback: { after_failures: 3, within_minutes: 10, when_exhausted: block }   # or wait
   commands: {}                       # per model: { author: "...", review: "..." } overriding the skill's defaults
 ```
@@ -160,7 +165,7 @@ delivery:
 The profile checks the record, never the running agents. The generated CI sets
 `ATDD_DELIVERY_GATE`: `merge` on pull requests and the merge queue, where every record the branch
 changes must be `ready`, the branch may differ from its approved SHA only under the delivery root,
-and a change outside the root needs a record (`require_record`, default true); `post-merge` on a
+and a change outside the root needs a record unless it touches only `atdd-bun.yaml` (`require_record`, default true); `post-merge` on a
 push to a protected branch (the generated workflow's push branches follow `protected_branches`), where the pushed commit must contain every approved SHA it brings in. Merge tranches with a
 merge commit: a squash or rebase merge writes a commit no reviewer saw, and the post-merge check
 fails on it. Moving the root, dropping a stage, relaxing a stage from `different-model` to
@@ -192,7 +197,7 @@ delivery skill.
 
 - the installed package differs from its published hashes;
 - the dependency is not an npm registry version;
-- a generated file (workflow, skills, the delivery review contract, instruction block, integrity test) was edited;
+- a generated file (workflow, skills, instruction block, integrity test) was edited;
 - `atdd-bun.yaml` is looser than on the base branch (after the first explicit `profiles:` list,
   dropping a profile or the list counts).
 

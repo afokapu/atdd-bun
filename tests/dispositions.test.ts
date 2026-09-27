@@ -7,7 +7,8 @@ import { join, resolve } from "node:path";
 // that promises it will not fail.
 const root = resolve(import.meta.dir, "..");
 const ENFORCING = new Set(["strict", "block"]);
-type Convention = { rule_id?: string; metadata?: { disposition?: string }; implementation?: { type?: string; ref?: string } };
+const isPolicy = (data: Convention) => data.kind === "policy" && data.implementation?.type === "none";
+type Convention = { rule_id?: string; kind?: string; metadata?: { disposition?: string }; implementation?: { type?: string; ref?: string } };
 
 async function conventions(dir: string): Promise<Array<{ file: string; text: string; data: Convention }>> {
   const out: Array<{ file: string; text: string; data: Convention }> = [];
@@ -19,9 +20,16 @@ async function conventions(dir: string): Promise<Array<{ file: string; text: str
   return out;
 }
 
-test("every shipped convention names its validator and is strict or block", async () => {
-  const weak = (await conventions(join(root, "conventions"))).filter(({ data }) => data.implementation?.type !== "validator" || !data.implementation.ref || !ENFORCING.has(data.metadata?.disposition ?? "")).map(({ file, data }) => `${file}: ${data.implementation?.type ?? "no implementation"} / ${data.metadata?.disposition ?? "no disposition"}`);
+test("every shipped rule names its validator and is strict or block", async () => {
+  const weak = (await conventions(join(root, "conventions"))).filter(({ data }) => !isPolicy(data) && (data.implementation?.type !== "validator" || !data.implementation.ref || !ENFORCING.has(data.metadata?.disposition ?? ""))).map(({ file, data }) => `${file}: ${data.implementation?.type ?? "no implementation"} / ${data.metadata?.disposition ?? "no disposition"}`);
   expect(weak).toEqual([]);
+});
+
+// A policy states what an agent does where no validator can judge it (a reviewer's checklist). It is never a rule in
+// disguise: it names no validator and claims no disposition, so nothing reads it as enforced.
+test("a shipped policy names no validator and claims no disposition", async () => {
+  const misfiled = (await conventions(join(root, "conventions"))).filter(({ data }) => data.kind === "policy" && (!isPolicy(data) || data.metadata?.disposition !== undefined)).map(({ file }) => file);
+  expect(misfiled).toEqual([]);
 });
 
 test("every planner rule this package enforces is declared strict or block in ENFORCEMENT_SCOPE", async () => {

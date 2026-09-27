@@ -22,13 +22,15 @@ content:
         independence: fresh-process
         stages:
           plan_review:  { authors: [codex], reviewers: [glm, claude] }
-          test_review:  { authors: [glm, claude], reviewers: [codex, claude] }
-          code_review:  { authors: [glm, claude], reviewers: [glm, claude] }
           final_review: { authors: [codex], reviewers: [codex, claude] }
+
+    test_review and code_review are optional stages a policy may add; named without lists, they take
+    authors [glm, claude] with reviewers [codex, claude] and [glm, claude] respectively.
   exceptions:
   - >-
-    Adoption is not exempt from the gate: the pull request that adopts delivery changes files outside the delivery root,
-    so it carries its own ready tranche record like any other change.
+    Adoption is not exempt from the gate: the pull request that adopts delivery brings the generated skill and workflow,
+    outside the delivery root, so it carries its own ready tranche record like any other change. A later change to
+    atdd-bun.yaml alone needs no record (delivery.merge-gate).
   - >-
     Inert until adoption: with no `delivery:` block and `delivery` absent from `profiles:`, no delivery rule emits anything.
 metadata:

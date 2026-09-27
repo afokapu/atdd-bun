@@ -1,0 +1,42 @@
+schema_version: 1.1.0
+rule_id: delivery.review
+kind: policy
+status: active
+name: What each review establishes, and how a reviewer works
+statement: >-
+  A reviewer is a fresh, read-only process for one stage of one tranche, given the stage, the SHA and the RED commit. It works through its stage's checklist systematically, systemically and adversarially, and returns one review entry with verdict, checked and findings.
+terms:
+- term_id: plan_review
+  text: >-
+    Are we building the right thing? The decomposition (wagon, WMBT, acceptance, train, journey, contract) covers the intent; every acceptance is testable with one observable outcome and every WMBT has a SMOKE acceptance; edge cases, migrations, security and architecture constraints are represented; the acceptances can prove the feature; owned files do not overlap other tranches; bun run atdd-bun planner passes.
+- term_id: final_review
+  text: >-
+    Does the change satisfy the approved plan? Tests, implementation and refactoring are read as one unit at the head SHA. Every acceptance has a test bound by URN that asserts the behaviour, not a mock; each acceptance test differs from its RED commit only by the removed RED marker and Phase header, and any other change is justified; behaviour is correct on edge and error paths; layering, composition, DTO, error-response and security rules hold; SMOKE runs through the real entry point; nothing drifts from the plan; bun test and bun run atdd-bun all pass.
+- term_id: test_review
+  text: >-
+    Where the policy names it, after RED. Every acceptance has a RED test bound by URN that fails for the missing behaviour and would still fail for a wrong implementation, asserting observable output rather than mocks; bun run atdd-bun tester passes.
+- term_id: code_review
+  text: >-
+    Where the policy names it, after TRACE. Every behaviour is correct against its acceptance on edge and error paths; layering, composition, DTO, error-response and security rules hold; SMOKE runs through the real entry point; bun test and bun run atdd-bun all pass.
+- term_id: method
+  text: >-
+    Systematic, the whole checklist, with everything checked listed in checked, not only what failed. Systemic, beyond the diff to contracts, other tranches and downstream owners, named in affects. Adversarial, assuming the work is wrong and proving it; a finding needs a file and line, a failing command or a counter-example.
+content:
+  summary: >-
+    The two default reviews carry the judgement no gate can: the plan before RED, and the whole change at its head. The gates between them are deterministic.
+  normative_text: |
+    The reviewer runs in a detached worktree at the SHA. It may read, search, use git show, git diff and git log, and run the gates (bun test, bun run atdd-bun). It never edits, commits or writes, including output-file options such as git diff --output=; the driver checks the worktree afterwards, and a review that wrote does not count (delivery.reviewer-independent). It judges and proposes; the author applies.
+    A finding carrying the author's rebuttal is withdrawn, left out, when the rebuttal holds, or upheld, repeated with the same id; there is no second round (delivery.findings-resolved).
+    The reviewer returns exactly one YAML document, the review entry of delivery-evidence.schema.json without author, fallback or report, which the driver adds: stage, sha, verdict (approve only with no critical or high finding), checked, and findings, each with id, severity (critical, high, medium, low), evidence, invariant, affects and proposed_fix, a precise description or short snippet, never a rewrite.
+  fix_hint: |
+    Give the reviewer this convention, the stage, the SHA and the RED commit. A review that skipped part of its checklist shows it in checked; run the stage again with a fresh reviewer.
+  exceptions:
+  - >-
+    A stage the policy does not name has no review; its checklist applies only where the policy names it.
+metadata:
+  aliases:
+  - DELIVERY-REVIEW-001
+  introduced_in: 0.10.0
+# A policy, not a rule: what a reviewer judges cannot be validated. The record it leaves is, by the delivery rules.
+implementation:
+  type: none

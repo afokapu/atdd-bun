@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { deliveryAdopted } from "./delivery";
@@ -8,8 +8,10 @@ const version = (await Bun.file(join(root, "package.json")).json() as { version:
 const render = async (path: string) => (await readFile(join(root, "templates/agents", path), "utf8")).replace("{{VERSION}}", version);
 // .agents/skills is the vendor-neutral Agent Skills path (Codex, Copilot, Cursor, Gemini CLI, …); .claude/skills is Claude Code's.
 const skillPaths = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"];
-/** The delivery skill and its review contract, installed only where the delivery profile is adopted: generated path → template. */
-export const deliverySkillFiles = [".agents/skills", ".claude/skills"].flatMap(base => ["SKILL.md", "review.md"].map(name => [`${base}/delivery/${name}`, `delivery/${name}`] as const));
+/** The delivery skill, installed only where the delivery profile is adopted: generated path → template. */
+export const deliverySkillFiles = [".agents/skills", ".claude/skills"].map(base => [`${base}/delivery/SKILL.md`, "delivery/SKILL.md"] as const);
+/** Generated files an earlier version installed and this one no longer ships: the review contract, now the skill's Reviewer section. */
+const retiredFiles = [".agents/skills/delivery/review.md", ".claude/skills/delivery/review.md"];
 /** Whether the repository's atdd-bun.yaml adopts the delivery profile. */
 export async function deliveryInstalled(repo: string): Promise<boolean> {
   const file = join(repo, "atdd-bun.yaml");
@@ -35,6 +37,7 @@ export async function agentInit(repo = process.cwd(), replace = false) {
     if (existsSync(output) && !replace) { kept.push(output); continue; }
     await mkdir(dirname(output), { recursive: true }); await writeFile(output, await render(template)); written.push(output);
   }
+  for (const path of retiredFiles) if (existsSync(join(repo, path))) { await rm(join(repo, path)); written.push(`${join(repo, path)} (removed)`); }
   const managed = await render("AGENTS.block.md");
   for (const path of instructionPaths) {
     const file = join(repo, path), current = existsSync(file) ? await readFile(file, "utf8") : "";

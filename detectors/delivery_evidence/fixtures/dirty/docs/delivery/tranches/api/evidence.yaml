@@ -1,5 +1,5 @@
-# Ready, but final_review never ran, the approved SHA exists nowhere, a reviewer is off-list, and one
-# reviewer also authored.
+# Ready, but the approved SHA is not what final_review approved and exists nowhere, a reviewer is off-list,
+# one reviewer also authored, and a finding was never resolved.
 tranche: api
 status: ready
 base_sha: 3f2a91c
@@ -11,16 +11,10 @@ reviews:
     reviewer: { model: gpt, run: gpt-plan-1 }
     verdict: approve
     checked: [ACC-API-001]
-  - stage: test_review
+  - stage: final_review
     sha: 91aa0b2
-    author: { model: glm, run: glm-red-1 }
+    author: { model: codex, run: codex-green-1 }
     reviewer: { model: codex, run: driver-api }
-    verdict: approve
-    checked: [ACC-API-001]
-  - stage: code_review
-    sha: a4c0f11
-    author: { model: glm, run: glm-green-1 }
-    reviewer: { model: glm, run: glm-code-1 }
     verdict: request_changes
     checked: [ACC-API-001]
     findings:
@@ -29,9 +23,9 @@ reviews:
         evidence: src/wagons/api/handler.ts:42 returns a bare string
         invariant: every error response carries a coded body
         proposed_fix: return a coded error body
-  - stage: code_review
-    sha: "0000000"
-    author: { model: glm, run: glm-green-2 }
-    reviewer: { model: glm, run: glm-code-2 }
+  - stage: final_review
+    sha: a4c0f11
+    author: { model: codex, run: codex-green-2 }
+    reviewer: { model: codex, run: codex-final-2 }
     verdict: approve
     checked: [ACC-API-001, F1]

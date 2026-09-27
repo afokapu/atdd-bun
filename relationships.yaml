@@ -100,6 +100,7 @@ nodes:
   - delivery.findings-resolved
   - delivery.merge-gate
   - delivery.model-allowed
+  - delivery.review
   - delivery.reviewer-independent
   - delivery.stages-complete
   - planner.acceptance.abstract-fields-required
@@ -5250,6 +5251,26 @@ edges:
     foundation: finish_to_start
     reason: a stage is approved only once its earlier findings are settled
     source_ref: delivery.stages-complete
+    strength: important
+    target_ref: delivery.findings-resolved
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: a reviewer works read-only in a fresh process, as the independence rule judges from the record
+    source_ref: delivery.review
+    strength: important
+    target_ref: delivery.reviewer-independent
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: a reviewer settles a rebuttal in one round, as the findings rule judges from the record
+    source_ref: delivery.review
     strength: important
     target_ref: delivery.findings-resolved
     type: requires
