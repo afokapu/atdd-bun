@@ -150,3 +150,19 @@ test("the view nests topics program > tranche > review, highlights the selected 
   expect(lines.join("\n")).toContain("write greet.ts");
   expect(lines.at(-1)).toContain("atdd-p-t1");
 });
+
+test("one watcher covers several topics and passes over heartbeats; every listed topic must be the agent's own", async () => {
+  const program = topicName("multi"), direct = topicName("multi", "direct"), me = as("coordinator@multi", program, direct);
+  const start = (await chat(as("driver@x", program), ["post", program, "--to", "someone-else"], "before")).out.trim();
+  await chat(as("driver@x", program), ["post", program, "--to", "coordinator@multi", "--kind", "heartbeat"], "HEARTBEAT");
+  await chat(as("peer@y", direct), ["post", direct, "--to", "coordinator@multi", "--kind", "blocked"], "need a ruling");
+  const woke = await chat(me, ["wait", `${program},${direct}`, "--since", start, "--skip", "heartbeat", "--timeout", "5"]);
+  expect(woke.code).toBe(0);
+  expect(woke.out).toContain(`[${direct}]`);
+  expect(woke.out).toContain("need a ruling");
+  // Without --skip the heartbeat is the next message for the coordinator.
+  expect((await chat(me, ["wait", `${program},${direct}`, "--since", start, "--timeout", "5"])).out).toContain("(heartbeat)");
+  const denied = await chat(as("coordinator@multi", program), ["wait", `${program},${direct}`, "--timeout", "1"]);
+  expect(denied.code).toBe(1);
+  expect(denied.err).toContain(`${direct} is not one of this agent's topics`);
+});

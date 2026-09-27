@@ -167,6 +167,10 @@ fail. Records in progress are judged by the current policy.
 From 0.10.4 a stage with nothing written (a plan-only or no-op tranche) records no work; a review
 whose range recorded none answers for the latest recorded work before it.
 
+From 0.10.5 only coordinators and drivers use the board: a writer or reviewer takes its task from its
+launch prompt and returns its answer as output, which the driver posts. `atdd-bun chat wait` takes several
+topics and `--skip heartbeat`; reviewers answer in JSON.
+
 Every key is optional; these are the defaults:
 
 ```yaml

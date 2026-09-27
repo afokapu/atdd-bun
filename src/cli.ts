@@ -25,7 +25,7 @@ const usage = {
     "atdd-bun chat topic <program> [<tranche> [<stage> <round>]]",
     "atdd-bun chat post <topic> --to <agent,...> [--kind K] [--stage S] [--reply-to ID] [--repo R] [--branch B] [--worktree W] [--goal G]  (body on stdin)",
     "atdd-bun chat read <topic> [--mine] [--since ID]",
-    "atdd-bun chat wait <topic> [--since ID] [--timeout SECONDS]",
+    "atdd-bun chat wait <topic[,topic...]> [--since ID] [--skip KIND,...] [--timeout SECONDS]",
     "atdd-bun chat                      (the board: every topic on the left, the conversation on the right)",
   ],
   profiles: profileNames,

@@ -103,14 +103,16 @@ export async function read(url: string, topics: string[], since = "all"): Promis
     .map(m => ({ id: m.id, time: m.time, topic: m.topic, raw: m.message, ...parseEnvelope(m.message) }));
 }
 
-/** Waits for the next message addressed to `agent` after `since`. It polls rather than streams: a live stream can drop
- * a message published while it connects. Returns null after `timeoutSeconds`, so an agent's tool call stays bounded. */
-export async function waitFor(url: string, topic: string, agent: string, since = "all", timeoutSeconds = 0, intervalMs = 500): Promise<Message | null> {
+/** Waits for the next message addressed to `agent` on any of `topics` after `since`, passing over the kinds in `skip`.
+ * It polls rather than streams: a live stream can drop a message published while it connects. ntfy reads `since` (a
+ * message id) as that message's time on every topic, so one cursor serves several topics. Returns null after
+ * `timeoutSeconds`, so an agent's tool call stays bounded. */
+export async function waitFor(url: string, topics: string[], agent: string, since = "all", timeoutSeconds = 0, skip: string[] = [], intervalMs = 500): Promise<Message | null> {
   const deadline = timeoutSeconds > 0 ? Date.now() + timeoutSeconds * 1000 : Infinity;
   for (;;) {
     let messages: Message[] = [];
-    try { messages = await read(url, [topic], since); } catch { /* the board is briefly unavailable: keep waiting */ }
-    for (const message of messages) { since = message.id; if (addressedTo(message, agent)) return message; }
+    try { messages = await read(url, topics, since); } catch { /* the board is briefly unavailable: keep waiting */ }
+    for (const message of messages) { since = message.id; if (addressedTo(message, agent) && !skip.includes(message.header.kind ?? "")) return message; }
     if (Date.now() >= deadline) return null;
     await Bun.sleep(intervalMs);
   }
@@ -136,9 +138,16 @@ export async function chat(args: string[], env: Record<string, string | undefine
     if (command === undefined) return await runUi(url, env);
     const topics = list(positional[0]);
     if (!topics.length) throw new Error(`usage: atdd-bun chat ${command} <topic> …`);
+    const me = agent();
+    topics.forEach(topic => checkTopic(topic, env));
+    if (command === "wait") {
+      const message = await waitFor(url, topics, me, flag("since") || "all", Number(flag("timeout") ?? 0), list(flag("skip")));
+      if (!message) { console.error(`no message for ${me} on ${topics.join(", ")} yet; wait again with --since to continue`); return 2; }
+      console.log(format(message, topics.length > 1));
+      return 0;
+    }
     if (topics.length !== 1) throw new Error(`${command} takes one topic`);
-    const topic = topics[0], me = agent();
-    checkTopic(topic, env);
+    const topic = topics[0];
     if (command === "post") {
       const to = list(flag("to"));
       if (!to.length) throw new Error("--to is required: every message names its recipients");
@@ -151,12 +160,6 @@ export async function chat(args: string[], env: Record<string, string | undefine
     }
     if (command === "read") {
       for (const message of await read(url, [topic], flag("since") || "all")) if (!rest.includes("--mine") || addressedTo(message, me)) console.log(format(message));
-      return 0;
-    }
-    if (command === "wait") {
-      const message = await waitFor(url, topic, me, flag("since") || "all", Number(flag("timeout") ?? 0));
-      if (!message) { console.error(`no message for ${me} on ${topic} yet; wait again with --since to continue`); return 2; }
-      console.log(format(message));
       return 0;
     }
     throw new Error(`unknown chat command ${command}; run atdd-bun chat alone for the board, or topic, post, read, wait`);
