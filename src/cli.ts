@@ -7,6 +7,7 @@ import { checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from 
 import { journeyDocs } from "./journey-docs";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
+import { chat } from "./board";
 
 const args = process.argv.slice(2);
 const usage = {
@@ -21,6 +22,11 @@ const usage = {
     "atdd-bun integrity [init|status] [--replace]",
     "atdd-bun docs journeys [--out <dir>] [--check] [--force]",
     "atdd-bun release check",
+    "atdd-bun chat topic <program> [<tranche> [<stage> <round>]]",
+    "atdd-bun chat post <topic> --to <agent,...> [--kind K] [--stage S] [--reply-to ID] [--repo R] [--branch B] [--worktree W] [--goal G]  (body on stdin)",
+    "atdd-bun chat read <topic> [--mine] [--since ID]",
+    "atdd-bun chat wait <topic> [--since ID] [--timeout SECONDS]",
+    "atdd-bun chat show <topic[,topic...]> [--once]",
   ],
   profiles: profileNames,
   note: "Use a profile directly, for example: atdd-bun planner. --profile planner remains supported for compatibility.",
@@ -88,6 +94,7 @@ if (args[0] === "agent") {
   const result = args[1] === "init" ? await agentInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await agentStatus() : fail("agent requires init or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
+if (args[0] === "chat") process.exit(await chat(args.slice(1)));
 if (args[0] === "release") {
   if (args[1] !== "check") fail("release requires check");
   const result = await releaseCheck(); console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);

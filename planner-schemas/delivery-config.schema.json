@@ -20,6 +20,14 @@
       "pattern": "^[a-z][a-z0-9-]*$",
       "description": "The terminal multiplexer the coordinator drives agents through, named by its command. Default: herdr. Any other name is accepted; the agent learns its commands from the multiplexer's own help."
     },
+    "board": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The local message board agents talk through (delivery.board). $ATDD_BOARD_URL overrides it on a machine that runs the board elsewhere.",
+      "properties": {
+        "url": { "type": "string", "pattern": "^https?://(127\\.0\\.0\\.1|localhost|\\[::1\\])(:[0-9]{1,5})?/?$", "description": "A local address only. Default: http://127.0.0.1:2586." }
+      }
+    },
     "independence": { "$ref": "#/definitions/independence" },
     "stages": {
       "type": "object",
