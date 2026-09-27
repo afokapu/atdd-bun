@@ -4,11 +4,11 @@ kind: policy
 status: active
 name: Agents talk through a local board, one topic per conversation
 statement: >-
-  Where atdd-bun.yaml sets delivery.board, the coordinator, drivers, writers and reviewers talk through a local message board with atdd-bun chat, never by typing into another agent's pane: one topic for the program, one per tranche, one per review conversation, each agent launched with its identity and the only topics it may use, every message naming its sender and recipients. The board makes the work visible; the evidence record stays the only thing the delivery rules judge.
+  Where atdd-bun.yaml sets delivery.board, the coordinator and drivers talk through a local message board with atdd-bun chat, never by typing into another agent's pane: one topic for the program, one per tranche, one per review conversation, each agent launched with its identity and the only topics it may use, every message naming its sender and recipients. The board makes the work visible; the evidence record stays the only thing the delivery rules judge.
 terms:
 - term_id: topics
   text: >-
-    Three levels, each its own topic, named by atdd-bun chat topic so every agent spells them alike. atdd-<program>: coordinator, drivers and humans; status only (started, blocked, ready, merged, a decision a human must take). atdd-<program>-<tranche>: the tranche's driver and writers; tasks and results. atdd-<program>-<tranche>-<stage>-<round>: the driver and one reviewer; the review request and the verdict. A rebuttal opens the next round's topic.
+    Three levels, each its own topic, named by atdd-bun chat topic so every agent spells them alike. atdd-<program>: coordinator, drivers and humans; status only (started, blocked, ready, merged, a decision a human must take). atdd-<program>-<tranche>: the tranche's driver; the tasks it gives its writers and their results. atdd-<program>-<tranche>-<stage>-<round>: the driver; one review's request and verdict. A rebuttal opens the next round's topic.
   values:
     program: atdd-bun chat topic <program>
     tranche: atdd-bun chat topic <program> <tranche>
@@ -18,21 +18,20 @@ terms:
     <role>@<tranche> for the whole tranche (driver@auth, writer-glm@auth, reviewer-codex@auth; a later round adds it: reviewer-codex-2@auth); coordinator for the coordinator.
 - term_id: launch
   text: >-
-    Whoever starts an agent gives it, in its environment, ATDD_AGENT (its identity) and ATDD_TOPICS (the topics it may use, comma-separated), and ATDD_BOARD_URL when the board is not the configured one. The coordinator gives a driver its tranche topic and the program topic; the driver adds each review topic as it opens it, gives a writer the tranche topic, and gives a reviewer its review topic alone. atdd-bun chat refuses any other topic, to read or to write.
+    Whoever starts a coordinator or driver gives it, in its environment, ATDD_AGENT (its identity) and ATDD_TOPICS (the topics it may use, comma-separated), and ATDD_BOARD_URL when the board is not the configured one. The coordinator gives a driver its tranche topic and the program topic; the driver adds each review topic as it opens it. atdd-bun chat refuses any other topic, to read or to write. Writers and reviewers get no board access: each is a headless run whose task is its launch prompt and whose answer is its output, which the driver posts (a verdict as "verdict of <reviewer>"), so their tools stay minimal and no sandbox has to reach the board.
   values:
+    coordinator: ATDD_AGENT=coordinator@<program> ATDD_TOPICS=atdd-<program>
     driver: ATDD_AGENT=driver@<tranche> ATDD_TOPICS=atdd-<program>,atdd-<program>-<tranche>
-    writer: ATDD_AGENT=writer-<model>@<tranche> ATDD_TOPICS=atdd-<program>-<tranche>
-    reviewer: ATDD_AGENT=reviewer-<model>@<tranche> ATDD_TOPICS=atdd-<program>-<tranche>-<stage>-<round>
 - term_id: message
   text: >-
-    atdd-bun chat post writes the header: from, to, participants and conversation always; kind (task, result, review-request, verdict, rebuttal, status, blocked), stage, reply-to, repo, branch, worktree, goal, base and sha when they apply. The body carries the whole instruction or answer, however long: the thread is the history.
+    atdd-bun chat post writes the header: from, to, participants and conversation always; kind (task, result, review-request, verdict, rebuttal, status, blocked, heartbeat), stage, reply-to, repo, branch, worktree, goal, base and sha when they apply. The body carries the whole instruction or answer, however long: the thread is the history. A heartbeat carries nothing else; anything that needs an answer goes as blocked, never inside a heartbeat.
 - term_id: commands
   text: >-
-    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you, bounded by --timeout so a tool call ends (exit 2: nothing yet, wait again with --since the last id); and, for a human, atdd-bun chat alone opens the board: every topic on the left, the selected conversation on the right, live.
+    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you on one or several topics (comma-separated), skipping kinds you do not act on (--skip heartbeat), bounded by --timeout so a tool call ends (exit 2: nothing yet, wait again with --since the last id); and, for a human, atdd-bun chat alone opens the board: every topic on the left, the selected conversation on the right, live.
   values:
     post: atdd-bun chat post <topic> --to <agent> --kind <kind> [--reply-to <id>] < message.md
     read: atdd-bun chat read <topic> [--mine]
-    wait: atdd-bun chat wait <topic> [--since <id>] --timeout 540
+    wait: atdd-bun chat wait <topic>[,<topic>...] [--since <id>] [--skip heartbeat] --timeout 540
     board: atdd-bun chat
 - term_id: server
   text: >-
@@ -43,11 +42,11 @@ content:
   summary: >-
     Typing into an agent's pane loses messages to startup screens, busy prompts and cut pastes. A board with one topic per conversation delivers every message, keeps the history, and lets a human follow any thread.
   normative_text: |
-    A reviewer never reads the tranche's conversation: its brief is the review request on its own topic, and it posts its verdict there. The driver records that verdict in evidence.yaml; the board is never evidence.
+    A reviewer never reads the tranche's conversation: its brief is the review request in its launch prompt, and its verdict is its output. The driver records that verdict in evidence.yaml and posts it on the review topic; the board is never evidence.
     Agents use atdd-bun chat only. It refuses an address that is not local and a topic the agent was not given. Never call ntfy directly: in the ntfy client -u means credentials, and a topic without a server goes to the public ntfy.sh.
-    A running session that must be woken is reached through its own channel (codex queue --thread <id>; --resume <session> for Claude and Pi), never by typing into its pane; its launch prompt tells it to wait on its topic between steps.
+    A running session that must be woken is reached through its own channel (codex queue --thread <id>; --resume <session> for Claude and Pi), never by typing into its pane; a driver's launch prompt tells it to wait on its topics between steps.
   fix_hint: |
-    Derive the topic with atdd-bun chat topic, launch the agent with ATDD_AGENT and ATDD_TOPICS, and post with --to. To follow the work, run atdd-bun chat in a terminal pane. ntfy cannot list its topics, so the first message on a topic also posts the topic's name to the directory topic atdd-topics, which the view reads.
+    Derive the topic with atdd-bun chat topic, launch coordinators and drivers with ATDD_AGENT and ATDD_TOPICS, and post with --to. To follow the work, run atdd-bun chat in a terminal pane. ntfy cannot list its topics, so the first message on a topic also posts the topic's name to the directory topic atdd-topics, which the view reads.
   exceptions:
   - >-
     The board is opt-in: without a delivery.board block there is none, and atdd-bun chat refuses to post or read. With the block and no url it is at http://127.0.0.1:2586; ATDD_BOARD_URL moves it on one machine but never switches it on. Switching it on or off changes how agents talk, not what a record must prove, so it is not a loosening.

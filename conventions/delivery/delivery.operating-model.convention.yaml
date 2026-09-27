@@ -14,7 +14,7 @@ terms:
     Owns one tranche end to end. For each stage of delivery.stages, in order, it starts the stage's writer (the first model in its writer list, or the next after a recorded fallback) in the tranche worktree, commits red on its own before green starts, passes the stage's gate, and appends a work entry; for each stage with a reviewer it starts a review. It never reviews.
 - term_id: review_run
   text: >-
-    Every review is a fresh process in its own detached worktree at the exact SHA (git worktree add --detach), given the delivery.review convention, the stage, the base SHA, the SHA and the RED commit. Afterwards git status --porcelain must be empty and HEAD still the SHA, or the review is a REVIEWER_FAILURE and does not count. The raw output is kept in the tranche folder and named in the review's report.
+    Every review is a fresh process in its own detached worktree at the exact SHA (git worktree add --detach), launched with a prompt that gives it the delivery.review convention, the stage, the base SHA, the SHA and the RED commit. Afterwards git status --porcelain must be empty and HEAD still the SHA, or the review is a REVIEWER_FAILURE and does not count. The raw output is kept in the tranche folder and named in the review's report.
 - term_id: fallback
   text: >-
     After fallback.after_failures failures within fallback.within_minutes (outage, rate limit, no auditable report, timeout), the driver uses the next model in the list and records the fallback with its role, kind, failures and window. A request-changes verdict is never a failure. With the list exhausted, when_exhausted block emits BLOCKED provider-unavailable; wait keeps retrying the last model.
@@ -74,7 +74,7 @@ content:
   summary: >-
     The policy says who may write and review each stage; this convention says how the coordinator and drivers carry it out. The record they leave is what the delivery rules judge.
   normative_text: |
-    With delivery.board set, tasks, results, review requests and verdicts travel on the board (delivery.board), each agent launched with its identity and topics. Without it, a task is the prompt an agent is launched with and its result is the run's output, which the driver keeps. Agents run in panes of the multiplexer named in delivery.multiplexer (default herdr) only for humans to watch; learn its commands from its own help before the first dispatch. Never deliver work to an agent by typing into its pane.
+    With delivery.board set, the coordinator and drivers talk on the board (delivery.board), and each driver posts its workers' tasks, results, review requests and verdicts there; workers never use the board. Without it, a task is the prompt an agent is launched with and its result is the run's output, which the driver keeps. Agents run in panes of the multiplexer named in delivery.multiplexer (default herdr) only for humans to watch; learn its commands from its own help before the first dispatch. Never deliver work to an agent by typing into its pane.
     Before a hosted model receives private repository content, confirm the user or organization authorized it.
     Never edit the delivery skill, these conventions, or loosen the delivery policy to get a tranche through. If the policy must change, stop and ask the human.
   fix_hint: |
