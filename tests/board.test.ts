@@ -34,9 +34,10 @@ const BOARD = `http://127.0.0.1:${server.port}`, cli = resolve(import.meta.dir, 
 // Agents run in a repository that enables the board; ATDD_BOARD_URL points it at the stand-in.
 const enabled = await mkdtemp(join(tmpdir(), "atdd-board-on-"));
 await writeFile(join(enabled, "atdd-bun.yaml"), "profiles: [delivery]\ndelivery:\n  board: {}\n");
-afterAll(() => rm(enabled, { recursive: true, force: true }));
+const state = await mkdtemp(join(tmpdir(), "atdd-board-state-"));
+afterAll(() => Promise.all([rm(enabled, { recursive: true, force: true }), rm(state, { recursive: true, force: true })]));
 async function chat(env: Record<string, string>, args: string[], stdin = "", cwd = enabled) {
-  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], cwd, env: { ...process.env, ATDD_BOARD_URL: BOARD, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
+  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], cwd, env: { ...process.env, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
   return { code: await child.exited, out: await new Response(child.stdout).text(), err: await new Response(child.stderr).text() };
 }
 const as = (agent: string, ...topics: string[]) => ({ ATDD_AGENT: agent, ATDD_TOPICS: topics.join(",") });
@@ -119,7 +120,7 @@ test("wait is bounded: with nothing addressed to the agent it exits 2 and says h
   await chat(as("driver@quiet", review), ["post", review, "--to", "someone-else"], "not for the reviewer");
   const waited = await chat(as("reviewer@quiet", review), ["wait", review, "--timeout", "1"]);
   expect(waited.code).toBe(2);
-  expect(waited.err).toContain("wait again with --since");
+  expect(waited.err).toContain("run the same wait again to continue");
 });
 
 test("the board lists its topics: each topic's first message names it once in the directory, and chat alone lists them", async () => {
@@ -165,4 +166,19 @@ test("one watcher covers several topics and passes over heartbeats; every listed
   const denied = await chat(as("coordinator@multi", program), ["wait", `${program},${direct}`, "--timeout", "1"]);
   expect(denied.code).toBe(1);
   expect(denied.err).toContain(`${direct} is not one of this agent's topics`);
+});
+
+test("wait remembers its place: the same command, run again, continues after the last message it saw", async () => {
+  const topic = topicName("resume"), me = as("coordinator@resume", topic), driver = as("driver@resume", topic);
+  for (const text of ["first", "second"]) await chat(driver, ["post", topic, "--to", "coordinator@resume"], text);
+  await chat(driver, ["post", topic, "--to", "coordinator@resume", "--kind", "heartbeat"], "HEARTBEAT");
+  const same = ["wait", topic, "--skip", "heartbeat", "--timeout", "2"];
+  expect((await chat(me, same)).out).toContain("first");
+  expect((await chat(me, same)).out).toContain("second");
+  // The heartbeat is passed over, and so is its place: nothing is left, then a new message arrives.
+  expect((await chat(me, same)).code).toBe(2);
+  await chat(driver, ["post", topic, "--to", "coordinator@resume"], "third");
+  expect((await chat(me, same)).out).toContain("third");
+  // Another identity keeps its own place.
+  expect((await chat(as("other@resume", topic), ["wait", topic, "--timeout", "1"])).code).toBe(2);
 });

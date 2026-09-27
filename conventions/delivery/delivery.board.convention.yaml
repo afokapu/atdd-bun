@@ -27,7 +27,7 @@ terms:
     atdd-bun chat post writes the header: from, to, participants and conversation always; kind (task, result, review-request, verdict, rebuttal, status, blocked, heartbeat), stage, reply-to, repo, branch, worktree, goal, base and sha when they apply. The body carries the whole instruction or answer, however long: the thread is the history. A heartbeat carries nothing else; anything that needs an answer goes as blocked, never inside a heartbeat.
 - term_id: commands
   text: >-
-    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you on one or several topics (comma-separated), skipping kinds you do not act on (--skip heartbeat), bounded by --timeout so a tool call ends (exit 2: nothing yet, wait again with --since the last id); and, for a human, atdd-bun chat alone opens the board: every topic on the left, the selected conversation on the right, live.
+    Post with the body on standard input; read what is on a topic; wait for the next message addressed to you on one or several topics (comma-separated), skipping kinds you do not act on (--skip heartbeat), bounded by --timeout so a tool call ends (exit 2: nothing yet). wait remembers where each identity stopped on each set of topics (~/.atdd-board/cursors), so re-arming a watcher is always the same command; --since still overrides it; and, for a human, atdd-bun chat alone opens the board: every topic on the left, the selected conversation on the right, live.
   values:
     post: atdd-bun chat post <topic> --to <agent> --kind <kind> [--reply-to <id>] < message.md
     read: atdd-bun chat read <topic> [--mine]

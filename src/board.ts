@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { runUi } from "./board-ui";
@@ -107,16 +108,25 @@ export async function read(url: string, topics: string[], since = "all"): Promis
  * It polls rather than streams: a live stream can drop a message published while it connects. ntfy reads `since` (a
  * message id) as that message's time on every topic, so one cursor serves several topics. Returns null after
  * `timeoutSeconds`, so an agent's tool call stays bounded. */
-export async function waitFor(url: string, topics: string[], agent: string, since = "all", timeoutSeconds = 0, skip: string[] = [], intervalMs = 500): Promise<Message | null> {
+export async function waitFor(url: string, topics: string[], agent: string, since = "all", timeoutSeconds = 0, skip: string[] = [], intervalMs = 500, seen: (id: string) => void = () => {}): Promise<Message | null> {
   const deadline = timeoutSeconds > 0 ? Date.now() + timeoutSeconds * 1000 : Infinity;
   for (;;) {
     let messages: Message[] = [];
     try { messages = await read(url, topics, since); } catch { /* the board is briefly unavailable: keep waiting */ }
-    for (const message of messages) { since = message.id; if (addressedTo(message, agent) && !skip.includes(message.header.kind ?? "")) return message; }
+    for (const message of messages) { since = message.id; seen(since); if (addressedTo(message, agent) && !skip.includes(message.header.kind ?? "")) return message; }
     if (Date.now() >= deadline) return null;
     await Bun.sleep(intervalMs);
   }
 }
+
+/** Where `wait` keeps its place, per identity and topic set, so restarting a watcher is always the same command.
+ * Best effort: where the file cannot be read or written, wait behaves as if it had no saved place. */
+function cursorFile(agent: string, topics: string[], env: Record<string, string | undefined>): string {
+  const key = `${agent}__${[...topics].sort().join("+")}`.replace(/[^A-Za-z0-9@+_.-]/g, "_");
+  return join(env.ATDD_BOARD_STATE || join(homedir(), ".atdd-board", "cursors"), key);
+}
+const loadCursor = (file: string) => { try { return readFileSync(file, "utf8").trim() || undefined; } catch { return undefined; } };
+const saveCursor = (file: string, id: string) => { try { mkdirSync(join(file, ".."), { recursive: true }); writeFileSync(file, `${id}\n`); } catch { /* best effort */ } };
 
 export function format(message: Message, withTopic = false): string {
   const time = new Date(message.time * 1000).toTimeString().slice(0, 8), h = message.header;
@@ -141,8 +151,10 @@ export async function chat(args: string[], env: Record<string, string | undefine
     const me = agent();
     topics.forEach(topic => checkTopic(topic, env));
     if (command === "wait") {
-      const message = await waitFor(url, topics, me, flag("since") || "all", Number(flag("timeout") ?? 0), list(flag("skip")));
-      if (!message) { console.error(`no message for ${me} on ${topics.join(", ")} yet; wait again with --since to continue`); return 2; }
+      // Without --since, continue from where this identity last stopped on these topics; either way, remember the place.
+      const file = cursorFile(me, topics, env);
+      const message = await waitFor(url, topics, me, flag("since") || loadCursor(file) || "all", Number(flag("timeout") ?? 0), list(flag("skip")), 500, id => saveCursor(file, id));
+      if (!message) { console.error(`no message for ${me} on ${topics.join(", ")} yet; run the same wait again to continue`); return 2; }
       console.log(format(message, topics.length > 1));
       return 0;
     }
