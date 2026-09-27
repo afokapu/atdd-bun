@@ -26,6 +26,11 @@
       "additionalProperties": false,
       "minProperties": 1,
       "properties": {
+        "plan": { "$ref": "#/definitions/stage" },
+        "red": { "$ref": "#/definitions/stage" },
+        "green": { "$ref": "#/definitions/stage" },
+        "refactor": { "$ref": "#/definitions/stage" },
+        "final": { "$ref": "#/definitions/stage" },
         "plan_review": { "$ref": "#/definitions/stage" },
         "test_review": { "$ref": "#/definitions/stage" },
         "code_review": { "$ref": "#/definitions/stage" },
@@ -57,7 +62,7 @@
   "definitions": {
     "independence": {
       "enum": ["fresh-process", "different-model"],
-      "description": "fresh-process: the reviewer is a new process that authored nothing in the tranche. different-model: additionally, the reviewer's model differs from the stage author's."
+      "description": "fresh-process: the reviewer is a new process that wrote nothing in the tranche. different-model (the default): additionally, its model wrote none of the work the review covers."
     },
     "models": {
       "type": "array",
@@ -69,10 +74,12 @@
     "stage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["reviewers"],
+      "anyOf": [{ "required": ["writer"] }, { "required": ["reviewer"] }, { "required": ["reviewers"] }],
       "properties": {
-        "authors": { "$ref": "#/definitions/models" },
-        "reviewers": { "$ref": "#/definitions/models" },
+        "writer": { "$ref": "#/definitions/models", "description": "Who may write this stage, in preference order. Absent: nobody writes it, as for final." },
+        "reviewer": { "$ref": "#/definitions/models", "description": "Who reviews this stage, in preference order. Absent: the stage is held by its gate alone." },
+        "authors": { "$ref": "#/definitions/models", "description": "0.9 spelling of writer, on a 0.9 stage name." },
+        "reviewers": { "$ref": "#/definitions/models", "description": "0.9 spelling of reviewer, on a 0.9 stage name." },
         "independence": { "$ref": "#/definitions/independence" }
       }
     }

@@ -6,18 +6,18 @@ name: What each review establishes, and how a reviewer works
 statement: >-
   A reviewer is a fresh, read-only process for one stage of one tranche, given the stage, the base SHA, the SHA and the RED commit. It reviews the change between the base and the SHA, working through its stage's checklist systematically, systemically and adversarially, and returns one review entry with verdict, checked and findings.
 terms:
-- term_id: plan_review
+- term_id: plan
   text: >-
     Are we building the right thing? The plan files the change adds or modifies: the decomposition (wagon, WMBT, acceptance, train, journey, contract) covers the intent; every acceptance is testable with one observable outcome and every WMBT has a SMOKE acceptance; edge cases, migrations, security and architecture constraints are represented; the acceptances can prove the feature; owned files do not overlap other tranches.
-- term_id: final_review
+- term_id: final
   text: >-
     Does the change satisfy the approved plan? The tests, implementation and refactoring the change brings are read together. Every acceptance the plan names has a test bound by URN that asserts the behaviour, not a mock; each acceptance test differs from its RED commit only by the removed RED marker and Phase header, and any other change is justified; behaviour is correct on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point; nothing drifts from the plan.
-- term_id: test_review
+- term_id: red
   text: >-
-    Where the policy names it, after RED. Every acceptance has a RED test bound by URN that fails for the missing behaviour and would still fail for a wrong implementation, asserting observable output rather than mocks.
-- term_id: code_review
+    Where the policy gives red a reviewer. Every acceptance has a RED test bound by URN that fails for the missing behaviour and would still fail for a wrong implementation, asserting observable output rather than mocks.
+- term_id: green_refactor
   text: >-
-    Where the policy names it, after TRACE. Every behaviour is correct against its acceptance on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point.
+    Where the policy gives green or refactor a reviewer. Every behaviour is correct against its acceptance on edge and error paths; the changed code keeps layering, composition, DTO, error-response and security sound; SMOKE runs through the real entry point.
 - term_id: method
   text: >-
     Systematic, the whole checklist, with everything checked listed in checked, not only what failed. Systemic, from the change to what it affects (callers, contracts, other tranches, downstream owners), named in affects; code the change does not touch or affect is out of scope. Adversarial, assuming the change is wrong and proving it; a finding needs a file and line, a failing command or a counter-example. A small change gets a short review.
@@ -27,7 +27,7 @@ content:
   normative_text: |
     The reviewer runs in a detached worktree at the SHA and reads the change with git diff base..SHA. The gates are CI's, not the reviewer's: it does not re-run them, and judges what they cannot. It may read, search and use git show, git diff and git log. It never edits, commits or writes, including output-file options such as git diff --output=; the driver checks the worktree afterwards, and a review that wrote does not count (delivery.reviewer-independent). It judges and proposes; the author applies.
     A finding carrying the author's rebuttal is withdrawn, left out, when the rebuttal holds, or upheld, repeated with the same id; there is no second round (delivery.findings-resolved).
-    The reviewer returns exactly one YAML document, the review entry of delivery-evidence.schema.json without author, fallback or report, which the driver adds: stage, sha, verdict (approve only with no critical or high finding), checked, and findings, each with id, severity (critical, high, medium, low), evidence, invariant, affects and proposed_fix, a precise description or short snippet, never a rewrite.
+    The reviewer returns exactly one YAML document, the review entry of delivery-evidence.schema.json without fallback or report, which the driver adds: stage, sha, verdict (approve only with no critical or high finding), checked, and findings, each with id, severity (critical, high, medium, low), evidence, invariant, affects and proposed_fix, a precise description or short snippet, never a rewrite.
   fix_hint: |
     Give the reviewer this convention, the stage, the base SHA, the SHA and the RED commit. A review that skipped part of its checklist shows it in checked; run the stage again with a fresh reviewer.
   exceptions:

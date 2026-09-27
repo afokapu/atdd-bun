@@ -31,7 +31,7 @@ content:
   - >-
     require_record false exempts changes with no record; turning it off is a loosening the integrity check reports.
   - >-
-    A change to atdd-bun.yaml alone needs no record: which models may author and review is a human's decision, and
+    A change to atdd-bun.yaml alone needs no record: which models may write and review is a human's decision, and
     the integrity check already reports any loosening for a human to approve; a tightening needs no review. A policy
     change that comes with any other file outside the delivery root is reviewed with it.
 metadata:

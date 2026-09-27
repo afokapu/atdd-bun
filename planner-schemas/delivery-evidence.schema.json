@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Delivery Evidence Schema",
-  "description": "Validates one <delivery root>/<tranche>/evidence.yaml: the record a tranche leaves of its reviews. Local shape only: stage completeness, allowed models and fallbacks, reviewer independence, finding outcomes and SHA resolution are cross-field validator concerns (src/delivery.ts).",
+  "description": "Validates one <delivery root>/<tranche>/evidence.yaml: the record a tranche leaves of who wrote each stage and of its reviews. Local shape only: stage completeness, allowed models and fallbacks, reviewer independence, finding outcomes and SHA resolution are cross-field validator concerns (src/delivery.ts).",
   "$comment": "Shipped by the delivery profile (delivery_evidence). `reviews` is chronological: a repair loop appends a new entry for the same stage rather than editing the earlier one.",
   "type": "object",
   "required": ["tranche", "status", "reviews"],
@@ -12,6 +12,7 @@
     "base_sha": { "$ref": "#/definitions/sha", "$comment": "Informational: the commit the tranche started from. Not checked; the gate derives its range from Git." },
     "approved_sha": { "$ref": "#/definitions/sha" },
     "pr": { "type": "string", "minLength": 1, "$comment": "Informational: the pull request URL. Not checked." },
+    "work": { "type": "array", "items": { "$ref": "#/definitions/work" }, "description": "Who wrote each stage, in order: one entry per stage written, more after a repair." },
     "reviews": { "type": "array", "items": { "$ref": "#/definitions/review" } }
   },
   "if": { "required": ["status"], "properties": { "status": { "const": "ready" } } },
@@ -32,7 +33,7 @@
       "required": ["from", "kind", "failures", "window", "reason"],
       "additionalProperties": false,
       "properties": {
-        "role": { "enum": ["author", "reviewer"], "description": "Which actor fell back. Default: reviewer." },
+        "role": { "enum": ["writer", "author", "reviewer"], "description": "Which actor fell back; author is the 0.9 spelling of writer. Default: writer on a work entry, reviewer on a review." },
         "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
         "kind": { "enum": ["outage", "rate_limit", "no_report", "timeout"], "description": "Why the model counts as unavailable. A verdict is never one of these." },
         "failures": { "type": "integer", "minimum": 1, "description": "Failures observed before falling back; at least delivery.fallback.after_failures." },
@@ -62,14 +63,25 @@
         "decision": { "type": "string", "minLength": 5, "description": "The human's ruling when outcome is human." }
       }
     },
+    "work": {
+      "type": "object",
+      "required": ["stage", "sha", "writer"],
+      "additionalProperties": false,
+      "properties": {
+        "stage": { "enum": ["plan", "red", "green", "refactor", "final", "plan_review", "test_review", "code_review", "final_review"] },
+        "sha": { "$ref": "#/definitions/sha", "description": "The commit the stage's work ended at." },
+        "writer": { "$ref": "#/definitions/actor" },
+        "fallback": { "type": "array", "items": { "$ref": "#/definitions/fallback" } }
+      }
+    },
     "review": {
       "type": "object",
       "required": ["stage", "sha", "reviewer", "verdict", "checked"],
       "additionalProperties": false,
       "properties": {
-        "stage": { "enum": ["plan_review", "test_review", "code_review", "final_review"] },
+        "stage": { "enum": ["plan", "red", "green", "refactor", "final", "plan_review", "test_review", "code_review", "final_review"], "description": "The stage reviewed. The 0.9 names read as plan, red, refactor and final." },
         "sha": { "$ref": "#/definitions/sha" },
-        "author": { "$ref": "#/definitions/actor" },
+        "author": { "$ref": "#/definitions/actor", "$comment": "0.9: the writer of the reviewed work. Records now name writers under work." },
         "reviewer": { "$ref": "#/definitions/actor" },
         "fallback": { "type": "array", "items": { "$ref": "#/definitions/fallback" } },
         "verdict": { "enum": ["approve", "request_changes"] },

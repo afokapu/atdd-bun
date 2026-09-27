@@ -4,19 +4,19 @@ kind: rule
 status: active
 name: Every tranche folder holds a well-formed evidence record
 statement: >-
-  Every folder under the delivery root holds an evidence.yaml that validates against delivery-evidence.schema.json, whose tranche matches the folder name, whose reviews each name an author and a configured stage, and whose reports are data files (json, jsonl, yaml, yml, txt, md, log) inside the tranche's own folder, one per review; a ready record names one for every review (delivery.stages-complete); and the records folder holds nothing else: a data file belongs only as a report a record in its tranche names, and every other file, including a loose file directly under the root, is a finding (REQUIRED).
+  Every folder under the delivery root holds an evidence.yaml that validates against delivery-evidence.schema.json, whose tranche matches the folder name, whose work entries each name a writer and a stage the policy lets someone write, whose reviews each name a stage the policy reviews, and whose reports are data files (json, jsonl, yaml, yml, txt, md, log) inside the tranche's own folder, one per review; a ready record names one for every review (delivery.stages-complete); and the records folder holds nothing else: a data file belongs only as a report a record in its tranche names, and every other file, including a loose file directly under the root, is a finding (REQUIRED).
 terms:
 - term_id: tranche
   text: >-
     one independently mergeable piece of a program, delivered on its own branch by one persistent driver through PLAN, RED, GREEN, SMOKE, REFACTOR and TRACE, with its reviews.
 - term_id: evidence
   text: >-
-    the tranche's record of its reviews at `<root>/<tranche>/evidence.yaml`: status (open or ready), base and approved SHAs, and the chronological list of reviews, each with stage, reviewed SHA, author, reviewer, fallbacks, verdict, the checklist it went through and its findings.
+    the tranche's record at `<root>/<tranche>/evidence.yaml`: status (open or ready), base and approved SHAs, the work (who wrote each stage, at which SHA, with fallbacks) and the chronological list of reviews, each with stage, reviewed SHA, reviewer, fallbacks, verdict, the checklist it went through and its findings.
 content:
   summary: >-
     The record is what CI can check. A review that is not written down, or written down in a shape the validator cannot read, did not happen as far as the merge gate is concerned.
   normative_text: |
-    The profile judges the record a tranche leaves, not the agents while they work. Each review is appended, never edited, so a repair loop shows as a request-changes entry followed by a fresh review of the same stage. A review must name its author: independence is judged against the author, and without one it cannot be judged.
+    The profile judges the record a tranche leaves, not the agents while they work. Each review is appended, never edited, so a repair loop shows as a request-changes entry followed by a fresh review of the same stage. A review answers for the work written since the previous reviewed stage; independence is judged against those writers, so a review with no recorded writer cannot be judged. A 0.9 record names the writer as the review's author.
   fix_hint: |
     Create or repair `<root>/<tranche>/evidence.yaml`; the finding names the schema path at fault. A request-changes review carries at least one finding; every review carries its `checked` list.
   exceptions:

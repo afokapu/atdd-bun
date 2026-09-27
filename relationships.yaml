@@ -100,6 +100,7 @@ nodes:
   - delivery.findings-resolved
   - delivery.merge-gate
   - delivery.model-allowed
+  - delivery.operating-model
   - delivery.review
   - delivery.reviewer-independent
   - delivery.stages-complete
@@ -5273,6 +5274,26 @@ edges:
     source_ref: delivery.review
     strength: important
     target_ref: delivery.findings-resolved
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: the driver runs every review as the review convention describes
+    source_ref: delivery.operating-model
+    strength: important
+    target_ref: delivery.review
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the operating model leaves the record the evidence schema judges
+    source_ref: delivery.operating-model
+    strength: important
+    target_ref: delivery.evidence-schema
     type: requires
     origin: "@afokapu/atdd-bun"
   - confidence: 1

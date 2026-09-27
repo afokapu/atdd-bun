@@ -22,16 +22,20 @@ const evidence = async (dir: string) => (await validateDelivery(dir, { gate: fal
 
 // Most tests exercise the rules, not the default location, so they pin the short root `delivery`; the default
 // (docs/delivery/tranches) has its own tests below.
-// The default is two reviews: plan_review and final_review. Tests of test_review and code_review name all four stages.
-const FOUR = "  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude] }\n    final_review: { reviewers: [codex, claude] }\n";
+// The default reviews plan and final; red, green and refactor are written and held by their gates. Tests of the 0.9
+// shape (plan_review, test_review, code_review, final_review, with review authors) pin that policy with ADOPT4.
+const FOUR = "  independence: fresh-process\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude] }\n    final_review: { reviewers: [codex, claude] }\n";
 const ADOPT = "profiles: [delivery]\ndelivery:\n  root: delivery\n";
 const ADOPT4 = `${ADOPT}${FOUR}`;
 type Review = Record<string, unknown>;
-const review = (stage: string, sha: string, author: [string, string], reviewer: [string, string], extra: Review = {}): Review =>
-  ({ stage, sha, author: { model: author[0], run: author[1] }, reviewer: { model: reviewer[0], run: reviewer[1] }, verdict: "approve", checked: ["ACC-001"], ...extra });
+const review = (stage: string, sha: string, author: [string, string] | null, reviewer: [string, string], extra: Review = {}): Review =>
+  ({ stage, sha, ...(author ? { author: { model: author[0], run: author[1] } } : {}), reviewer: { model: reviewer[0], run: reviewer[1] }, verdict: "approve", checked: ["ACC-001"], ...extra });
+const write = (stage: string, sha: string, writer: [string, string]) => ({ stage, sha, writer: { model: writer[0], run: writer[1] } });
+// Who wrote each stage under the default policy: codex the plan, glm the tests and code.
+const WORK = [write("plan", "1111111", ["codex", "w-plan"]), write("red", "2222222", ["glm", "w-red"]), write("green", "3333333", ["glm", "w-green"]), write("refactor", "3333333", ["glm", "w-refactor"])];
 const FULL = [
-  review("plan_review", "1111111", ["codex", "driver"], ["glm", "r1"]),
-  review("final_review", "3333333", ["codex", "driver"], ["codex", "r4"]),
+  review("plan", "1111111", null, ["glm", "r1"]),
+  review("final", "3333333", null, ["codex", "r4"]),
 ];
 const FULL4 = [
   review("plan_review", "1111111", ["codex", "driver"], ["glm", "r1"]),
@@ -39,7 +43,9 @@ const FULL4 = [
   review("code_review", "3333333", ["glm", "a2"], ["glm", "r3"]),
   review("final_review", "3333333", ["codex", "driver"], ["codex", "r4"]),
 ];
-const record = (reviews: Review[], extra: Record<string, unknown> = {}) => JSON.stringify({ tranche: "api", status: "open", base_sha: "0abcdef", reviews, ...extra });
+// A record in the current shape carries its work; a 0.9-shaped one (legacy stage names) names authors on its reviews.
+const record = (reviews: Review[], extra: Record<string, unknown> = {}) =>
+  JSON.stringify({ tranche: "api", status: "open", base_sha: "0abcdef", ...(reviews.some(r => String(r.stage).endsWith("_review")) ? {} : { work: WORK }), reviews, ...extra });
 const WINDOW = { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" };
 const FINDING = { id: "F1", severity: "high", evidence: "handler.ts:42 returns a bare string", invariant: "coded error bodies", proposed_fix: "return a coded body" };
 
@@ -75,7 +81,7 @@ test("stages the policy omits are not required, and a review of one is out of po
     expect((await rules(dir)).filter(id => id !== "delivery.approved-sha-resolves")).toEqual([]);
   });
   await withRepo({ "atdd-bun.yaml": policy, "delivery/api/evidence.yaml": record(FULL4) }, async dir => {
-    expect((await evidence(dir)).filter(e => e.includes("not a configured stage")).length).toBe(3);
+    expect((await evidence(dir)).filter(e => e.includes("has no reviewer in delivery.stages")).length).toBe(3);
   });
 });
 
@@ -89,7 +95,7 @@ test("a fallback model needs a recorded reason for every model it skipped, in li
   // An author fallback is recorded under its own role: a reviewer fallback does not excuse it.
   const author = [...FULL4.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", kind: "outage", failures: 3, window: WINDOW, reason: "provider outage since 09:00" }] }), FULL4[3]];
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(author) }, async dir => {
-    expect(await evidence(dir)).toEqual([expect.stringContaining("author 'claude' is a fallback"), expect.stringContaining("reviewer fallback from 'glm' does not precede 'glm'")]);
+    expect(await evidence(dir)).toEqual([expect.stringContaining("reviewer fallback from 'glm' does not precede 'glm'"), expect.stringContaining("writer 'claude' is a fallback")]);
   });
 });
 
@@ -97,10 +103,10 @@ test("independence: a fresh process per review, never an author, and a different
   const reused = [...FULL4.slice(0, 3), review("final_review", "3333333", ["codex", "driver"], ["codex", "r1"])];
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(reused) }, async dir => expect(await rules(dir)).toEqual(["delivery.reviewer-independent"]));
   const selfReview = [...FULL4.slice(0, 3), review("final_review", "3333333", ["codex", "driver"], ["codex", "driver"])];
-  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(selfReview) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("also authored")]));
+  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(selfReview) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("also wrote")]));
   // GLM reviewing GLM passes under fresh-process and fails once code_review asks for a different model.
-  const strict = "delivery:\n  root: delivery\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n";
-  await withRepo({ "atdd-bun.yaml": strict, "delivery/api/evidence.yaml": record(FULL4) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("code_review requires a different model")]));
+  const strict = "delivery:\n  root: delivery\n  independence: fresh-process\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    test_review: { reviewers: [codex, claude] }\n    code_review: { reviewers: [glm, claude], independence: different-model }\n    final_review: { reviewers: [codex, claude] }\n";
+  await withRepo({ "atdd-bun.yaml": strict, "delivery/api/evidence.yaml": record(FULL4) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("refactor requires a different model")]));
 });
 
 test("findings: fixed or withdrawn needs a fresh re-review, withdrawn needs a rebuttal, human needs the decision", async () => {
@@ -109,7 +115,7 @@ test("findings: fixed or withdrawn needs a fresh re-review, withdrawn needs a re
   expect(await judged(round({}, false))).toEqual([]);                           // work in progress
   expect(await judged(round({}))).toEqual([expect.stringContaining("has no outcome")]);
   expect(await judged(round({ outcome: "fixed" }))).toEqual([]);
-  expect(await judged(round({ outcome: "fixed" }, false))).toEqual([expect.stringContaining("no later code_review confirms it")]);
+  expect(await judged(round({ outcome: "fixed" }, false))).toEqual([expect.stringContaining("no later refactor confirms it")]);
   expect(await judged(round({ outcome: "withdrawn" }))).toEqual([expect.stringContaining("without a rebuttal")]);
   expect(await judged(round({ outcome: "withdrawn", rebuttal: "handler.test.ts:31 proves the loop stops on abort" }))).toEqual([]);
   expect(await judged(round({ outcome: "human" }, false))).toEqual([expect.stringContaining("records no decision")]);
@@ -132,10 +138,10 @@ test("a finding upheld after its dispute goes to a human, never to a second roun
 
 test("ready means every configured stage approved and approved_sha is what the closing review approved", async () => {
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(FULL4.slice(0, 3), { status: "ready", approved_sha: "3333333" }) }, async dir => {
-    expect(await evidence(dir)).toContain("status is ready, but final_review has no review");
+    expect(await evidence(dir)).toContain("status is ready, but final has no review");
   });
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(FULL, { status: "ready", approved_sha: "9999999" }) }, async dir => {
-    expect(await evidence(dir)).toContain("approved_sha 9999999 is not the SHA the last final_review approved (3333333)");
+    expect(await evidence(dir)).toContain("approved_sha 9999999 is not the SHA the last final review approved (3333333)");
   });
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(FULL, { status: "ready" }) }, async dir => {
     expect((await evidence(dir)).some(e => e.includes("must have required property 'approved_sha'"))).toBeTrue();
@@ -143,14 +149,16 @@ test("ready means every configured stage approved and approved_sha is what the c
 });
 
 test("loosening the policy is reported; tightening is silent", () => {
-  const strict = { delivery: { independence: "different-model" } }, base = { delivery: {} };
-  expect(loosenedDelivery(base, strict)).toEqual([]);
-  expect(loosenedDelivery(strict, base)).toEqual(["plan_review", "final_review"].map(stage => `delivery.stages.${stage}.independence different-model → fresh-process`));
-  expect(loosenedDelivery(base, { delivery: { stages: { code_review: { reviewers: ["glm"] } } } })).toEqual(["delivery.stages drops plan_review", "delivery.stages drops final_review"]);
-  // Adding a stage to the default two tightens the policy; dropping one of four that were named loosens it.
-  expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, code_review: { reviewers: ["glm"] } } } })).toEqual([]);
-  expect(loosenedDelivery({ delivery: { stages: Object.fromEntries(STAGE_NAMES.map(stage => [stage, { reviewers: ["claude"] }])) } }, base)).toEqual(expect.arrayContaining(["delivery.stages drops test_review", "delivery.stages drops code_review"]));
-  expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, final_review: { reviewers: ["codex", "claude", "gpt"] } } } })).toEqual(["delivery.stages.final_review.reviewers adds gpt"]);
+  const base = { delivery: {} }, defaults = deliveryPolicy({}).stages;
+  expect(loosenedDelivery(base, { delivery: { independence: "different-model" } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { independence: "fresh-process" } })).toEqual(["plan", "red", "green", "refactor", "final"].map(stage => `delivery.stages.${stage}.independence different-model → fresh-process`));
+  expect(loosenedDelivery(base, { delivery: { stages: { final: { reviewer: ["codex"] } } } })).toEqual(["delivery.stages drops plan", "delivery.stages drops red", "delivery.stages drops green", "delivery.stages drops refactor"]);
+  // Reviewing a stage that was held by its gate alone tightens the policy; no longer reviewing one loosens it.
+  expect(loosenedDelivery(base, { delivery: { stages: { ...defaults, red: { ...defaults.red, reviewer: ["codex"] } } } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...defaults, plan: { writer: defaults.plan!.writer } } } })).toEqual(["delivery.stages.plan is no longer reviewed"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...defaults, final: { reviewer: ["codex", "glm", "claude-opus", "gpt"] } } } })).toEqual(["delivery.stages.final.reviewer adds gpt"]);
+  // 0.9 stage names are read as the stages they reviewed.
+  expect(loosenedDelivery({ delivery: { stages: Object.fromEntries(STAGE_NAMES.map(stage => [stage, { reviewers: ["claude"] }])) } }, { delivery: { stages: { plan_review: { reviewers: ["claude"] }, final_review: { reviewers: ["claude"] } } } })).toEqual(["delivery.stages drops red", "delivery.stages drops refactor"]);
   expect(loosenedDelivery(base, {})).toEqual(["delivery is no longer adopted"]);
   // A first explicit list is an adoption, but not of less than the delivery block already adopted.
   expect(loosenedDelivery(base, { profiles: ["docs"], delivery: {} })).toEqual(["delivery is no longer adopted"]);
@@ -181,7 +189,7 @@ async function tranche(body: (dir: string, commit: (message: string, files: Reco
 // A ready record retains every review's raw output next to it.
 const tranchePR = (tranche: string, sha: string, status = "ready") => ({
   // Every stage approves a real commit in the approved history (here the approved one itself).
-  [`delivery/${tranche}/evidence.yaml`]: record(FULL.map(r => ({ ...r, sha, report: `delivery/${tranche}/${r.stage}.json` })), { tranche, status, approved_sha: sha }),
+  [`delivery/${tranche}/evidence.yaml`]: record(FULL.map(r => ({ ...r, sha, report: `delivery/${tranche}/${r.stage}.json` })), { tranche, status, approved_sha: sha, work: WORK.map(w => ({ ...w, sha })) }),
   ...Object.fromEntries(FULL.map(r => [`delivery/${tranche}/${r.stage}.json`, "{}\n"])),
 });
 const gate = async (dir: string) => (await validateDelivery(dir, { gate: true, base: "main" })).filter(f => f.rule_id === "delivery.merge-gate").map(f => f.evidence);
@@ -258,21 +266,28 @@ test("a change to atdd-bun.yaml alone needs no tranche record; with anything els
 });
 
 test("the default policy is two reviews: the plan, and the whole change at its head", () => {
-  expect(Object.keys(deliveryPolicy({}).stages)).toEqual(["plan_review", "final_review"]);
-  expect(deliveryPolicy({}).stages.final_review?.authors).toEqual(["codex"]);
+  const { stages, independence } = deliveryPolicy({});
+  expect(independence).toBe("different-model");
+  expect(stages).toEqual({
+    plan: { writer: ["codex", "claude-opus"], reviewer: ["glm", "claude-opus", "codex"], independence },
+    red: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
+    green: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
+    refactor: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
+    final: { writer: [], reviewer: ["codex", "glm", "claude-opus"], independence },
+  });
 });
 
 test("F2: an approving review cannot carry a critical or high finding", async () => {
   const approving = [...FULL4.slice(0, 3), review("final_review", "3333333", ["codex", "driver"], ["codex", "r4"], { findings: [{ ...FINDING, severity: "critical" }, { ...FINDING, id: "F2", severity: "low" }] })];
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(approving) }, async dir => {
-    expect(await evidence(dir)).toEqual(["reviews[3] (final_review) approves with critical finding F1; a critical or high finding requests changes"]);
+    expect(await evidence(dir)).toEqual(["reviews[3] (final) approves with critical finding F1; a critical or high finding requests changes"]);
   });
 });
 
 test("F3: moving the root, adding an author, or making fallback easier is a loosening", () => {
   const base = { delivery: {} };
   expect(loosenedDelivery(base, { delivery: { root: "unused" } })).toEqual(["delivery.root docs/delivery/tranches → unused"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, plan_review: { authors: ["codex", "gpt"], reviewers: ["glm", "claude"] } } } })).toEqual(["delivery.stages.plan_review.authors adds gpt"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...deliveryPolicy({}).stages, plan: { writer: ["codex", "claude-opus", "gpt"], reviewer: ["glm", "claude-opus", "codex"] } } } })).toEqual(["delivery.stages.plan.writer adds gpt"]);
   expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 1, within_minutes: 60 } } })).toEqual(["delivery.fallback.after_failures 3 → 1", "delivery.fallback.within_minutes 10 → 60"]);
   expect(loosenedDelivery(base, { delivery: { fallback: { after_failures: 5, within_minutes: 5 } } })).toEqual([]);
 });
@@ -306,9 +321,9 @@ test("F5: after the merge, the pushed commit must contain the approved one; a sq
 test("F6: a ready record retains every review's raw report", async () => {
   await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/final.json": "{}", "delivery/api/evidence.yaml": record(FULL4.map((r, i) => i === 3 ? { ...r, report: "delivery/api/final.json" } : i === 2 ? { ...r, report: "delivery/api/gone.json" } : r), { status: "ready", approved_sha: "3333333" }) }, async dir => {
     expect((await evidence(dir)).filter(e => e.includes("report"))).toEqual([
-      "status is ready, but reviews[0] (plan_review) retains no report",
-      "status is ready, but reviews[1] (test_review) retains no report",
-      "status is ready, but reviews[2] (code_review) names report delivery/api/gone.json, which is not a regular file",
+      "status is ready, but reviews[0] (plan) retains no report",
+      "status is ready, but reviews[1] (red) retains no report",
+      "status is ready, but reviews[2] (refactor) names report delivery/api/gone.json, which is not a regular file",
     ]);
   });
 });
@@ -382,11 +397,16 @@ test("GLM F12: an explicit base wins over a local merge of the base into the bra
   });
 });
 
-test("GLM F9: the default claude review command allows only gates, never a writing atdd-bun subcommand", async () => {
-  const skill = await Bun.file(new URL("../templates/agents/delivery/SKILL.md", import.meta.url)).text();
-  const review = skill.split("\n").find(line => line.startsWith("| claude |"))!.split("|")[3];
-  expect(review).not.toContain("atdd-bun:*");
-  expect(review).toContain("--disallowedTools Edit Write NotebookEdit");
+test("GLM F9: the default review commands never write: claude disallows edits and runs no atdd-bun subcommand, codex is read-only, glm has only the read tool", async () => {
+  const convention = Bun.YAML.parse(await Bun.file(new URL("../conventions/delivery/delivery.operating-model.convention.yaml", import.meta.url)).text()) as { terms: Array<{ term_id: string; values?: Record<string, { review: string }> }> };
+  const commands = convention.terms.find(term => term.term_id === "commands")!.values!;
+  for (const model of ["claude-opus", "claude-sonnet"]) {
+    expect(commands[model].review).not.toContain("atdd-bun");
+    expect(commands[model].review).toContain("--disallowedTools Edit Write NotebookEdit");
+    expect(commands[model].review).toContain("--setting-sources project");
+  }
+  expect(commands.codex.review).toContain("--sandbox read-only");
+  expect(commands.glm.review).toContain("--tools read ");
 });
 
 // Regressions from the Codex re-review of PR #19 (059c1ae).
@@ -414,9 +434,9 @@ test("R2: a report lives in its tranche's folder, so it cannot exempt a source f
 
 test("R3: reordering or removing a model so a fallback becomes primary is a loosening", () => {
   const stages = deliveryPolicy({}).stages, base = { delivery: {} };
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final_review: { reviewers: ["claude", "codex"] } } } })).toEqual(["delivery.stages.final_review.reviewers [codex, claude] → [claude, codex] promotes claude"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final_review: { reviewers: ["claude"] } } } })).toEqual(["delivery.stages.final_review.reviewers [codex, claude] → [claude] promotes claude"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final_review: { reviewers: ["codex"] } } } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "codex", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus] → [glm, codex, claude-opus] promotes glm"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus] → [glm, claude-opus] promotes glm, claude-opus"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["codex", "glm"] } } } })).toEqual([]);
 });
 
 test("R4: a fallback's failures fall within the policy's window", async () => {
@@ -435,17 +455,19 @@ test("R4: a fallback's failures fall within the policy's window", async () => {
 test("GLM R1: tightening the policy later does not fail every change on a record that merged under the old one", async () => {
   await tranche(async (dir, commit) => {
     const sha = await commit("feat: api", { "src/app.ts": "export const a = 2;\n" });
-    await commit("chore: evidence", tranchePR("api", sha));   // final_review: codex reviewed codex, legal under fresh-process
+    await commit("chore: evidence", tranchePR("api", sha));   // plan: reviewed by glm, first in the list
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
-    await commit("chore: tighten", { "atdd-bun.yaml": "profiles: [delivery]\ndelivery:\n  root: delivery\n  stages:\n    plan_review: { reviewers: [glm, claude] }\n    final_review: { reviewers: [codex, claude], independence: different-model }\n" });
+    const writers = { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] };
+    const changed = { plan: { writer: ["codex", "claude-opus"], reviewer: ["claude-opus", "glm"] }, red: writers, green: writers, refactor: writers, final: { reviewer: ["codex", "glm", "claude-opus"] } };
+    await commit("chore: plan reviewed by opus first", { "atdd-bun.yaml": `profiles: [delivery]\ndelivery:\n  root: delivery\n  stages: ${JSON.stringify(changed)}\n` });
     await sh(dir, "git", "checkout", "-qb", "tranche/next");
     const next = await commit("feat: next", { "src/app.ts": "export const a = 3;\n" });
     const record = tranchePR("next", next);
-    record["delivery/next/evidence.yaml"] = record["delivery/next/evidence.yaml"].replace('"run":"a2"}', '"run":"a2"}').replace(/"reviewer":\{"model":"codex","run":"r4"\}/, '"reviewer":{"model":"claude","run":"r4"},"fallback":[{"from":"codex","kind":"outage","failures":3,"window":{"from":"2026-09-25T09:00:00Z","to":"2026-09-25T09:05:00Z"},"reason":"provider outage all morning"}]');
+    record["delivery/next/evidence.yaml"] = record["delivery/next/evidence.yaml"].replace('"run":"a2"}', '"run":"a2"}').replace('"reviewer":{"model":"glm","run":"r1"}', '"reviewer":{"model":"claude-opus","run":"r1"}');
     await commit("chore: evidence", record);
     expect(await validateDelivery(dir, { gate: true, base: "main" })).toEqual([]);
     // Outside the gate the old record is judged against today's policy, so the history stays visible.
-    expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.reviewer-independent delivery/api/evidence.yaml"]);
+    expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.model-allowed delivery/api/evidence.yaml"]);
   });
 });
 
@@ -462,7 +484,7 @@ test("GLM R2: the post-merge gate judges everything a push brings in, not only i
     const found = await judged(before);
     expect(found).toContain("this push deletes delivery/api/evidence.yaml; records are append-only, and deleting one would escape its findings and the gate");
     expect(found).toContainEqual(expect.stringContaining("this push changes src/app.ts with no tranche record"));   // a deleted record covers nothing
-    expect(found).toContainEqual(expect.stringContaining("changes delivery/api/final_review.json under delivery/"));
+    expect(found).toContainEqual(expect.stringContaining("changes delivery/api/final.json under delivery/"));
     expect(await judged("0000000000000000000000000000000000000000")).toEqual([]);   // a new branch's first push falls back to the parent
   });
 });
@@ -493,20 +515,20 @@ test("T2: a push that adds code alongside a record approving an older commit dri
 test("T4: every stage approves a real commit in the approved history, in lifecycle order", async () => {
   await tranche(async (dir, commit) => {
     const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), red = await commit("red", { "tests/a.test.ts": "//\n" }), green = await commit("green", { "src/app.ts": "export const a = 3;\n" });
-    const shas: Record<string, string> = { plan_review: plan, final_review: green };
+    const shas: Record<string, string> = { plan, final: green }, work = WORK.map(w => ({ ...w, sha: { plan, red, green, refactor: green }[w.stage] }));
     const write = async (overrides: Record<string, string>) => {
       await mkdir(join(dir, "delivery/api"), { recursive: true });
       const reviews = FULL.map(r => ({ ...r, sha: overrides[r.stage as string] ?? shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
-      await writeFile(join(dir, "delivery/api/evidence.yaml"), record(reviews, { status: "ready", approved_sha: green }));
+      await writeFile(join(dir, "delivery/api/evidence.yaml"), record(reviews, { status: "ready", approved_sha: green, work }));
       for (const r of FULL) await writeFile(join(dir, `delivery/api/${r.stage}.json`), "{}");
       return (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.approved-sha-resolves").map(f => f.evidence);
     };
     expect(await write({})).toEqual([]);
-    expect(await write({ plan_review: "0000000" })).toEqual(["plan_review approved 0000000, which is not a commit in this repository's history"]);
+    expect(await write({ plan: "0000000" })).toEqual(["plan approved 0000000, which is not a commit in this repository's history"]);
     // A commit off the approved history, made without touching the record files.
     const side = await sh(dir, "git", "commit-tree", "-p", "main", "-m", "side", `${await sh(dir, "git", "rev-parse", "main")}^{tree}`);
-    expect(await write({ plan_review: side })).toEqual([expect.stringContaining("which is not in the history of approved_sha")]);
-    expect(await write({ plan_review: green, final_review: red })).toEqual(expect.arrayContaining([expect.stringContaining("final_review approved")]));
+    expect(await write({ plan: side })).toEqual([expect.stringContaining("which is not in the history of approved_sha")]);
+    expect(await write({ plan: green, final: red })).toEqual(expect.arrayContaining([expect.stringContaining("final approved")]));
   });
 });
 
@@ -519,9 +541,9 @@ test("GLM T1: a wrong-typed policy value is a config finding, never a crash, in 
   expect(deliveryPolicy({ root: 123 }).root).toBe("docs/delivery/tranches");
 });
 
-test("GLM T2: the skill's example record is a state the profile accepts", async () => {
-  const skill = await Bun.file(new URL("../templates/agents/delivery/SKILL.md", import.meta.url)).text();
-  const example = Bun.YAML.parse(skill.split("```yaml\n")[1].split("```")[0]) as Record<string, unknown>;
+test("GLM T2: the operating model's example record is a state the profile accepts", async () => {
+  const convention = Bun.YAML.parse(await Bun.file(new URL("../conventions/delivery/delivery.operating-model.convention.yaml", import.meta.url)).text()) as { terms: Array<{ term_id: string; values?: unknown }> };
+  const example = convention.terms.find(term => term.term_id === "example_record")!.values as Record<string, unknown>;
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": JSON.stringify(example) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
@@ -534,10 +556,10 @@ test("U1: a record or report already on the base branch is final; editing it can
     await sh(dir, "git", "checkout", "-q", "main"); await sh(dir, "git", "merge", "-q", "--no-ff", "-m", "merge", "tranche/api");
     await sh(dir, "git", "checkout", "-qb", "tranche/abuse");
     const old = await Bun.file(join(dir, "delivery/api/evidence.yaml")).text();
-    await commit("abuse", { "delivery/api/final_review.json": "{\"allow\": \"everyone\"}\n", "delivery/api/evidence.yaml": old.replace('"status":"ready"', '"status":"ready","pr":"touched"') });
+    await commit("abuse", { "delivery/api/final.json": "{\"allow\": \"everyone\"}\n", "delivery/api/evidence.yaml": old.replace('"status":"ready"', '"status":"ready","pr":"touched"') });
     const found = await gate(dir);
     expect(found).toContain("the branch modifies delivery/api/evidence.yaml, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche");
-    expect(found).toContain("the branch modifies delivery/api/final_review.json, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche");
+    expect(found).toContain("the branch modifies delivery/api/final.json, which is already on the base branch; merged records and reports are final, so a later change needs a new tranche");
   });
 });
 
@@ -583,16 +605,6 @@ test("GLM U2: renaming a merged record away is a deletion", async () => {
     });
 });
 
-test("GLM U3: code changed after code_review cannot merge on an appended final_review alone", async () => {
-  await tranche(async (dir, commit) => {
-    const green = await commit("green", { "src/app.ts": "export const a = 2;\n" });
-    const later = await commit("after code review", { "src/app.ts": "export const a = 666;\n" });
-    const reviews = FULL4.map(r => ({ ...r, sha: r.stage === "final_review" ? later : green, report: `delivery/api/${r.stage}.json` }));
-    await commit("evidence", { "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL4.map(r => [`delivery/api/${r.stage}.json`, "{}"])) });
-    expect((await validateDelivery(dir, { gate: false })).map(f => f.evidence)).toEqual([`src/app.ts changed after code_review approved ${green.slice(0, 7)}, and only final_review reviewed the change; a code change goes back through code_review`]);
-  });
-});
-
 // Round 5 of PR #19 (Codex, 7804950).
 
 test("V1: the delivery root may not overlap a plan, source, test, e2e or telemetry root, and reports are data files", async () => {
@@ -625,38 +637,7 @@ test("GLM V1: a symlinked tranche folder is reported, never skipped unread", asy
   });
 });
 
-test("GLM V2: the check after code_review covers the whole repository, whatever the scan root", async () => {
-  await tranche(async (dir, commit) => {
-    const green = await commit("green", { "svc/api/src/app.ts": "export const a = 2;\n" });
-    const later = await commit("elsewhere", { "svc/web/x.ts": "export const x = 1;\n" });
-    await writeFile(join(dir, "svc/api/atdd-bun.yaml"), ADOPT4);
-    const reviews = FULL4.map(r => ({ ...r, sha: r.stage === "final_review" ? later : green, report: `delivery/api/${r.stage}.json` }));
-    await commit("evidence", { "svc/api/delivery/api/evidence.yaml": record(reviews, { status: "ready", approved_sha: later }), ...Object.fromEntries(FULL4.map(r => [`svc/api/delivery/api/${r.stage}.json`, "{}"])) });
-    expect((await validateDelivery(join(dir, "svc/api"), { gate: false })).map(f => f.evidence)).toEqual([expect.stringContaining("svc/web/x.ts changed after code_review approved")]);
-  });
-});
-
 // Round 6 of PR #19 (GLM, 4796c29; approved with one medium and four low findings).
-
-test("GLM W1: the freshness check follows code_review, so a reduced stage set can still become ready", async () => {
-  await tranche(async (dir, commit) => {
-    const plan = await commit("plan", { "plan/a.yaml": "a: 1\n" }), code = await commit("code", { "src/app.ts": "export const a = 3;\n" });
-    const stages = (names: string[]) => `delivery:\n  root: delivery\n  stages:\n${names.map(n => `    ${n}: { reviewers: [${n === "test_review" || n === "final_review" ? "codex" : "glm"}, claude] }`).join("\n")}\n`;
-    const check = async (names: string[], shas: Record<string, string>, approved: string) => {
-      await rm(join(dir, "delivery"), { recursive: true, force: true });
-      const reviews = FULL4.filter(r => names.includes(r.stage as string)).map(r => ({ ...r, sha: shas[r.stage as string], report: `delivery/api/${r.stage}.json` }));
-      await mkdir(join(dir, "delivery/api"), { recursive: true });
-      await writeFile(join(dir, "atdd-bun.yaml"), stages(names));
-      await writeFile(join(dir, "delivery/api/evidence.yaml"), record(reviews, { status: "ready", approved_sha: approved }));
-      for (const r of reviews) await writeFile(join(dir, r.report as string), "{}");
-      return (await validateDelivery(dir, { gate: false })).map(f => f.evidence);
-    };
-    expect(await check(["plan_review", "code_review"], { plan_review: plan, code_review: code }, code)).toEqual([]);
-    expect(await check(["code_review"], { code_review: code }, code)).toEqual([]);
-    // With final_review configured, code after code_review is still caught.
-    expect(await check(["code_review", "final_review"], { code_review: plan, final_review: code }, code)).toEqual([expect.stringContaining("changed after code_review approved")]);
-  });
-});
 
 test("GLM W2: generated delivery skill files stay protected while present, even with delivery turned off", async () => {
   const { checkIntegrity } = await import("../src/integrity");
@@ -863,5 +844,34 @@ test("a compatibility symlink to the root is not records outside it", async () =
   await withRepo({ "atdd-bun.yaml": "profiles: [delivery]\n", "docs/delivery/tranches/api/evidence.yaml": record([]) }, async dir => {
     await Bun.$`ln -s docs/delivery/tranches ${join(dir, "delivery")}`;
     expect((await evidence(dir)).filter(e => e.includes("outside the root"))).toEqual([]);
+  });
+});
+
+// 0.10: writers and reviewers per stage.
+
+test("the final review answers for red, green and refactor: a model that wrote any of them cannot review it", async () => {
+  // glm wrote the tests and code (WORK); glm reviewing final is its own model's work, with codex skipped by a fallback.
+  const own = [FULL[0], review("final", "3333333", null, ["glm", "r4"], { fallback: [{ from: "codex", kind: "outage", failures: 3, window: WINDOW, reason: "provider outage since 09:00" }] })];
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(own) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("final requires a different model, but 'glm' reviewed work its own model wrote")]);
+  });
+  // The plan review answers for the plan only: glm reviewing codex's plan is independent although glm wrote red.
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(FULL) }, async dir => expect(await rules(dir)).toEqual([]));
+});
+
+test("a ready record names who wrote every written stage; a review of a stage without reviewers is out of policy", async () => {
+  const noRefactor = JSON.parse(record(FULL.map(r => ({ ...r, report: `delivery/api/${r.stage}.json` })), { status: "ready", approved_sha: "3333333" }));
+  noRefactor.work = noRefactor.work.filter((entry: { stage: string }) => entry.stage !== "refactor");
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/plan.json": "{}", "delivery/api/final.json": "{}", "delivery/api/evidence.yaml": JSON.stringify(noRefactor) }, async dir => {
+    expect((await evidence(dir)).filter(e => e.startsWith("status is ready"))).toEqual(["status is ready, but refactor records no work; name who wrote it"]);
+  });
+  const reviewedRed = [...FULL, review("red", "2222222", null, ["codex", "r9"])];
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": record(reviewedRed) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("red has no reviewer in delivery.stages")]);
+  });
+  // A writer outside the stage's list is out of policy, as a reviewer is.
+  const stranger = JSON.parse(record(FULL)); stranger.work[1].writer.model = "gpt";
+  await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(stranger) }, async dir => {
+    expect(await evidence(dir)).toEqual([expect.stringContaining("writer model 'gpt' is not in red.writer")]);
   });
 });

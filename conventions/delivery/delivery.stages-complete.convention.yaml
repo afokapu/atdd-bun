@@ -4,11 +4,11 @@ kind: rule
 status: active
 name: A ready record has every configured stage approved
 statement: >-
-  A record with status ready has, for every stage the policy configures, a last review that approves; its approved_sha is the SHA the last review of the closing stage approved; every review names its retained raw report, which exists; and, when code_review is configured and is not the closing stage, nothing outside the delivery root changed between code_review's last approval and approved_sha, since a code change goes back through code_review (REQUIRED).
+  A record with status ready has, for every stage the policy gives a writer, recorded work, and for every stage it gives a reviewer, a last review that approves; its approved_sha is the SHA the last review of the closing stage approved; and every review names its retained raw report, which exists (REQUIRED).
 terms:
 - term_id: closing_stage
   text: >-
-    the last configured stage in lifecycle order (plan_review, test_review, code_review, final_review); by default final_review, the review of the PR head.
+    the last reviewed stage in lifecycle order (plan, red, green, refactor, final); by default final, the review of the PR head, which answers for everything written since the plan review.
 content:
   summary: >-
     Ready is the driver's claim that the tranche can merge. It is only true when no stage is missing and the approval covers the commit being merged.
