@@ -145,6 +145,18 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
   return out;
 }
 
+/** The delivery policy a ready record was approved under: atdd-bun.yaml at its approved_sha. A merged record proves it met
+ * the policy of its time, so a later policy change never makes it fail. When that commit has no readable, adopting
+ * config, the current policy applies. The root stays today's: it only locates the records. */
+async function policyAt(root: string, sha: string, current: DeliveryPolicy): Promise<DeliveryPolicy> {
+  const prefix = (await git(root, ["rev-parse", "--show-prefix"])).out, shown = await git(root, ["show", `${sha}:${prefix}atdd-bun.yaml`]);
+  if (shown.code) return current;
+  try {
+    const data = record(Bun.YAML.parse(shown.out));
+    return data && deliveryAdopted(data) ? { ...deliveryPolicy(data.delivery ?? {}), root: current.root } : current;
+  } catch { return current; }
+}
+
 async function readConfig(root: string): Promise<{ data: Record<string, unknown> | null; error?: string }> {
   const file = join(root, "atdd-bun.yaml");
   if (!existsSync(file)) return { data: null };
@@ -455,7 +467,8 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       if (seen.has(review.report)) findings.push(finding("delivery.evidence-schema", entry.file, `reviews[${index}] reuses report ${review.report} from reviews[${seen.get(review.report)}]; every review retains its own report`));
       else seen.set(review.report, index);
     }
-    findings.push(...checkEvidence(entry.file, entry.data, policy));
+    const judged = entry.data.status === "ready" && entry.data.approved_sha ? await policyAt(absolute, entry.data.approved_sha, policy) : policy;
+    findings.push(...checkEvidence(entry.file, entry.data, judged));
     if (entry.data.status === "ready") {
       // Ready means auditable: every review's raw output is retained and named.
       for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !regularFile(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which is not a regular file` : "retains no report"}`));
@@ -468,7 +481,7 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
         else if (!await inHistory(item.sha)) findings.push(finding("delivery.approved-sha-resolves", entry.file, `work[${index}] (${item.stage}) names ${item.sha.slice(0, 7)}, which is not in the history of approved_sha ${approved.slice(0, 7)}`));
       }
       let previous: { stage: Stage; sha: string } | null = null;
-      for (const stage of STAGES.filter(name => policy.stages[name]?.reviewer.length)) {
+      for (const stage of STAGES.filter(name => judged.stages[name]?.reviewer.length)) {
         const last = entry.data.reviews.filter(review => review.stage === stage).at(-1);
         if (!last || last.verdict !== "approve") continue; // reported by delivery.stages-complete
         if ((await git(absolute, ["cat-file", "-e", `${last.sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha}, which is not a commit in this repository's history`)); continue; }

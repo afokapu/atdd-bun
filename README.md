@@ -160,6 +160,10 @@ From 0.10.2 the pre-commit hook no longer counts uncommitted work: it refused ex
 commits that reduce it. `max_uncommitted_files` is no longer read; commit size stays limited by
 `max_staged_files` and `max_staged_changed_lines`.
 
+From 0.10.3 each ready record is judged by the delivery policy in `atdd-bun.yaml` at its `approved_sha`:
+a later policy change (dropping or reordering a model, removing a review) never makes a merged record
+fail. Records in progress are judged by the current policy.
+
 Every key is optional; these are the defaults:
 
 ```yaml

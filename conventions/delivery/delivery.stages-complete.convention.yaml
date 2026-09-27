@@ -18,6 +18,8 @@ content:
     Run the missing review, or set status back to open until it has run. Set approved_sha to the SHA the final review approved.
   exceptions:
   - >-
+    A ready record is judged by the policy in atdd-bun.yaml at its approved_sha, the policy it was approved under; a later policy change does not re-judge it. A record in progress is judged by the current policy.
+  - >-
     A stage the policy omits is not required. Omitting one loosens the policy and is reported by the integrity check until a human approves it.
 metadata:
   aliases:
