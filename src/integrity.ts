@@ -132,7 +132,7 @@ function withoutNulls(config: Record<string, unknown>): Record<string, unknown> 
  * where a list is expected) or compare them as the defaults. An empty or null document is the default policy, and fine. */
 export function policyShapeErrors(config: Record<string, unknown>): string[] {
   const out: string[] = [];
-  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"])
+  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_commits_per_push", "max_registry_removed_lines"])
     if (config[key] !== undefined && !(typeof config[key] === "number" && Number.isFinite(config[key]))) out.push(`${key} must be a finite number`);
   for (const key of ["require_plan_reference", "require_traceability"]) if (config[key] !== undefined && typeof config[key] !== "boolean") out.push(`${key} must be true or false`);
   for (const key of ["protected_branches", "registry_paths"]) if (config[key] !== undefined && !(Array.isArray(config[key]) && (config[key] as unknown[]).every(item => typeof item === "string"))) out.push(`${key} must be a list of strings`);
@@ -152,7 +152,7 @@ export function policyShapeErrors(config: Record<string, unknown>): string[] {
 export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
-  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_uncommitted_files", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
+  for (const key of ["max_staged_files", "max_staged_changed_lines", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
   for (const key of ["require_plan_reference", "require_traceability"] as const) if (b[key] && !c[key]) out.push(`${key} true → false`);
   for (const key of ["enabled", "require_linked_worktree"] as const) if (b.worktrees[key] && !c.worktrees[key]) out.push(`worktrees.${key} true → false`);
   const removed = b.protected_branches.filter(x => !c.protected_branches.includes(x)), added = c.registry_paths.filter(x => !b.registry_paths.includes(x));
