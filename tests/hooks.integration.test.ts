@@ -25,7 +25,7 @@ test("real Git installation is idempotent, worktree-local, and removable", async
 test("real Git policy rejects protected branches, each micro threshold, deletion without token, and bad traceability", async () => {
   const root = await repo("main"); try {
     await installHooks(root); await writeFile(join(root, "x.ts"), "export const x = 1;\n"); await git(root, ["add", "x.ts"]); expect((await git(root, ["commit", "-m", "blocked"])).code).not.toBe(0);
-    await git(root, ["checkout", "-qb", "feature"]); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 0\nmax_staged_changed_lines: 0\nmax_uncommitted_files: 0\n"); await git(root, ["add", "atdd-bun.yaml"]); expect((await runHook("pre-commit", root)).ok).toBeFalse();
+    await git(root, ["checkout", "-qb", "feature"]); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 0\nmax_staged_changed_lines: 0\n"); await git(root, ["add", "atdd-bun.yaml"]); expect((await runHook("pre-commit", root)).ok).toBeFalse();
     await writeFile(join(root, "plan.yml"), "x\n"); await git(root, ["add", "plan.yml"]); const trace = await runHook("pre-commit", root); expect(trace.ok).toBeFalse();
     for (let i = 0; i < 51; i++) await writeFile(join(root, `delete-${i}.txt`), "x\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "seed deletes", "--no-verify"]); for (let i = 0; i < 51; i++) await rm(join(root, `delete-${i}.txt`)); await git(root, ["add", "-A"]); const message = join(root, "message"); await writeFile(message, "delete\n"); expect((await runHook("commit-msg", root, [message])).ok).toBeFalse(); await writeFile(message, "delete\n[mass-delete-approved]\n"); expect((await runHook("commit-msg", root, [message])).ok).toBeTrue();
   } finally { await cleanup(root); }
@@ -66,19 +66,18 @@ test("declarative registries are exempt from the micro-commit size caps but stil
   } finally { await cleanup(root); }
 }, 30_000);
 
-test("the uncommitted-files cap counts unstaged and untracked work, never the staged commit itself", async () => {
+test("a commit is never refused for the work still left uncommitted: committing is how that work shrinks", async () => {
   const root = await repo(); try {
-    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 100\nmax_uncommitted_files: 10\nrequire_traceability: false\n");
+    // A leftover max_uncommitted_files from an older config is ignored.
+    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 100\nmax_uncommitted_files: 1\nrequire_traceability: false\n");
     for (let i = 0; i < 15; i++) await writeFile(join(root, `part-${i}.md`), "x\n");
-    await git(root, ["add", "-A"]);
-    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    await git(root, ["add", "-A"]); await git(root, ["commit", "-qm", "seed", "--no-verify"]);
     for (let i = 0; i < 11; i++) await writeFile(join(root, `untracked-${i}.md`), "x\n");
-    const blocked = await runHook("pre-commit", root);
-    expect(blocked.ok).toBeFalse(); expect(blocked.message).toContain("unstaged or untracked files 11 exceed 10");
-    for (let i = 0; i < 11; i++) await rm(join(root, `untracked-${i}.md`));
-    await git(root, ["commit", "-qm", "seed", "--no-verify"]);
     for (let i = 0; i < 11; i++) await writeFile(join(root, `part-${i}.md`), "changed\n");
-    expect((await runHook("pre-commit", root)).message).toContain("unstaged or untracked files 11 exceed 10");
+    await git(root, ["add", "part-0.md", "part-1.md", "part-2.md", "part-3.md"]);
+    const small = await runHook("pre-commit", root);
+    expect(small.message).not.toContain("uncommitted");
+    expect(small.ok).toBeTrue();
   } finally { await cleanup(root); }
 }, 20_000);
 

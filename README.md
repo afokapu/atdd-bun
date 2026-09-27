@@ -156,6 +156,10 @@ recorded work. Independence now defaults to `different-model`: a repository that
 `fresh-process` default sets it explicitly. A repository with no `stages:` gets the new default
 operating model, without the integrity check reporting the change.
 
+From 0.10.2 the pre-commit hook no longer counts uncommitted work: it refused exactly the small
+commits that reduce it. `max_uncommitted_files` is no longer read; commit size stays limited by
+`max_staged_files` and `max_staged_changed_lines`.
+
 Every key is optional; these are the defaults:
 
 ```yaml
