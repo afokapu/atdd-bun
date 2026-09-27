@@ -7,7 +7,7 @@ import { allowedTopics, DIRECTORY, format, read, type Message } from "./board";
 /** Every topic the directory names, in order. */
 export async function knownTopics(url: string): Promise<string[]> {
   const entries = await read(url, [DIRECTORY]).catch(() => [] as Message[]);
-  return [...new Set(entries.map(entry => entry.raw.trim()).filter(topic => /^[A-Za-z0-9_-]{1,64}$/.test(topic)))].sort();
+  return [...new Set(entries.map(entry => entry.raw.trim()).filter(topic => /^[A-Za-z0-9_-]{1,64}$/.test(topic)))].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
 }
 
 export type UiState = { topics: string[]; messages: Map<string, Message[]>; selected: number; scroll: number; url: string };
