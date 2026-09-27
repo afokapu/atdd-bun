@@ -2,26 +2,26 @@ schema_version: 1.1.0
 rule_id: delivery.reviewer-independent
 kind: rule
 status: active
-name: Every reviewer is a fresh process independent of the authors
+name: Every reviewer is a fresh process independent of the writers
 statement: >-
-  A reviewer's run never authored anything in the tranche and never reviewed another entry; where the stage requires different-model independence, the reviewer's model also differs from the stage author's (REQUIRED).
+  A reviewer's run never wrote anything in the tranche and never reviewed another entry; where the stage requires different-model independence (the default), the reviewer's model wrote none of the work the review answers for: its own stage and every stage since the previous reviewed one (REQUIRED).
 terms:
 - term_id: run
   text: >-
     the identity of one process: a session id, a pane id with its start time, or the retained report. Two entries with the same run were produced by the same process.
 - term_id: independence
   text: >-
-    fresh-process: the reviewer is a new process that authored nothing. different-model: additionally, its model is not the author's.
+    fresh-process: the reviewer is a new process that wrote nothing. different-model: additionally, its model wrote none of the work it reviews; the final review answers for red, green and refactor when none of them is reviewed.
 content:
   summary: >-
-    A reviewer that edits becomes an author, and a reviewer that already saw an earlier round is anchored to it. Independence is what makes an approval evidence.
+    A reviewer that edits becomes a writer, and a reviewer that already saw an earlier round is anchored to it. Independence is what makes an approval evidence.
   normative_text: |
-    Every review is a new process. The run identifiers make that checkable: a reviewer run that appears as an author anywhere in the tranche, or on a second review, is not independent. The stricter mode is chosen per stage in the policy.
+    Every review is a new process. The run identifiers make that checkable: a reviewer run that appears as a writer anywhere in the tranche, or on a second review, is not independent. The stricter mode is chosen per stage in the policy.
   fix_hint: |
-    Re-run the review in a fresh process and record its own run; under different-model, use a reviewer model other than the author's.
+    Re-run the review in a fresh process and record its own run; under different-model, use the next reviewer model in the list that wrote none of the reviewed work.
   exceptions:
   - >-
-    The persistent driver authors the plan and opens the PR; its run may never review.
+    The persistent driver dispatches the work and opens the PR; its run may never review.
 metadata:
   aliases:
   - DELIVERY-REVIEWER-INDEPENDENT-001

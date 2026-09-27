@@ -1,0 +1,91 @@
+schema_version: 1.1.0
+rule_id: delivery.operating-model
+kind: policy
+status: active
+name: How a program is delivered in tranches, and who does what
+statement: >-
+  A coordinator splits the program into tranches and keeps every slot busy; one persistent driver per tranche runs its lifecycle stages in order (plan, red, green, refactor, final), dispatching each stage's writer and reviewer from the delivery policy in atdd-bun.yaml as fresh headless processes, and records who wrote each stage and every review in the tranche's evidence.yaml.
+terms:
+- term_id: coordinator
+  text: >-
+    Owns throughput, never the work. It splits the program into tranches with explicit dependencies and writes why, the scope and the split in docs/delivery/index.adoc; activates a tranche once its own dependencies have merged (one still waiting may run plan and its review, nothing after); starts one driver per tranche in its own worktree; keeps provider health for the program, telling every driver to skip a model that is down; intervenes when a tranche is idle without being blocked, or has deliverables and no commit after two hours; and hands BLOCKED disputed-finding to a human with both sides. It never writes, reviews or merges.
+- term_id: driver
+  text: >-
+    Owns one tranche end to end. For each stage of delivery.stages, in order, it starts the stage's writer (the first model in its writer list, or the next after a recorded fallback) in the tranche worktree, commits red on its own before green starts, passes the stage's gate, and appends a work entry; for each stage with a reviewer it starts a review. It never reviews.
+- term_id: review_run
+  text: >-
+    Every review is a fresh process in its own detached worktree at the exact SHA (git worktree add --detach), given the delivery.review convention, the stage, the base SHA, the SHA and the RED commit. Afterwards git status --porcelain must be empty and HEAD still the SHA, or the review is a REVIEWER_FAILURE and does not count. The raw output is kept in the tranche folder and named in the review's report.
+- term_id: fallback
+  text: >-
+    After fallback.after_failures failures within fallback.within_minutes (outage, rate limit, no auditable report, timeout), the driver uses the next model in the list and records the fallback with its role, kind, failures and window. A request-changes verdict is never a failure. With the list exhausted, when_exhausted block emits BLOCKED provider-unavailable; wait keeps retrying the last model.
+- term_id: repair
+  text: >-
+    For each finding of a request-changes review the writer either fixes it or writes one rebuttal with evidence; a fresh review of the same stage follows. If that reviewer upholds a disputed finding, the driver emits BLOCKED disputed-finding and never disputes it again. Any commit, regenerated file, conflict fix or rebase after an approval cancels it and the change goes back to that stage's review.
+- term_id: ready
+  text: >-
+    When the last reviewed stage approves, the driver sets status ready and approved_sha to that SHA, commits the evidence and its reports alone, pushes, and merges with a merge commit once CI is green. A squash or rebase merge writes a commit no reviewer saw, and CI fails it after the merge.
+- term_id: events
+  text: >-
+    One line each, for the coordinator to wait on: PROGRAM_EVENT <tranche> <STAGE <stage> <sha> | WORKER_START <role> <model> <sha> | WORKER_END <role> <model> <verdict> | FALLBACK <role> <from>→<to> <reason> | PR_OPENED <url> | MERGED <sha> | BLOCKED <reason> | HEARTBEAT>.
+- term_id: commands
+  text: >-
+    The default headless command per model, overridden per model under delivery.commands.<model>.author (the writer's command) and .review. {prompt} and {worktree} are substituted. Claude runs take project settings only, so a user's own allowances cannot widen a reviewer. glm runs through Pi, which has no permission system: as a reviewer it gets the read tool alone (the driver puts the diff in its prompt and records its output), and as a writer it runs only inside a container or sandbox limited to the worktree.
+  values:
+    codex:
+      author: codex exec --cd {worktree} --sandbox workspace-write "{prompt}"
+      review: codex exec --cd {worktree} --sandbox read-only "{prompt}"
+    claude-opus:
+      author: cd {worktree} && claude --model opus --setting-sources project --permission-mode acceptEdits --allowedTools Read Grep Glob Edit Write "Bash(bun:*)" "Bash(git:*)" --output-format json -p "{prompt}"
+      review: cd {worktree} && claude --model opus --setting-sources project --allowedTools Read Grep Glob "Bash(git show:*)" "Bash(git diff:*)" "Bash(git log:*)" --disallowedTools Edit Write NotebookEdit --output-format json -p "{prompt}"
+    claude-sonnet:
+      author: cd {worktree} && claude --model sonnet --setting-sources project --permission-mode acceptEdits --allowedTools Read Grep Glob Edit Write "Bash(bun:*)" "Bash(git:*)" --output-format json -p "{prompt}"
+      review: cd {worktree} && claude --model sonnet --setting-sources project --allowedTools Read Grep Glob "Bash(git show:*)" "Bash(git diff:*)" "Bash(git log:*)" --disallowedTools Edit Write NotebookEdit --output-format json -p "{prompt}"
+    glm:
+      author: cd {worktree} && pi -p --no-session --no-extensions --no-skills --no-context-files --tools read,bash,edit,write "{prompt}"
+      review: cd {worktree} && pi -p --no-session --no-extensions --no-skills --no-context-files --tools read "{prompt}"
+- term_id: example_record
+  text: >-
+    A tranche in progress: the plan written by codex and approved by glm; red, green and refactor written by glm; the final review requesting changes. Only the finding's outcome is ever added to an earlier entry.
+  values:
+    tranche: api
+    status: open
+    base_sha: 3f2a91c
+    work:
+    - { stage: plan, sha: 8b10e44, writer: { model: codex, run: codex-plan-1 } }
+    - { stage: red, sha: 91aa0b2, writer: { model: glm, run: glm-red-1 } }
+    - { stage: green, sha: a4c0f11, writer: { model: glm, run: glm-green-1 } }
+    - { stage: refactor, sha: a4c0f11, writer: { model: glm, run: glm-refactor-1 } }
+    reviews:
+    - stage: plan
+      sha: 8b10e44
+      reviewer: { model: glm, run: glm-plan-review-1 }
+      verdict: approve
+      checked: [ACC-API-001, planner.decomposition]
+      report: docs/delivery/tranches/api/plan-1.json
+    - stage: final
+      sha: a4c0f11
+      reviewer: { model: codex, run: codex-final-1 }
+      verdict: request_changes
+      checked: [ACC-API-001, src/wagons/api, coder.bun.error-response-*]
+      findings:
+      - { id: F1, severity: high, evidence: "src/wagons/api/handler.ts:42", invariant: "coded error bodies", affects: [ui], proposed_fix: "return { code: 'API_NOT_FOUND' }" }
+      report: docs/delivery/tranches/api/final-1.json
+content:
+  summary: >-
+    The policy says who may write and review each stage; this convention says how the coordinator and drivers carry it out. The record they leave is what the delivery rules judge.
+  normative_text: |
+    With delivery.board set, tasks, results, review requests and verdicts travel on the board (delivery.board), each agent launched with its identity and topics. Without it, a task is the prompt an agent is launched with and its result is the run's output, which the driver keeps. Agents run in panes of the multiplexer named in delivery.multiplexer (default herdr) only for humans to watch; learn its commands from its own help before the first dispatch. Never deliver work to an agent by typing into its pane.
+    Before a hosted model receives private repository content, confirm the user or organization authorized it.
+    Never edit the delivery skill, these conventions, or loosen the delivery policy to get a tranche through. If the policy must change, stop and ask the human.
+  fix_hint: |
+    Follow the driver's order: writer, gate, work entry; review, repair, fresh review; ready and merge commit. The example_record term shows a record the profile accepts.
+  exceptions:
+  - >-
+    A stage the policy does not name has no writer and no review; a stage with a writer but no reviewer is held by its gate alone.
+metadata:
+  aliases:
+  - DELIVERY-OPERATING-MODEL-001
+  introduced_in: 0.10.0
+# A policy, not a rule: how agents carry out the delivery policy cannot be validated. The record they leave is.
+implementation:
+  type: none

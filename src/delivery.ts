@@ -6,22 +6,28 @@ import { join, resolve } from "node:path";
 import type { PlanFinding } from "./planner-kernel";
 import { topologyFor } from "./topology";
 
-/** The delivery profile: the record a tranche leaves of its reviews, checked against the policy in atdd-bun.yaml.
+/** The delivery profile: the record a tranche leaves of who wrote each stage and of its reviews, checked against the
+ * policy in atdd-bun.yaml.
  *
- * A tranche is one independently mergeable piece of a program. Its driver appends each review to
- * `<root>/<tranche>/evidence.yaml`; this validator judges that record, never the running agents. It holds on
- * every run: each reviewer is an allowed model, a fallback names why the preferred one was unavailable, the
- * reviewer is independent of the authors, and every finding is fixed, withdrawn after a written dispute, or ruled
- * on by a human. A `ready` record must also have every configured stage approved and an approved SHA that exists.
- * At the merge gate (a pull request or merge queue in CI), every record the branch changes must be ready and the
- * branch head may differ from its approved SHA only under the delivery root.
+ * A tranche is one independently mergeable piece of a program. Its driver appends each stage's work and each review
+ * to `<root>/<tranche>/evidence.yaml`; this validator judges that record, never the running agents. It holds on every
+ * run: each writer and reviewer is an allowed model, a fallback names why the preferred one was unavailable, every
+ * reviewer is independent of the writers its review answers for, and every finding is fixed, withdrawn after a written
+ * dispute, or ruled on by a human. A `ready` record must also have every written stage recorded, every reviewed stage
+ * approved, and an approved SHA that exists. At the merge gate (a pull request or merge queue in CI), every record the
+ * branch changes must be ready and the branch head may differ from its approved SHA only under the delivery root.
  *
  * The capability is inert until adopted in atdd-bun.yaml: a `delivery:` block, or `delivery` named in `profiles:`. */
 
-export const STAGES = ["plan_review", "test_review", "code_review", "final_review"] as const;
+/** The lifecycle stages, in order. Each names who may write it and who reviews it; either may be absent. */
+export const STAGES = ["plan", "red", "green", "refactor", "final"] as const;
 export type Stage = (typeof STAGES)[number];
+/** Stage names before 0.10, still read in configs and records: each review stage maps to the stage it reviewed. */
+export const LEGACY_STAGES: Record<string, Stage> = { plan_review: "plan", test_review: "red", code_review: "refactor", final_review: "final" };
+/** A legacy stage that named reviewers but no authors took these package defaults for its authors. */
+const LEGACY_AUTHORS: Record<string, string[]> = { plan_review: ["codex"], test_review: ["glm", "claude"], code_review: ["glm", "claude"], final_review: ["codex"] };
 export type Independence = "fresh-process" | "different-model";
-export type StagePolicy = { authors: string[]; reviewers: string[]; independence: Independence };
+export type StagePolicy = { writer: string[]; reviewer: string[]; independence: Independence };
 export type DeliveryPolicy = {
   root: string;
   independence: Independence;
@@ -32,13 +38,17 @@ export type DeliveryPolicy = {
   multiplexer: string;
 };
 
-
-const DEFAULT_STAGES: Record<Stage, Omit<StagePolicy, "independence">> = {
-  plan_review: { authors: ["codex"], reviewers: ["glm", "claude"] },
-  test_review: { authors: ["glm", "claude"], reviewers: ["codex", "claude"] },
-  code_review: { authors: ["glm", "claude"], reviewers: ["glm", "claude"] },
-  final_review: { authors: ["codex"], reviewers: ["codex", "claude"] },
+/** The default operating model: two reviews, the plan and the whole change; the stages between them are written and
+ * held by their deterministic gates. Lists are preference orders; a later model is used only as a recorded fallback. */
+const DEFAULT_STAGES: Partial<Record<Stage, { writer?: string[]; reviewer?: string[] }>> = {
+  plan: { writer: ["codex", "claude-opus"], reviewer: ["glm", "claude-opus", "codex"] },
+  red: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
+  green: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
+  refactor: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
+  final: { reviewer: ["codex", "glm", "claude-opus"] },
 };
+/** The stage a record or config name refers to: a current name, or a legacy review stage's. */
+export const stageOf = (name: string): Stage | undefined => (STAGES as readonly string[]).includes(name) ? name as Stage : LEGACY_STAGES[name];
 /** Tranche records live with the program's reasoning, under the docs profile's delivery area; the docs profile leaves
  * this folder to the delivery profile (records are YAML and data, never authored AsciiDoc). */
 export const DEFAULT_ROOT = "docs/delivery/tranches";
@@ -69,11 +79,20 @@ export function deliveryPolicy(block: unknown): DeliveryPolicy {
   const models = (value: unknown, fallback: string[]) => (Array.isArray(value) && value.every(item => typeof item === "string") ? value as string[] : fallback);
   const mode = (value: unknown, fallback: Independence): Independence => (value === "fresh-process" || value === "different-model" ? value : fallback);
   const count = (value: unknown, fallback: number) => (Number.isInteger(value) ? value as number : fallback);
-  const independence = mode(raw.independence, "fresh-process"), given = record(raw.stages), stages: DeliveryPolicy["stages"] = {};
-  for (const stage of STAGES) {
-    const entry = given ? record(given[stage]) : DEFAULT_STAGES[stage];
-    if (!entry) continue;
-    stages[stage] = { authors: models(entry.authors, DEFAULT_STAGES[stage].authors), reviewers: models(entry.reviewers, DEFAULT_STAGES[stage].reviewers), independence: mode((entry as Record<string, unknown>).independence, independence) };
+  const independence = mode(raw.independence, "different-model"), given = record(raw.stages), stages: DeliveryPolicy["stages"] = {};
+  // `stages`, when given, replaces the default set. A legacy name (plan_review, …) is read as the stage it reviewed,
+  // its authors as the writers and its reviewers as the reviewers; a current name wins over a legacy one.
+  const entries: Array<[Stage, Record<string, unknown>, string]> = given
+    ? Object.entries(given).flatMap(([name, value]) => { const stage = stageOf(name), entry = record(value); return stage && entry ? [[stage, entry, name] as [Stage, Record<string, unknown>, string]] : []; })
+        .sort((a, b) => Number(a[2] === a[0]) - Number(b[2] === b[0]))
+    : Object.entries(DEFAULT_STAGES).map(([stage, entry]) => [stage as Stage, entry as Record<string, unknown>, stage]);
+  for (const [stage, entry, name] of entries) {
+    const legacy = name !== stage;
+    stages[stage] = {
+      writer: models(legacy ? entry.authors : entry.writer, legacy ? LEGACY_AUTHORS[name] : []),
+      reviewer: models(legacy ? entry.reviewers : entry.reviewer, []),
+      independence: mode(entry.independence, independence),
+    };
   }
   const fallback = record(raw.fallback) ?? {};
   return {
@@ -99,14 +118,17 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
     if (!b) continue;
     if (!c) { out.push(`delivery.stages drops ${stage}`); continue; }
     if (b.independence === "different-model" && c.independence === "fresh-process") out.push(`delivery.stages.${stage}.independence different-model → fresh-process`);
-    for (const role of ["reviewers", "authors"] as const) {
+    if (b.reviewer.length && !c.reviewer.length) out.push(`delivery.stages.${stage} is no longer reviewed`);
+    for (const role of ["reviewer", "writer"] as const) {
       const added = c[role].filter(model => !b[role].includes(model));
-      if (added.length) out.push(`delivery.stages.${stage}.${role} adds ${added.join(", ")}`);
+      if (added.length && b[role].length) out.push(`delivery.stages.${stage}.${role} adds ${added.join(", ")}`);
       // The lists are preference orders: moving a model earlier, by reordering or removing one before it, makes a
       // fallback model usable without the fallback.
       const promoted = c[role].filter(model => b[role].includes(model) && c[role].indexOf(model) < b[role].indexOf(model));
       if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
     }
+    // A stage that had no writer list now accepting writers is a loosening too: before, nothing could be written there.
+    if (!b.writer.length && c.writer.length) out.push(`delivery.stages.${stage}.writer adds ${c.writer.join(", ")}`);
   }
   // Moving the root hides every earlier record from the validator and the gate. No exception, not even pinning the 0.8.0
   // default: from the config alone it cannot be told apart from moving a 0.9 repository's records out of view, so a
@@ -143,9 +165,11 @@ const git = async (cwd: string, args: string[]) => {
 };
 
 type Actor = { model: string; run: string };
-type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Array<{ role?: "author" | "reviewer"; from: string; kind: string; failures: number; window: { from: string; to: string }; reason: string }>; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
+type Fallback = { role?: "author" | "writer" | "reviewer"; from: string; kind: string; failures: number; window: { from: string; to: string }; reason: string };
+type Work = { stage: Stage; sha: string; writer: Actor; fallback?: Fallback[] };
+type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Fallback[]; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
 type Finding = { id: string; severity: string; rebuttal?: string; outcome?: "fixed" | "withdrawn" | "human"; decision?: string };
-type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; approved_sha?: string; reviews: Review[] };
+type Evidence = { tranche: string; status: "open" | "ready"; base_sha: string; approved_sha?: string; work?: Work[]; reviews: Review[] };
 export type EvidenceFile = { file: string; tranche: string; data: Evidence | null; error?: string };
 
 /** Files in the records folder that are neither a tranche's evidence.yaml nor a data file (a report): authored documents
@@ -198,27 +222,36 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
   return out;
 }
 
-/** Models must come from the stage's list; a model after the first needs a recorded fallback from each one before it. */
-function checkModels(file: string, review: Review, policy: StagePolicy, at: string, fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
+/** A model must come from the stage's list; a model after the first needs a recorded fallback from each one before it. */
+function checkModel(file: string, at: string, stage: Stage, role: "writer" | "reviewer", actor: Actor, list: string[], fallbacks: Fallback[], defaultRole: "writer" | "reviewer", fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
   const out: PlanFinding[] = [];
-  // The count and window are the driver's claims, but explicit ones: a fallback outside the policy is out of policy.
-  for (const entry of review.fallback ?? []) {
+  const index = list.indexOf(actor.model);
+  if (index < 0) return [finding("delivery.model-allowed", file, `${at}: ${role} model '${actor.model}' is not in ${stage}.${role} [${list.join(", ")}]`)];
+  // `author` is the 0.9 spelling of `writer`.
+  const recorded = fallbacks.filter(entry => ((entry.role === "author" ? "writer" : entry.role) ?? defaultRole) === role).map(entry => entry.from);
+  for (const skipped of list.slice(0, index)) if (!recorded.includes(skipped)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} '${actor.model}' is a fallback, but no fallback from '${skipped}' records why it was unavailable`));
+  for (const from of recorded) if (!list.slice(0, index).includes(from)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} fallback from '${from}' does not precede '${actor.model}' in [${list.join(", ")}]`));
+  return out;
+}
+
+/** The count and window of every recorded fallback are the driver's claims, but explicit ones: outside the policy is out of policy. */
+function checkFallbacks(file: string, at: string, fallbacks: Fallback[], fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
+  const out: PlanFinding[] = [];
+  for (const entry of fallbacks) {
     if (entry.failures < fallback.after_failures) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' after ${entry.failures} failure(s); the policy requires ${fallback.after_failures} (delivery.fallback.after_failures)`));
     const span = (Date.parse(entry.window.to) - Date.parse(entry.window.from)) / 60_000;
     if (!(span >= 0)) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' has a window that ends before it starts`));
     else if (span > fallback.within_minutes) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' counts failures over ${Math.round(span)} minutes; the policy allows ${fallback.within_minutes} (delivery.fallback.within_minutes)`));
   }
-  const role = (name: "author" | "reviewer", actor: Actor | undefined, list: string[]) => {
-    if (!actor) return;
-    const index = list.indexOf(actor.model);
-    if (index < 0) { out.push(finding("delivery.model-allowed", file, `${at}: ${name} model '${actor.model}' is not in ${review.stage}.${name}s [${list.join(", ")}]`)); return; }
-    const recorded = (review.fallback ?? []).filter(entry => (entry.role ?? "reviewer") === name).map(entry => entry.from);
-    for (const skipped of list.slice(0, index)) if (!recorded.includes(skipped)) out.push(finding("delivery.model-allowed", file, `${at}: ${name} '${actor.model}' is a fallback, but no fallback from '${skipped}' records why it was unavailable`));
-    for (const from of recorded) if (!list.slice(0, index).includes(from)) out.push(finding("delivery.model-allowed", file, `${at}: ${name} fallback from '${from}' does not precede '${actor.model}' in [${list.join(", ")}]`));
-  };
-  role("author", review.author, policy.authors);
-  role("reviewer", review.reviewer, policy.reviewers);
   return out;
+}
+
+/** The stages a review of `stage` answers for: its own, and every stage after the previous reviewed one. The final review
+ * covers red, green and refactor when none of them is reviewed. */
+function coveredStages(stage: Stage, policy: DeliveryPolicy): Stage[] {
+  const position = STAGES.indexOf(stage);
+  const previous = STAGES.slice(0, position).findLastIndex(name => (policy.stages[name]?.reviewer.length ?? 0) > 0);
+  return STAGES.slice(previous + 1, position + 1);
 }
 
 /** Reports are data, never code: a report path is exempt from drift, so it must not be able to name a source file. */
@@ -244,17 +277,27 @@ const sameCommit = (a: string, b: string) => a.length <= b.length ? b.startsWith
 
 /** The judgement over one well-formed record. */
 function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy): PlanFinding[] {
-  const out: PlanFinding[] = [], reviews = evidence.reviews;
-  const authorRuns = new Set(reviews.flatMap(review => review.author ? [review.author.run] : [])), reviewerRuns = new Map<string, number>();
+  const out: PlanFinding[] = [], reviews = evidence.reviews, work = evidence.work ?? [];
+  const writerRuns = new Set([...work.map(entry => entry.writer.run), ...reviews.flatMap(review => review.author ? [review.author.run] : [])]), reviewerRuns = new Map<string, number>();
+  work.forEach((entry, index) => {
+    const at = `work[${index}] (${entry.stage} @ ${entry.sha})`, stage = policy.stages[entry.stage];
+    if (!stage?.writer.length) { out.push(finding("delivery.evidence-schema", file, `${at}: ${entry.stage} has no writer in delivery.stages`)); return; }
+    out.push(...checkFallbacks(file, at, entry.fallback ?? [], policy.fallback), ...checkModel(file, at, entry.stage, "writer", entry.writer, stage.writer, entry.fallback ?? [], "writer", policy.fallback));
+  });
   reviews.forEach((review, index) => {
     const at = `reviews[${index}] (${review.stage} @ ${review.sha})`, stage = policy.stages[review.stage];
-    if (!stage) { out.push(finding("delivery.evidence-schema", file, `${at}: ${review.stage} is not a configured stage in delivery.stages`)); return; }
-    if (!review.author) out.push(finding("delivery.evidence-schema", file, `${at}: names no author; the reviewer's independence cannot be judged without one`));
-    out.push(...checkModels(file, review, stage, at, policy.fallback));
-    if (authorRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also authored in this tranche; a reviewer that edits becomes an author`));
+    if (!stage?.reviewer.length) { out.push(finding("delivery.evidence-schema", file, `${at}: ${review.stage} has no reviewer in delivery.stages`)); return; }
+    const fallbacks = review.fallback ?? [];
+    out.push(...checkFallbacks(file, at, fallbacks, policy.fallback), ...checkModel(file, at, review.stage, "reviewer", review.reviewer, stage.reviewer, fallbacks, "reviewer", policy.fallback));
+    if (review.author && stage.writer.length) out.push(...checkModel(file, at, review.stage, "writer", review.author, stage.writer, fallbacks, "reviewer", policy.fallback));
+    // Independence is judged against everyone who wrote what this review answers for.
+    const covered = coveredStages(review.stage, policy), writers = [...work.filter(entry => covered.includes(entry.stage)).map(entry => entry.writer), ...(review.author ? [review.author] : [])];
+    if (!writers.length) out.push(finding("delivery.evidence-schema", file, `${at}: names no writer of the work it reviews (${covered.join(", ")}); record each stage's work, or the review's author, so independence can be judged`));
+    if (writerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also wrote in this tranche; a reviewer that edits becomes a writer`));
     if (reviewerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' already reviewed reviews[${reviewerRuns.get(review.reviewer.run)}]; every review is a fresh process`));
     else reviewerRuns.set(review.reviewer.run, index);
-    if (stage.independence === "different-model" && review.author && review.author.model === review.reviewer.model) out.push(finding("delivery.reviewer-independent", file, `${at}: ${review.stage} requires a different model, but '${review.reviewer.model}' reviewed its own model's work`));
+    const own = writers.find(writer => writer.model === review.reviewer.model);
+    if (stage.independence === "different-model" && own) out.push(finding("delivery.reviewer-independent", file, `${at}: ${review.stage} requires a different model, but '${review.reviewer.model}' reviewed work its own model wrote`));
   });
 
   // Findings: each one on a request-changes review is fixed, withdrawn after one written dispute, or ruled on by a
@@ -284,12 +327,16 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
   if (evidence.status === "ready") {
     const configured = STAGES.filter(stage => policy.stages[stage]);
     for (const stage of configured) {
+      // A 0.9 record names writers as the authors of the reviews that covered their stages.
+      const written = work.some(entry => entry.stage === stage) || reviews.some(review => review.author && coveredStages(review.stage, policy).includes(stage));
+      if (policy.stages[stage]!.writer.length && !written) out.push(finding("delivery.stages-complete", file, `status is ready, but ${stage} records no work; name who wrote it`));
+      if (!policy.stages[stage]!.reviewer.length) continue;
       const last = reviews.filter(review => review.stage === stage).at(-1);
       if (!last) out.push(finding("delivery.stages-complete", file, `status is ready, but ${stage} has no review`));
-      else if (last.verdict !== "approve") out.push(finding("delivery.stages-complete", file, `status is ready, but the last ${stage} requests changes`));
+      else if (last.verdict !== "approve") out.push(finding("delivery.stages-complete", file, `status is ready, but the last ${stage} review requests changes`));
     }
-    const closing = configured.at(-1), approval = closing && reviews.filter(review => review.stage === closing).at(-1);
-    if (approval && approval.verdict === "approve" && !sameCommit(approval.sha, evidence.approved_sha ?? "")) out.push(finding("delivery.stages-complete", file, `approved_sha ${evidence.approved_sha} is not the SHA the last ${closing} approved (${approval.sha})`));
+    const closing = configured.filter(stage => policy.stages[stage]!.reviewer.length).at(-1), approval = closing && reviews.filter(review => review.stage === closing).at(-1);
+    if (approval && approval.verdict === "approve" && !sameCommit(approval.sha, evidence.approved_sha ?? "")) out.push(finding("delivery.stages-complete", file, `approved_sha ${evidence.approved_sha} is not the SHA the last ${closing} review approved (${approval.sha})`));
   }
   return out;
 }
@@ -394,6 +441,8 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       for (const error of validEvidence.errors ?? []) findings.push(finding("delivery.evidence-schema", entry.file, `${entry.file} violates delivery-evidence.schema.json: ${error.instancePath || "/"} ${error.message ?? error.keyword}`));
       continue;
     }
+    // Legacy stage names (plan_review, …) are read as the stages they reviewed.
+    for (const item of [...entry.data.reviews, ...(entry.data.work ?? [])]) item.stage = stageOf(item.stage) ?? item.stage;
     if (entry.data.tranche !== entry.tranche) findings.push(finding("delivery.evidence-schema", entry.file, `tranche '${entry.data.tranche}' does not match its folder '${entry.tranche}'`));
     // A report lives in its tranche's folder: a report path is exempt from drift, so it may never name other files.
     const folder = `${policy.root}/${entry.tranche}/`;
@@ -411,26 +460,21 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
       // Ready means auditable: every review's raw output is retained and named.
       for (const [index, review] of entry.data.reviews.entries()) if (!review.report || !regularFile(join(absolute, review.report))) findings.push(finding("delivery.stages-complete", entry.file, `status is ready, but reviews[${index}] (${review.stage}) ${review.report ? `names report ${review.report}, which is not a regular file` : "retains no report"}`));
       if ((await git(absolute, ["cat-file", "-e", `${entry.data.approved_sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `approved_sha ${entry.data.approved_sha} is not a commit in this repository's history`)); continue; }
-      // Every stage's approval names a real commit in the approved history, in lifecycle order.
+      // Every stage's approval and every recorded piece of work names a real commit in the approved history, and
+      // approvals follow the lifecycle.
+      const approved = entry.data.approved_sha!, inHistory = async (sha: string) => !(await git(absolute, ["merge-base", "--is-ancestor", sha, approved])).code;
+      for (const [index, item] of (entry.data.work ?? []).entries()) {
+        if ((await git(absolute, ["cat-file", "-e", `${item.sha}^{commit}`])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `work[${index}] (${item.stage}) names ${item.sha}, which is not a commit in this repository's history`));
+        else if (!await inHistory(item.sha)) findings.push(finding("delivery.approved-sha-resolves", entry.file, `work[${index}] (${item.stage}) names ${item.sha.slice(0, 7)}, which is not in the history of approved_sha ${approved.slice(0, 7)}`));
+      }
       let previous: { stage: Stage; sha: string } | null = null;
-      for (const stage of STAGES.filter(name => policy.stages[name])) {
+      for (const stage of STAGES.filter(name => policy.stages[name]?.reviewer.length)) {
         const last = entry.data.reviews.filter(review => review.stage === stage).at(-1);
         if (!last || last.verdict !== "approve") continue; // reported by delivery.stages-complete
         if ((await git(absolute, ["cat-file", "-e", `${last.sha}^{commit}`])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha}, which is not a commit in this repository's history`)); continue; }
-        if ((await git(absolute, ["merge-base", "--is-ancestor", last.sha, entry.data.approved_sha!])).code) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha.slice(0, 7)}, which is not in the history of approved_sha ${entry.data.approved_sha!.slice(0, 7)}`)); continue; }
+        if (!await inHistory(last.sha)) { findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha.slice(0, 7)}, which is not in the history of approved_sha ${approved.slice(0, 7)}`)); continue; }
         if (previous && (await git(absolute, ["merge-base", "--is-ancestor", previous.sha, last.sha])).code) findings.push(finding("delivery.approved-sha-resolves", entry.file, `${stage} approved ${last.sha.slice(0, 7)}, which does not contain what ${previous.stage} approved (${previous.sha.slice(0, 7)}); stages follow the lifecycle`));
         previous = { stage, sha: last.sha };
-      }
-      // The closing review does not replace the stage before it: code that changed after that stage approved must go
-      // back through it (driver step 5), so nothing outside the delivery root may differ between the two.
-      // Anchored on code_review, the stage that approves code: not the position, which would ask plan_review to approve
-      // the final code under a reduced stage set.
-      const configured = STAGES.filter(name => policy.stages[name]), closing = configured.at(-1);
-      const before: Stage | undefined = configured.includes("code_review") && closing !== "code_review" ? "code_review" : undefined;
-      const earlier = before && entry.data.reviews.filter(review => review.stage === before).at(-1);
-      if (earlier && earlier.verdict === "approve" && closing && !(await git(absolute, ["cat-file", "-e", `${earlier.sha}^{commit}`])).code) {
-        const changedSince = (await git(absolute, ["diff", "--no-renames", "--name-only", earlier.sha, entry.data.approved_sha!, "--", ":(top)", `:(exclude)${policy.root}`])).out.split("\n").filter(Boolean);
-        if (changedSince.length) findings.push(finding("delivery.stages-complete", entry.file, `${changedSince.slice(0, 5).join(", ")}${changedSince.length > 5 ? ` and ${changedSince.length - 5} more` : ""} changed after ${before} approved ${earlier.sha.slice(0, 7)}, and only ${closing} reviewed the change; a code change goes back through ${before}`));
       }
     }
   }
@@ -470,7 +514,10 @@ async function mergeGate(root: string, policy: DeliveryPolicy, files: EvidenceFi
   const named = new Set(changed.flatMap(path => namedReports(files.find(file => file.file === path)?.data)));
   for (const path of changedHere.filter(path => path.startsWith(`${policy.root}/`) && !isRecord(path) && !named.has(path)))
     out.push(finding("delivery.merge-gate", path, `${mode === "merge" ? "the branch" : "this push"} changes ${path} under ${policy.root}/, and no record it changes names it as a report; only <tranche>/evidence.yaml records and their reports live there`));
-  if (policy.require_record && outside.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
+  // A change to the policy alone needs no tranche: the integrity check reports any loosening for a human to approve,
+  // and a tightening needs no review. A policy change that comes with anything else is reviewed with it.
+  const reviewable = outside.filter(path => path !== "atdd-bun.yaml");
+  if (policy.require_record && reviewable.length && !changed.length) out.push(finding("delivery.merge-gate", "atdd-bun.yaml", `${mode === "merge" ? "the branch" : "this push"} changes ${outside.slice(0, 5).join(", ")}${outside.length > 5 ? ` and ${outside.length - 5} more` : ""} with no tranche record under ${policy.root}/; every change merges through a reviewed tranche (delivery.require_record)`));
   // Every changed ready record, its reports, and the approved SHAs that may cover each other's files.
   const readyChanged = changed.map(path => files.find(file => file.file === path)!).filter(entry => entry.data?.status === "ready");
   const siblings = readyChanged.map(entry => entry.data!.approved_sha!).filter(Boolean);
