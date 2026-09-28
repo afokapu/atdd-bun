@@ -269,11 +269,11 @@ test("the default policy is two reviews: the plan, and the whole change at its h
   const { stages, independence } = deliveryPolicy({});
   expect(independence).toBe("different-model");
   expect(stages).toEqual({
-    plan: { writer: ["codex", "claude-opus"], reviewer: ["glm", "claude-opus", "codex"], independence },
-    red: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
-    green: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
-    refactor: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"], reviewer: [], independence },
-    final: { writer: [], reviewer: ["codex", "glm", "claude-opus"], independence },
+    plan: { writer: ["codex", "claude-opus", "kimi"], reviewer: ["glm", "claude-opus", "codex", "kimi"], independence },
+    red: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"], reviewer: [], independence },
+    green: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"], reviewer: [], independence },
+    refactor: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"], reviewer: [], independence },
+    final: { writer: [], reviewer: ["codex", "glm", "claude-opus", "kimi"], independence },
   });
 });
 
@@ -434,8 +434,8 @@ test("R2: a report lives in its tranche's folder, so it cannot exempt a source f
 
 test("R3: reordering or removing a model so a fallback becomes primary is a loosening", () => {
   const stages = deliveryPolicy({}).stages, base = { delivery: {} };
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "codex", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus] → [glm, codex, claude-opus] promotes glm"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus] → [glm, claude-opus] promotes glm, claude-opus"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "codex", "claude-opus", "kimi"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus, kimi] → [glm, codex, claude-opus, kimi] promotes glm"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus, kimi] → [glm, claude-opus] promotes glm, claude-opus"]);
   expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["codex", "glm"] } } } })).toEqual([]);
 });
 

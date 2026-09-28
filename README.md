@@ -181,11 +181,11 @@ delivery:
   # board: { url: http://127.0.0.1:2586 }   # opt-in: agents talk through a local board; absent, there is none
   independence: different-model      # a reviewer's model wrote none of the work it reviews; or fresh-process
   stages:                            # models in preference order: the first, then recorded fallbacks
-    plan:     { writer: [codex, claude-opus], reviewer: [glm, claude-opus, codex] }
-    red:      { writer: [glm, claude-sonnet, claude-opus, codex] }
-    green:    { writer: [glm, claude-sonnet, claude-opus, codex] }
-    refactor: { writer: [glm, claude-sonnet, claude-opus, codex] }
-    final:    { reviewer: [codex, glm, claude-opus] }
+    plan:     { writer: [codex, claude-opus, kimi], reviewer: [glm, claude-opus, codex, kimi] }
+    red:      { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+    green:    { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+    refactor: { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+    final:    { reviewer: [codex, glm, claude-opus, kimi] }
   fallback: { after_failures: 3, within_minutes: 10, when_exhausted: block }   # or wait
   commands: {}                       # per model: { author: "...", review: "..." } overriding delivery.operating-model's defaults
 ```

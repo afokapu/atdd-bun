@@ -21,11 +21,11 @@ content:
         root: docs/delivery/tranches
         independence: different-model
         stages:
-          plan:     { writer: [codex, claude-opus], reviewer: [glm, claude-opus, codex] }
-          red:      { writer: [glm, claude-sonnet, claude-opus, codex] }
-          green:    { writer: [glm, claude-sonnet, claude-opus, codex] }
-          refactor: { writer: [glm, claude-sonnet, claude-opus, codex] }
-          final:    { reviewer: [codex, glm, claude-opus] }
+          plan:     { writer: [codex, claude-opus, kimi], reviewer: [glm, claude-opus, codex, kimi] }
+          red:      { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+          green:    { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+          refactor: { writer: [glm, claude-sonnet, deepseek-flash, claude-opus, codex, kimi] }
+          final:    { reviewer: [codex, glm, claude-opus, kimi] }
 
     independence defaults to different-model. A stage may name a writer, a reviewer or both. The 0.9
     names plan_review, test_review, code_review and final_review are still read, as plan, red, refactor
