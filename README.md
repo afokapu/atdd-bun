@@ -171,6 +171,10 @@ From 0.10.5 only coordinators and drivers use the board: a writer or reviewer ta
 launch prompt and returns its answer as output, which the driver posts. `atdd-bun chat wait` takes several
 topics and `--skip heartbeat`; reviewers answer in JSON.
 
+From 0.10.7 only a browser spec (a `*.e2e.*` file, or a Playwright file bound by `// Train:`/`// Journey:` or a
+`test:train:`/`test:journey:` URN) is a journey spec. A `bun:test` file may carry the `Acceptance:` line
+traceability needs, including a test proving `acc:train:…` and the journey test `atdd-bun.topology.e2e-location` requires.
+
 Every key is optional; these are the defaults:
 
 ```yaml

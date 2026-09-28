@@ -3,7 +3,7 @@ rule_id: tester.htmx.journey-no-acceptance-marker
 kind: rule
 status: active
 name: A journey spec carries no Acceptance or WMBT header
-statement: A journey spec MUST NOT carry `// Acceptance:` or `// WMBT:` header lines. Bun/htmx realization of `tester.vite.journey-no-acceptance-marker`,
+statement: A journey spec, meaning a browser spec (a `*.e2e.*` file, or a Playwright file bound to a train or journey), MUST NOT carry `// Acceptance:` or `// WMBT:` header lines; a bun test file is never a journey spec. Bun/htmx realization of `tester.vite.journey-no-acceptance-marker`,
   strict.
 terms:
 - term_id: browser_spec

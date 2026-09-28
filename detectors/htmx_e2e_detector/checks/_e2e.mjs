@@ -65,7 +65,10 @@ export function collectSpecs(roots, excludes) {
   return [...out.values()];
 }
 
-export const isJourneySpec = (spec) => spec.e2eNamed || spec.journeyMarked;
+// A journey spec is a browser spec: a *.e2e.* file, or a Playwright file whose header binds a train or journey. A bun:test
+// file is never one, so a Bun test proving acc:train:… (or the journey test atdd-bun.topology.e2e-location requires) may
+// carry the Acceptance: line traceability needs.
+export const isJourneySpec = (spec) => spec.e2eNamed || (spec.playwright && spec.journeyMarked);
 
 /** The plan subjects a spec can bind to, read with the package's own loader. */
 export async function planOf(root) {

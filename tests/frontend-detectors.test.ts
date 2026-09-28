@@ -82,3 +82,16 @@ test("browser-spec detector: a backend-only plan needs no browser spec", async (
   const root = resolve(import.meta.dir, "fixtures/journey-runaway");
   expect(await runImplementation("htmx_e2e_detector", { scanRoots: [root], excludes: [] })).toEqual([]);
 });
+
+test("only a browser spec is a journey spec: a bun:test may bind acc:train:… with Acceptance: whatever its URN or Train: line", async () => {
+  const { parseSpec, isJourneySpec } = await import("../detectors/htmx_e2e_detector/checks/_e2e.mjs");
+  const bun = (header: string) => parseSpec("e2e/trains/t/declared-outcome.test.ts", `${header}\nimport { test } from "bun:test";\ntest("x", () => {});\n`);
+  const trainAcceptance = bun("// URN: test:train:protocol:declared-outcome\n// Acceptance: acc:train:protocol:declared-outcome\n// Phase: SMOKE");
+  const topologyJourney = bun("// URN: test:orders:place-order:E001-E2E-001\n// Acceptance: acc:orders:E001-E2E-001\n// Train: train:orders:checkout");
+  expect(isJourneySpec(trainAcceptance)).toBeFalse();
+  expect(isJourneySpec(topologyJourney)).toBeFalse();
+  // Browser specs stay journey specs: a Playwright file bound by header, and any *.e2e.* file.
+  const playwright = parseSpec("e2e/checkout.spec.ts", `// Train: train:orders:checkout\nimport { test } from "@playwright/test";\ntest("x", async () => {});\n`);
+  expect(isJourneySpec(playwright)).toBeTrue();
+  expect(isJourneySpec(parseSpec("e2e/any.e2e.ts", `import { test } from "bun:test";\n`))).toBeTrue();
+});
