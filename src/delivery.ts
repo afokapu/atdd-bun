@@ -41,11 +41,11 @@ export type DeliveryPolicy = {
 /** The default operating model: two reviews, the plan and the whole change; the stages between them are written and
  * held by their deterministic gates. Lists are preference orders; a later model is used only as a recorded fallback. */
 const DEFAULT_STAGES: Partial<Record<Stage, { writer?: string[]; reviewer?: string[] }>> = {
-  plan: { writer: ["codex", "claude-opus"], reviewer: ["glm", "claude-opus", "codex"] },
-  red: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
-  green: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
-  refactor: { writer: ["glm", "claude-sonnet", "claude-opus", "codex"] },
-  final: { reviewer: ["codex", "glm", "claude-opus"] },
+  plan: { writer: ["codex", "claude-opus", "kimi"], reviewer: ["glm", "claude-opus", "codex", "kimi"] },
+  red: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"] },
+  green: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"] },
+  refactor: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"] },
+  final: { reviewer: ["codex", "glm", "claude-opus", "kimi"] },
 };
 /** The stage a record or config name refers to: a current name, or a legacy review stage's. */
 export const stageOf = (name: string): Stage | undefined => (STAGES as readonly string[]).includes(name) ? name as Stage : LEGACY_STAGES[name];

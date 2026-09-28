@@ -29,7 +29,7 @@ terms:
     One line each, for the coordinator to wait on: PROGRAM_EVENT <tranche> <STAGE <stage> <sha> | WORKER_START <role> <model> <sha> | WORKER_END <role> <model> <verdict> | FALLBACK <role> <from>→<to> <reason> | PR_OPENED <url> | MERGED <sha> | BLOCKED <reason> | HEARTBEAT>.
 - term_id: commands
   text: >-
-    The default headless command per model, overridden per model under delivery.commands.<model>.author (the writer's command) and .review. {prompt} and {worktree} are substituted. Claude runs take project settings only, so a user's own allowances cannot widen a reviewer. glm runs through Pi, which has no permission system: as a reviewer it gets the read tool alone (the driver puts the diff in its prompt and records its output), and as a writer it runs only inside a container or sandbox limited to the worktree.
+    The default headless command per model, overridden per model under delivery.commands.<model>.author (the writer's command) and .review. {prompt} and {worktree} are substituted. Claude runs take project settings only, so a user's own allowances cannot widen a reviewer. glm, kimi (Moonshot kimi-k3, a replacement for codex and claude-opus) and deepseek-flash (a smaller coding model beside claude-sonnet) run through Pi, which has no permission system; kimi and deepseek-flash take their keys from MOONSHOT_API_KEY and DEEPSEEK_API_KEY, or point delivery.commands at a wrapper that provides them. Through Pi, as a reviewer it gets the read tool alone (the driver puts the diff in its prompt and records its output), and as a writer it runs only inside a container or sandbox limited to the worktree.
   values:
     codex:
       author: codex exec --cd {worktree} --sandbox workspace-write "{prompt}"
@@ -43,6 +43,12 @@ terms:
     glm:
       author: cd {worktree} && pi -p --no-session --no-extensions --no-skills --no-context-files --tools read,bash,edit,write "{prompt}"
       review: cd {worktree} && pi -p --no-session --no-extensions --no-skills --no-context-files --tools read "{prompt}"
+    kimi:
+      author: cd {worktree} && pi --provider moonshotai --model kimi-k3 -p --no-session --no-extensions --no-skills --no-context-files --tools read,bash,edit,write "{prompt}"
+      review: cd {worktree} && pi --provider moonshotai --model kimi-k3 -p --no-session --no-extensions --no-skills --no-context-files --tools read "{prompt}"
+    deepseek-flash:
+      author: cd {worktree} && pi --provider deepseek --model deepseek-flash -p --no-session --no-extensions --no-skills --no-context-files --tools read,bash,edit,write "{prompt}"
+      review: cd {worktree} && pi --provider deepseek --model deepseek-flash -p --no-session --no-extensions --no-skills --no-context-files --tools read "{prompt}"
 - term_id: example_record
   text: >-
     A tranche in progress: the plan written by codex and approved by glm; red, green and refactor written by glm; the final review requesting changes. Only the finding's outcome is ever added to an earlier entry.
