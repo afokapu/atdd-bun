@@ -97,8 +97,8 @@ export async function post(url: string, topic: string, header: Header, body: str
 }
 
 /** Every message on the topics after `since` (a message id, or "all"). */
-export async function read(url: string, topics: string[], since = "all"): Promise<Message[]> {
-  const res = await fetch(`${url}/${topics.join(",")}/json?poll=1&since=${since}`);
+export async function read(url: string, topics: string[], since = "all", signal?: AbortSignal): Promise<Message[]> {
+  const res = await fetch(`${url}/${topics.join(",")}/json?poll=1&since=${since}`, { signal });
   if (!res.ok) throw new Error(`reading ${topics.join(", ")} failed: ${res.status} ${await res.text()}`);
   return (await res.text()).split("\n").filter(Boolean).map(line => JSON.parse(line)).filter(m => m.event === "message")
     .map(m => ({ id: m.id, time: m.time, topic: m.topic, raw: m.message, ...parseEnvelope(m.message) }));
@@ -108,11 +108,17 @@ export async function read(url: string, topics: string[], since = "all"): Promis
  * It polls rather than streams: a live stream can drop a message published while it connects. ntfy reads `since` (a
  * message id) as that message's time on every topic, so one cursor serves several topics. Returns null after
  * `timeoutSeconds`, so an agent's tool call stays bounded. */
+/** The longest one poll may take. ntfy answers a poll at once, so only a stalled request ever reaches it. */
+const POLL_LIMIT_MS = 10_000;
+
 export async function waitFor(url: string, topics: string[], agent: string, since = "all", timeoutSeconds = 0, skip: string[] = [], intervalMs = 500, seen: (id: string) => void = () => {}): Promise<Message | null> {
   const deadline = timeoutSeconds > 0 ? Date.now() + timeoutSeconds * 1000 : Infinity;
   for (;;) {
     let messages: Message[] = [];
-    try { messages = await read(url, topics, since); } catch { /* the board is briefly unavailable: keep waiting */ }
+    // Each poll is bounded: a request that never answers (a half-open connection after the board restarts or the
+    // machine sleeps) would otherwise hold the wait past its deadline and deliver nothing. It counts as unavailable.
+    const bound = AbortSignal.timeout(Math.max(1, Math.min(POLL_LIMIT_MS, deadline - Date.now())));
+    try { messages = await read(url, topics, since, bound); } catch { /* the board is briefly unavailable: keep waiting */ }
     for (const message of messages) { since = message.id; seen(since); if (addressedTo(message, agent) && !skip.includes(message.header.kind ?? "")) return message; }
     if (Date.now() >= deadline) return null;
     await Bun.sleep(intervalMs);
