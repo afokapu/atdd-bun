@@ -16,6 +16,7 @@ nodes:
   - atdd-bun.planner.reference-resolves
   - atdd-bun.planner.schema
   - atdd-bun.planner.train-wagon-resolves
+  - atdd-bun.profiles.presets
   - atdd-bun.topology.e2e-location
   - atdd-bun.topology.feature-source-coverage
   - atdd-bun.topology.feature-test-coverage
@@ -363,6 +364,16 @@ nodes:
   - traceability.source.tested-by-resolves
   - traceability.test.binding-resolves
 edges: 
+  - confidence: 1
+    constraint: discretionary
+    control: internal
+    foundation: finish_to_start
+    reason: traceability joins with the building preset because executable-acceptance-has-test reports every acceptance until tests exist
+    source_ref: atdd-bun.profiles.presets
+    strength: minor
+    target_ref: traceability.plan.executable-acceptance-has-test
+    type: follows
+    origin: "@afokapu/atdd-bun"
   - confidence: 1
     constraint: mandatory
     control: internal

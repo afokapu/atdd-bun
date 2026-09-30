@@ -1,0 +1,35 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.profiles.presets
+kind: policy
+status: active
+name: The agent proposes the profiles the work at hand needs, one preset at a time
+statement: >-
+  The agent proposes profiles without being asked: when the work reaches a stage whose preset is not active yet (RED starts while only planner is on, or no profiles: list is set), it asks the user what they want to do and recommends the matching preset. It explains that presets are adopted gradually, each the set most consistent with that work, so nothing needs activating all at once. The user decides; the agent writes only what they choose. Presets accumulate: moving on adds profiles, it never swaps them, because removing one loosens the gate.
+terms:
+- term_id: presets
+  text: >-
+    Planning: planner (plus docs when the repository keeps documentation under docs/). Building, once RED starts: add coder, tester, traceability, security; add htmx and design for a web UI, and interlocking once trains have a runtime. Instrumenting: add telemetry. Delivering through reviewed tranches: add delivery.
+  values:
+    planning: [planner]
+    building: [coder, tester, traceability, security]
+    instrumenting: [telemetry]
+    delivering: [delivery]
+content:
+  summary: >-
+    A goal is easier to name than a profile. The presets map what the user is doing to the profiles that judge it, in the order the work creates what they check.
+  normative_text: |
+    planner alone keeps the plan consistent: it parses, validates and resolves the plan with nothing else present. traceability judges the links from the plan to tests and source, so before tests exist it can only report that every acceptance is untested; it joins with building, and from then on it also catches a plan change that orphans a test.
+    security joins with the first code, not at release: a secret committed during GREEN stays in history.
+    coder already bundles the architecture, metrics, runtime, design and responsive detectors, so those need no later preset.
+  fix_hint: |
+    At a stage whose preset is missing, ask what the user wants to do (planning, building, instrumenting, delivering), recommend that preset and say it can be adopted step by step, then write the chosen list to profiles: in atdd-bun.yaml.
+  exceptions:
+  - >-
+    A profile can always be run by name to see what it would report (atdd-bun coder); only profiles: decides what the repository is governed by.
+metadata:
+  aliases:
+  - ATDD-BUN-PROFILES-PRESETS
+  introduced_in: 0.10.9
+# A policy, not a rule: which work a user is doing cannot be validated from the repository.
+implementation:
+  type: none

@@ -5,6 +5,8 @@ Before changing code, tests, or `plan/`, follow `.agents/skills/atdd/SKILL.md`: 
 
 `atdd-bun.yaml` controls which profiles are active (`profiles:`; absent, every profile runs) and their settings. Turn a profile on or off only when the user asks. Adding one is always allowed; removing one loosens the gate, so the integrity check reports it until a human approves it on the base branch.
 
+When the work reaches a stage whose profiles are not active yet, ask the user what they want to do and propose the matching preset from the package convention `atdd-bun.profiles.presets`.
+
 When `delivery` is active, deliver tranches through `.agents/skills/delivery/SKILL.md`: the reviews it requires are recorded under the delivery root and checked in CI.
 
 Never modify the toolkit itself (`node_modules/@afokapu/atdd-bun`, or the files atdd-bun generates); change only the configuration it offers, and loosen it only when the user asks. The integrity test and CI fail if the toolkit is modified.
