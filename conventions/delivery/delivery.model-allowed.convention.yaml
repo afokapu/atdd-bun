@@ -4,21 +4,26 @@ kind: rule
 status: active
 name: Authors and reviewers are allowed models, and every fallback says why
 statement: >-
-  Each work entry's writer appears in that stage's writer list and each review's reviewer in its reviewer list; a model after the first is used only with a recorded fallback from each model before it, stating the kind of unavailability (outage, rate_limit, no_report, timeout), the failures observed (at least delivery.fallback.after_failures) within a window no longer than delivery.fallback.within_minutes, and the reason (REQUIRED).
+  Each work entry's writer appears in that stage's writer list and each review's reviewer in its reviewer list; a model after the first is used only with a recorded fallback from each model before it, stating the kind of unavailability (outage, rate_limit, no_report, timeout), the failures observed (at least delivery.fallback.after_failures) within a window no longer than delivery.fallback.within_minutes, and the reason; or, where the operator ordered the substitution, kind operator with who decided, when, the ruling it is recorded in, and the reason (REQUIRED).
 terms:
 - term_id: fallback
   text: >-
-    a recorded switch from a preferred model to the next one in the stage's list, with role (writer or reviewer) and a reason: an outage, a rate limit, or no auditable report. A REQUEST CHANGES verdict is never a reason.
+    a recorded switch from a preferred model to a later one in the stage's list, with role (writer or reviewer) and a reason: an outage, a rate limit, or no auditable report, counted by failures; or the operator's order, referenced by its ruling. A REQUEST CHANGES verdict is never a reason.
 content:
   summary: >-
     The lists are the operator's choice of who may do the work. A silent switch to another model hides an outage and can hide a reviewer chosen for being lenient.
   normative_text: |
     The first model in a list is used normally. When it is unavailable, the driver falls back to the next one and records it. A fallback is never triggered by a verdict: shopping for a reviewer until one approves is exactly what this rule exists to expose.
+    An operator can order a substitution faster than a policy change lands, as a standing ruling while a model is rate-limited. The record then states that ruling rather than failures nobody counted. The substitute must still be a model the stage lists in the policy the record is judged by, so the policy file keeps the final word; and only the operator rules: a driver never writes an operator fallback on its own authority.
   fix_hint: |
     Record the fallback on the review:
 
       fallback:
         - { role: reviewer, from: codex, kind: rate_limit, failures: 3, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:08:00Z" }, reason: "429 on 3 attempts in 10 minutes" }
+
+    or, for a substitution the operator ordered:
+
+        - { role: writer, from: claude-opus, kind: operator, decided_by: "the owner", decided_at: "2026-09-27T23:00:00Z", ruling: "atdd-frg-workstation #abc123", reason: "Standing substitution while Claude is rate-limited: kimi for Opus-tier work" }
 
     or use a model the stage lists.
   exceptions:
