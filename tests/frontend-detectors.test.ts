@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
@@ -107,5 +107,19 @@ test("the shipped docs-site stylesheet is clean under the design profile", async
     await copyFile(resolve(import.meta.dir, "../templates/docs/site.css"), join(root, "docs", "site", "site.css"));
     for (const detector of ["bun_design_system_detector", "bun_responsive_detector"])
       expect((await runImplementation(detector, { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).map(v => v.rule_id)).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("a train acceptance's full URN resolves when the plan states it", async () => {
+  // acc:train:<subject>:<slug>:<name> has several colon segments; the plan scan once kept only the first, so a test
+  // binding a declared train acceptance was reported as unresolved (C1/JEV, atdd-maintainer #BpwXdu5z6kn7).
+  const root = await mkdtemp(join(tmpdir(), "atdd-train-acc-"));
+  try {
+    await mkdir(join(root, "plan", "_trains"), { recursive: true });
+    await mkdir(join(root, "tests", "trains", "protocol"), { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "train:protocol:prove.yaml"), "train_id: train:protocol:prove\nacceptances:\n  - identity:\n      urn: acc:train:protocol:prove:declared-outcome\n");
+    await writeFile(join(root, "tests", "trains", "protocol", "declared-outcome.test.ts"), "// URN: test:train:protocol:prove:declared-outcome\n// Acceptance: acc:train:protocol:prove:declared-outcome\n// Phase: SMOKE\nimport { expect, test } from \"bun:test\";\ntest(\"x\", () => expect(1).toBe(1));\n");
+    const found = await runImplementation("bun_tester_discipline_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] });
+    expect(found.filter(v => v.rule_id === "tester.bun.acceptance-resolves-to-declared")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

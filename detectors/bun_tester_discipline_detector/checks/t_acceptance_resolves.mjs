@@ -51,7 +51,7 @@ function planFiles(dir, excludes) {
 function declaredUrns(croot, excludes, planRoot) {
   const urns = new Set();
   for (const f of planFiles(join(croot, planRoot), excludes)) {
-    for (const m of read(f).matchAll(/\b((?:acc|wmbt):[a-z0-9][\w.-]*(?::[\w.-]+)?)/gi)) {
+    for (const m of read(f).matchAll(/\b((?:acc|wmbt):[a-z0-9][\w.-]*(?::[\w.-]+)*)/gi)) {
       urns.add(m[1]);
     }
   }
