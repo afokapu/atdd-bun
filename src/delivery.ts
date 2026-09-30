@@ -177,7 +177,8 @@ const git = async (cwd: string, args: string[]) => {
 };
 
 type Actor = { model: string; run: string };
-type Fallback = { role?: "author" | "writer" | "reviewer"; from: string; kind: string; failures: number; window: { from: string; to: string }; reason: string };
+// A failure fallback counts observed failures; an operator fallback references the operator's ruling instead.
+type Fallback = { role?: "author" | "writer" | "reviewer"; from: string; kind: string; failures?: number; window?: { from: string; to: string }; decided_by?: string; decided_at?: string; ruling?: string; reason: string };
 type Work = { stage: Stage; sha: string; writer: Actor; fallback?: Fallback[] };
 type Review = { stage: Stage; sha: string; author?: Actor; reviewer: Actor; fallback?: Fallback[]; verdict: "approve" | "request_changes"; findings?: Finding[]; report?: string };
 type Finding = { id: string; severity: string; rebuttal?: string; outcome?: "fixed" | "withdrawn" | "human"; decision?: string };
@@ -252,6 +253,8 @@ function checkModel(file: string, at: string, stage: Stage, role: "writer" | "re
 function checkFallbacks(file: string, at: string, fallbacks: Fallback[], fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
   const out: PlanFinding[] = [];
   for (const entry of fallbacks) {
+    // The operator ordered the substitution: nothing was counted, and the schema has required the ruling it names.
+    if (entry.kind === "operator" || !entry.window || entry.failures === undefined) continue;
     if (entry.failures < fallback.after_failures) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' after ${entry.failures} failure(s); the policy requires ${fallback.after_failures} (delivery.fallback.after_failures)`));
     const span = (Date.parse(entry.window.to) - Date.parse(entry.window.from)) / 60_000;
     if (!(span >= 0)) out.push(finding("delivery.model-allowed", file, `${at}: fallback from '${entry.from}' has a window that ends before it starts`));

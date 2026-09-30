@@ -932,3 +932,18 @@ test("a reviewer passes over a model that independence forbids without a fallbac
   expect(await allowed("different-model")).toEqual([]);
   expect(await allowed("fresh-process")).toEqual([expect.stringContaining("no fallback from 'glm'")]);
 });
+
+test("an operator fallback records a substitution the operator ordered, for a model the stage lists, and names its ruling", async () => {
+  // FWS #vA6u5BfOEH5l: kimi wrote the plan under the operator's standing substitution while Claude was rate-limited; no
+  // failures were counted, so no failure fallback could honestly record it.
+  const policy = (writers: string[]) => `profiles: [delivery]\ndelivery:\n  root: delivery\n  stages: ${JSON.stringify({ plan: { writer: writers, reviewer: ["glm"] }, final: { reviewer: ["glm"] } })}\n`;
+  const operator = { role: "writer", from: "claude-opus", kind: "operator", decided_by: "the owner", decided_at: "2026-09-27T23:00:00Z", ruling: "atdd-frg-workstation #abc123", reason: "Standing substitution while Claude is rate-limited" };
+  const found = async (writers: string[], fallback: Record<string, unknown>[]) => { let out: string[] = []; await withRepo({ "atdd-bun.yaml": policy(writers), "delivery/api/evidence.yaml": record([review("plan", "1111111", null, ["glm", "r1"])], { work: [{ ...write("plan", "1111111", ["kimi", "w-plan"]), fallback }] }) }, async dir => { out = (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.model-allowed" || f.rule_id === "delivery.evidence-schema").map(f => `${f.rule_id}: ${f.evidence}`); }); return out; };
+  expect(await found(["claude-opus", "kimi"], [operator])).toEqual([]);
+  // The policy keeps the final word: an operator fallback never admits a model the stage does not list.
+  expect(await found(["claude-opus"], [operator])).toEqual([expect.stringContaining("writer model 'kimi' is not in plan.writer")]);
+  const { ruling: _ruling, ...unreferenced } = operator;
+  expect((await found(["claude-opus", "kimi"], [unreferenced])).some(line => line.startsWith("delivery.evidence-schema"))).toBeTrue();
+  // A failure fallback still counts its failures.
+  expect(await found(["claude-opus", "kimi"], [{ role: "writer", from: "claude-opus", kind: "rate_limit", failures: 1, window: { from: "2026-09-25T09:00:00Z", to: "2026-09-25T09:01:00Z" }, reason: "429 on one attempt only" }])).toEqual([expect.stringContaining("after 1 failure(s)")]);
+});

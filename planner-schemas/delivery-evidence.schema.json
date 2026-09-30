@@ -30,12 +30,16 @@
     },
     "fallback": {
       "type": "object",
-      "required": ["from", "kind", "failures", "window", "reason"],
+      "required": ["from", "kind", "reason"],
       "additionalProperties": false,
+      "description": "Why a later model in the stage's list was used: counted failures of the preferred one, or the operator's order (kind operator), which references its ruling instead and is accepted only for a model the stage lists.",
+      "if": { "required": ["kind"], "properties": { "kind": { "const": "operator" } } },
+      "then": { "required": ["decided_by", "decided_at", "ruling"], "not": { "anyOf": [{ "required": ["failures"] }, { "required": ["window"] }] } },
+      "else": { "required": ["failures", "window"] },
       "properties": {
         "role": { "enum": ["writer", "author", "reviewer"], "description": "Which actor fell back; author is the 0.9 spelling of writer. Default: writer on a work entry, reviewer on a review." },
         "from": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
-        "kind": { "enum": ["outage", "rate_limit", "no_report", "timeout"], "description": "Why the model counts as unavailable. A verdict is never one of these." },
+        "kind": { "enum": ["outage", "rate_limit", "no_report", "timeout", "operator"], "description": "Why the model counts as unavailable, or operator when the operator ordered the substitution. A verdict is never one of these." },
         "failures": { "type": "integer", "minimum": 1, "description": "Failures observed before falling back; at least delivery.fallback.after_failures." },
         "window": {
           "type": "object",
@@ -44,7 +48,10 @@
           "description": "When the first and last counted failures happened; the span is at most delivery.fallback.within_minutes.",
           "properties": { "from": { "type": "string", "format": "date-time" }, "to": { "type": "string", "format": "date-time" } }
         },
-        "reason": { "type": "string", "minLength": 10, "description": "Why the preferred model was unavailable: outage, rate limit, or no auditable report. Never a verdict." }
+        "decided_by": { "type": "string", "minLength": 2, "description": "operator only: who ruled, by name or board identity. Never the driver on its own authority." },
+        "decided_at": { "type": "string", "format": "date-time", "description": "operator only: when the ruling was given." },
+        "ruling": { "type": "string", "minLength": 3, "description": "operator only: where the ruling is recorded (a board message id, an ADR or a PR)." },
+        "reason": { "type": "string", "minLength": 10, "description": "Why the preferred model was not used: an outage, a rate limit, no auditable report, or the operator's order. Never a verdict." }
       }
     },
     "finding": {
