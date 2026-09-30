@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
 
@@ -94,4 +96,16 @@ test("only a browser spec is a journey spec: a bun:test may bind acc:train:… w
   const playwright = parseSpec("e2e/checkout.spec.ts", `// Train: train:orders:checkout\nimport { test } from "@playwright/test";\ntest("x", async () => {});\n`);
   expect(isJourneySpec(playwright)).toBeTrue();
   expect(isJourneySpec(parseSpec("e2e/any.e2e.ts", `import { test } from "bun:test";\n`))).toBeTrue();
+});
+
+test("the shipped docs-site stylesheet is clean under the design profile", async () => {
+  // Consumers link templates/docs/site.css from the package instead of hand-rolling a theme, so it must hold itself to
+  // the rules it saves them from: no hardcoded or off-grid values, only declared breakpoints.
+  const root = await mkdtemp(join(tmpdir(), "atdd-site-css-"));
+  try {
+    await mkdir(join(root, "docs", "site"), { recursive: true });
+    await copyFile(resolve(import.meta.dir, "../templates/docs/site.css"), join(root, "docs", "site", "site.css"));
+    for (const detector of ["bun_design_system_detector", "bun_responsive_detector"])
+      expect((await runImplementation(detector, { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).map(v => v.rule_id)).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

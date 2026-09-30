@@ -1,0 +1,369 @@
+/* ============================================================================
+   atdd-bun docs-site theme. Shipped with @afokapu/atdd-bun; link it from
+   node_modules/@afokapu/atdd-bun/templates/docs/site.css instead of copying it.
+   Targets Asciidoctor's default HTML5 structure (toc: left), light + dark.
+   Re-theme by overriding the custom properties on :root in your own stylesheet.
+   Adapted from Decision OS's docs theme.
+   ========================================================================= */
+
+:root {
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --r: 10px;
+
+  /* motion tokens - animation is part of the vocabulary, not ad-hoc */
+  --dur-fast: .14s; --dur: .45s; --dur-slow: .7s;
+  --ease: cubic-bezier(.22, .61, .36, 1);   /* gentle ease-out */
+
+  /* light - near-white ground, cards a step darker, high ink contrast */
+  --paper: #ffffff; --surface: #f1f5f7; --raised: #ffffff;
+  --ink: #131a1f; --ink-2: #47555e; --ink-3: #6e7d87;
+  --line: #dbe2e6; --line-2: #edf1f3;
+  --accent: #0b6b74; --accent-hi: #084f57; --accent-wash: #e3f0f1;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0c1114; --surface: #121a1e; --raised: #172126;
+    --ink: #e7edee; --ink-2: #9aa8b0; --ink-3: #74848d;
+    --line: #263238; --line-2: #1e2a30;
+    --accent: #2ba6af; --accent-hi: #4fc2ca; --accent-wash: #103336;
+  }
+}
+:root[data-theme="light"] {
+  --paper: #ffffff; --surface: #f1f5f7; --raised: #ffffff;
+  --ink: #131a1f; --ink-2: #47555e; --ink-3: #6e7d87; --line: #dbe2e6; --line-2: #edf1f3;
+  --accent: #0b6b74; --accent-hi: #084f57; --accent-wash: #e3f0f1;
+}
+:root[data-theme="dark"] {
+  --paper: #0c1114; --surface: #121a1e; --raised: #172126;
+  --ink: #e7edee; --ink-2: #9aa8b0; --ink-3: #74848d; --line: #263238; --line-2: #1e2a30;
+  --accent: #2ba6af; --accent-hi: #4fc2ca; --accent-wash: #103336;
+}
+
+/* ---- base -------------------------------------------------------------- */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body.article {
+  margin: 0; padding: 0; max-width: none;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+strong { color: var(--ink); font-weight: 640; }
+em { color: var(--ink-2); }
+code, .monospaced { font-family: var(--mono); font-size: .9em; }
+:not(pre) > code {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 5px; padding: .08em .38em; color: var(--ink-2);
+}
+
+/* ---- header + left TOC sidebar ---------------------------------------- */
+/* The page title used to be pinned to the top-left corner, which made a piece of fixed
+   chrome change on every page, and put the document's name where the site's name
+   belongs. It now sits at the top of the content column as an eyebrow above the
+   headline, and the corner holds the brand, which is the same everywhere. */
+#header { margin: 0 260px 0 300px; padding: 46px 0 0; }
+#header > h1 {
+  position: static; width: auto; z-index: auto;
+  margin: 0 0 4px; padding: 0; background: none; border: 0;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3);
+}
+#header > h1::after { content: ""; }
+
+/* The page's OWN contents. It used to be the left rail; it is now the right one, so
+   that navigating BETWEEN documents and navigating WITHIN one stop sharing a column. */
+#toc.toc2 {
+  position: fixed; top: 0; right: 0; bottom: 0; left: auto; width: 244px; z-index: 4;
+  overflow-y: auto; box-sizing: border-box;
+  /* top padding clears the theme toggle, which is fixed to this corner */
+  padding: 62px 16px 40px; margin: 0;
+  background: var(--paper); border-left: 1px solid var(--line); border-right: 0;
+  scrollbar-width: thin;
+}
+#toc.toc2 #toctitle {
+  display: block; font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3);
+  margin: 4px 8px 8px; opacity: .8;
+}
+#toc.toc2 ul { list-style: none; margin: 0; padding: 0; }
+#toc.toc2 li { margin: 1px 0; }
+#toc.toc2 a {
+  display: block; padding: 5px 10px; border-radius: 7px;
+  color: var(--ink-2); font-size: 13px; line-height: 1.4; text-decoration: none;
+  border-left: 2px solid transparent; transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* level hierarchy: section > subsection > sub-subsection */
+#toc.toc2 .sectlevel1 > li > a { font-weight: 600; color: var(--ink); }
+#toc.toc2 .sectlevel2 { margin: 2px 0 4px 9px; padding-left: 8px; border-left: 1px solid var(--line-2); }
+#toc.toc2 .sectlevel2 > li > a { font-size: 12px; color: var(--ink-2); }
+#toc.toc2 .sectlevel3 { margin-left: 8px; }
+#toc.toc2 .sectlevel3 > li > a { font-size: 11.5px; color: var(--ink-3); padding-top: 3px; padding-bottom: 3px; }
+#toc.toc2 a:hover { color: var(--ink); background: var(--surface); border-left-color: var(--line); }
+/* scroll-spy: current heading, and its ancestor section, stay highlighted */
+#toc.toc2 a.active {
+  color: var(--accent); border-left-color: var(--accent);
+  background: var(--accent-wash); font-weight: 600;
+}
+#toc.toc2 a.active-parent { color: var(--accent); border-left-color: var(--accent); }
+
+/* ---- floating light/dark toggle --------------------------------------- */
+#theme-toggle {
+  position: fixed; top: 16px; right: 18px; z-index: 20;
+  width: 38px; height: 38px; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 16px; line-height: 1;
+  background: var(--raised); color: var(--ink-2);
+  border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(0,0,0,.12);
+  transition: transform .15s ease, color .15s ease, border-color .15s ease;
+}
+#theme-toggle:hover { color: var(--accent); border-color: var(--accent); transform: scale(1.06); }
+#theme-toggle:active { transform: scale(.96); }
+@media (max-width: 768px) { #theme-toggle { top: 10px; right: 10px; } }
+
+/* ---- TOC show/hide toggle --------------------------------------------- */
+#toc-toggle {
+  position: fixed; top: 15px; left: 14px; z-index: 21;
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1;
+  background: var(--paper); color: var(--ink-3); border: 1px solid var(--line);
+  transition: color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+#toc-toggle:hover { color: var(--accent); border-color: var(--accent); }
+#site-tree, #toc.toc2, #content, #header { transition: transform var(--dur) var(--ease), margin var(--dur) var(--ease); }
+body.toc-hidden #site-tree { transform: translateX(-101%); }
+body.toc-hidden #content, body.toc-hidden #header { margin-left: 0; }
+/* The 900px reading frame belongs to the three-column layout. Once the site tree is hidden,
+   keeping that cap strands the released 300px as empty paper instead of giving it to the page. */
+body.toc-hidden #content > .sect1 > .sectionbody { max-width: none; }
+body.toc-hidden #toc-toggle { left: 14px; }
+
+/* ---- content column ---------------------------------------------------- */
+#content { margin-left: 300px; margin-right: 260px; padding: 4px 0 0; }
+.sect1 { padding: 48px clamp(24px, 5vw, 72px); border-top: 1px solid var(--line-2); }
+.sect1:first-child { border-top: 0; }
+#content > .sect1 > .sectionbody { max-width: 900px; }
+
+/* section heading + the "00 EYEBROW" line authored as a role above it */
+/* section title (the short label + number) reads as a marker; the headline is the display line */
+.sect1 > h2 {
+  font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--accent); margin: 0 0 8px;
+}
+.paragraph.headline p {
+  font-size: clamp(26px, 3.6vw, 40px); font-weight: 800; letter-spacing: -.02em;
+  line-height: 1.1; text-wrap: balance; margin: 2px 0 18px; color: var(--ink);
+}
+.sect2 > h3 { font-size: 19px; font-weight: 680; letter-spacing: -.01em; margin: 30px 0 10px; color: var(--ink); }
+.sect3 > h4 { font-size: 15px; font-weight: 660; margin: 22px 0 8px; color: var(--ink-2); }
+
+.eyebrow, p.eyebrow {
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin: 0;
+}
+.eyebrow .n { color: var(--ink-3); margin-right: 10px; }
+
+.paragraph p { margin: 0 0 14px; color: var(--ink-2); }
+.paragraph.prose p, .lead p { color: var(--ink); font-size: 17px; }
+
+/* ---- card grid + cards (block roles [.card-grid] / [.card]) ------------ */
+.card-grid > .content,
+.openblock.card-grid > .content {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px; margin: 8px 0 6px;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r); padding: 17px 19px; line-height: 1.6;
+}
+.card > p { margin: 0; color: var(--ink-2); font-size: 13.5px; line-height: 1.6; }
+.card strong:first-child,
+.card p:first-child strong { color: var(--ink); }
+/* the small mono kicker on a card: first strong via role, or use [.k]#..# */
+.card .k, .k {
+  display: inline-block; font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 7px;
+}
+/* inline code chips get vertical air so wrapped runs don't collide */
+.card, .dlist dd, #content details .content p, .stack .card { line-height: 1.65; }
+.card code, .dlist code, #content details code { line-height: 1.5; }
+/* accent stripe variants for the control-loop trio */
+
+/* ---- tag pills ([.tag-pills] on a bullet list) ------------------------- */
+.tag-pills ul, ul.tag-pills {
+  list-style: none; margin: 14px 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.tag-pills li {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: 999px; padding: 5px 12px;
+}
+
+/* node color dots + inline node roles ([.n-actor]#...#, [gdot]#o#) ---------
+   Every node class has a hue, including the three that went without one: Resource had none
+   from the day it was admitted, and Force and Potential arrived the same way. The table then
+   rendered five classes in colour and three in plain text, which is a claim about the
+   ontology that the ontology does not make. */
+.gdot, .dot { color: var(--accent); }
+/* highlighted spine line (verbs + nodes colored) */
+.spine-line { font-family: var(--mono); font-size: 13px; line-height: 2.1; white-space: pre-line; color: var(--ink-2); }
+.spine-line .v { color: var(--accent); font-weight: 600; }
+.spine-line .mut { color: var(--ink-3); }
+.spine-line .n-actor, .spine-line .n-outcome, .spine-line .n-capability, .spine-line .n-bet { font-weight: 600; }
+
+/* ---- tables + the grid matrix ([.grid-matrix]) --------------------- */
+table.tableblock {
+  border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14px;
+  border: 1px solid var(--line);
+}
+table.tableblock th, table.tableblock td {
+  border: 1px solid var(--line); padding: 9px 12px; text-align: left;
+  vertical-align: top; color: var(--ink-2);
+}
+table.tableblock thead th { background: var(--surface); color: var(--ink); font-weight: 660; }
+table.tableblock td p, table.tableblock th p { margin: 0; }
+
+.grid-matrix { table-layout: fixed; }
+.grid-matrix th, .grid-matrix td { text-align: center; font-family: var(--mono); font-size: 12px; }
+.grid-matrix thead th {
+  font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3);
+}
+.grid-matrix td strong { color: var(--ink); }
+.row-header { display: block; font-family: var(--mono); font-weight: 700; letter-spacing: .04em; }
+.row-header.attr { color: var(--ink-2); font-size: 11px; }
+.row-header.finance { color: var(--accent); }
+/* Personal Finance OS rails, the second adaptation's columns, same five slots. */
+.row-header.protect { color: var(--accent); }
+
+/* ---- callouts / admonitions / notes ------------------------------------ */
+.admonitionblock, .note-block {
+  background: var(--surface); border: 1px solid var(--line);
+  border-left: 3px solid var(--accent); border-radius: var(--r);
+  padding: 14px 16px; margin: 16px 0;
+}
+.admonitionblock td.content { color: var(--ink-2); font-size: 14px; }
+.admonitionblock .title, .note-label {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--accent);
+}
+
+/* ---- listings / literal (ascii diagrams) ------------------------------- */
+.listingblock pre, .literalblock pre {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  padding: 14px 16px; overflow-x: auto; font-family: var(--mono);
+  font-size: 12.5px; line-height: 1.5; color: var(--ink-2);
+}
+
+/* ---- misc lists + rules ------------------------------------------------ */
+.ulist ul, .olist ol { margin: 0 0 14px; padding-left: 20px; color: var(--ink-2); }
+.ulist li, .olist li { margin: 4px 0; }
+hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+
+/* ---- responsive: collapse the sidebar --------------------------------- */
+@media (max-width: 1024px) {
+  /* not enough room for two rails: the page contents fold under the content */
+  #toc.toc2 {
+    position: static; width: auto; height: auto;
+    border-left: 0; border-top: 1px solid var(--line);
+    padding: 18px 22px 30px;
+  }
+  #content, #header { margin-right: 0; }
+}
+@media (max-width: 768px) {
+  #site-tree { position: static; width: auto; border-right: 0; height: auto; }
+  #header { margin: 0; padding: 20px 22px 0; }
+  #site-tree { border-bottom: 1px solid var(--line); padding: 12px 16px; }
+  #content { margin-left: 0; }
+}
+
+/* wide blocks never scroll the page body */
+.tableblock, .listingblock, .literalblock { overflow-x: auto; }
+
+/* ============================================================================
+   Interactive / animated figures (authored via passthrough ++++ blocks).
+   All local + inline - no CDN, so the output stays a single standalone file.
+   ========================================================================= */
+
+/* Entrance motion that CANNOT hide content.
+   The previous version set the class to zero opacity and relied on an `in` class to restore
+   it, and nothing anywhere added that class. (Written out rather than quoted, because a rule
+   inside a comment is indistinguishable from a real one when you grep for the bug.) Every figure on the site held its full height and showed
+   nothing, for as long as that shipped. The replacement animates TRANSFORM only, so opacity is
+   never in play: if the animation is disabled, throttled, or never runs at all, the figure is
+   still there. It also needs no script, no observer and no class, which is three fewer things
+   that can fail between a figure and a reader. */
+.reveal { animation: revealIn .5s var(--ease) both; }
+@keyframes revealIn { from { transform: translateY(12px); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal { animation: none; } }
+
+
+/* collapsible grammar blocks ([%collapsible]) - the <details> folds */
+#content details { margin: 10px 0 4px; }
+#content details > summary {
+  cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: .04em;
+  color: var(--accent); padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  list-style: none;
+}
+#content details > summary::-webkit-details-marker { display: none; }
+#content details > summary::before { content: "\25B8 "; color: var(--ink-3); }
+#content details[open] > summary::before { content: "\25BE "; }
+#content details[open] > summary { border-radius: 8px 8px 0 0; }
+#content details > .content { border: 1px solid var(--line); border-top: 0; border-radius: 0 0 8px 8px;
+  padding: 16px 18px; background: var(--surface); }
+#content details > .content > .paragraph { margin: 12px 0; }
+#content details > .content > .paragraph p { line-height: 1.7; }
+#content details > .content > .paragraph:last-child p { margin-bottom: 0; }
+#content details > .content > .paragraph:first-child { margin-top: 2px; }
+
+/* one-per-row box stack: for independent boxes that shouldn't be packed in a grid */
+.stack > .content { display: flex; flex-direction: column; gap: 12px; }
+.stack .card { padding: 16px 20px; }
+
+/* definition lists (dlist) - the grammar term/def */
+.dlist dl { margin: 8px 0; display: grid; grid-template-columns: minmax(110px, auto) 1fr; gap: 16px 18px; align-items: baseline; }
+.dlist dt { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--accent); }
+.dlist dd { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.65; }
+.dlist dd p { margin: 0; }
+
+
+@media print {
+  /* Print is a light medium regardless of the reader's theme, so the tokens are pinned. */
+  :root, :root[data-theme="dark"], :root[data-theme="light"] {
+    --paper: #ffffff; --surface: #ffffff; --ink: #111111; --ink-2: #333333;
+    --ink-3: #555555; --line: #bbbbbb; --accent: #0b6b74; --accent-wash: #f2f7f7;
+  }
+  html, body { background: #fff !important; color: #111 !important; }
+
+  /* the boundary: the document, without the site around it */
+  #site-tree, #toc, #theme-toggle, #toc-toggle, .page-actions, .screen-only { display: none !important; }
+  .export-only { display: revert !important; }
+
+  /* the rails are gone, so the space reserved for them goes too */
+  body, body.toc2, #content, #header, .index-page {
+    margin-left: 0 !important; margin-right: 0 !important;
+    padding-left: 0 !important; padding-right: 0 !important;
+    max-width: none !important; width: auto !important;
+  }
+
+  /* decorative motion prints in the state it settles into, never mid-transition */
+  *, *::before, *::after {
+    animation: none !important; transition: none !important;
+    opacity: 1 !important; transform: none !important;
+    scroll-behavior: auto !important;
+  }
+  .reveal { opacity: 1 !important; transform: none !important; }
+
+  /* wide figures fit the page instead of being clipped at the right edge */
+  svg, img, figure, table, pre, .listingblock, .tableblock { max-width: 100% !important; }
+  svg { height: auto !important; }
+  .tableblock, .listingblock, .literalblock { overflow: visible !important; }
+
+  /* no heading stranded at the foot of a page, and nothing split that reads as one unit */
+  h1, h2, h3, h4 { break-after: avoid-page; page-break-after: avoid; }
+  figure, .admonitionblock, .imageblock, tr, .card { break-inside: avoid-page; page-break-inside: avoid; }
+  a { text-decoration: none; color: inherit; }
+  @page { margin: 16mm 14mm; }
+}
