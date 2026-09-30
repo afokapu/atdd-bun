@@ -47,7 +47,11 @@ jobs:
         run: |
           name=$(node -p "require('./package.json').name")
           local=$(node -p "require('./package.json').version")
-          published=$(npm view "$name" version 2>/dev/null || echo "0.0.0")
+          # npm can take minutes to list a release, so a merge right after another would compute the same version
+          # and be refused (409). The highest of npm's latest and the release tags is the version to follow.
+          registry=$(npm view "$name" version 2>/dev/null || echo "0.0.0")
+          tagged=$(git tag --list 'v*' --sort=-v:refname | head -1 | sed 's/^v//')
+          published=$(printf '%s\n%s\n' "$registry" "${tagged:-0.0.0}" | sort -V | tail -1)
           next=$(LOCAL="$local" PUBLISHED="$published" node -e '
             const [l, p] = [process.env.LOCAL, process.env.PUBLISHED].map(v => v.split("-")[0].split(".").map(Number));
             const gt = l[0] - p[0] || l[1] - p[1] || l[2] - p[2];
