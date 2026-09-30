@@ -270,78 +270,9 @@ export function e2eFiles(croot) {
   return [...walkFiles(join(croot, "e2e"), isTs)].sort();
 }
 
-// Interlocking YAML parse — declares interlocking_id + a non-empty routes list (core #1248,
-// snake_case planner data). Registry/projection docs with no routes yield null.
-export function parseInterlocking(text) {
-  const lines = text.split(/\r?\n/);
-  const idM = text.match(/^interlocking_id:\s*["']?([^"'#\n]+?)["']?\s*(?:#.*)?$/m);
-  if (!idM) return null;
-  const interlockingId = idM[1].trim();
-
-  const routes = [];
-  const ri = lines.findIndex((l) => /^routes:\s*(?:#.*)?$/.test(l));
-  if (ri >= 0) {
-    for (let i = ri + 1; i < lines.length; i++) {
-      const l = lines[i];
-      if (/^\S/.test(l)) break;
-      const rm = l.match(/^\s*-\s*route_id:\s*["']?([^"'#\n]+?)["']?\s*(?:#.*)?$/);
-      if (rm) {
-        routes.push({
-          routeId: rm[1].trim(),
-          line: i + 1,
-          sourceLine: l,
-          trainId: null,
-          category: null,
-        });
-      } else if (routes.length) {
-        const cur = routes[routes.length - 1];
-        const tm = l.match(/^\s*train_id:\s*["']?([^"'#\n]+?)["']?\s*(?:#.*)?$/);
-        if (tm) cur.trainId = tm[1].trim();
-        // `category:` only — `category_digit:` is retired (#1421 / #1440) and rejected by
-        // core's schema, so there is nothing left to read off a conforming artifact.
-        const cm = l.match(/^\s*category:\s*["']?([^"'#\n]+?)["']?\s*(?:#.*)?$/);
-        if (cm) cur.category = cm[1].trim();
-      }
-    }
-  }
-  if (!routes.length) return null;
-
-  let exposed = false;
-  const actions = [];
-  const ei = lines.findIndex((l) => /^entrypoint:\s*(?:#.*)?$/.test(l));
-  if (ei >= 0) {
-    for (let i = ei + 1; i < lines.length; i++) {
-      const l = lines[i];
-      if (/^\S/.test(l)) break;
-      if (/^\s*exposed:\s*true\b/.test(l)) exposed = true;
-      // FLOW STYLE TOO: `actions: [resolve_match, other]`.
-      //
-      // The interlocking YAML is stack-neutral planner data and flow sequences are
-      // ordinary YAML. Python reads it with a real parser and accepts both; this
-      // hand-rolled line scanner accepted only block style, so the SAME plan file
-      // was judged differently depending on which stack read it — and the verdict
-      // was "exposed interlocking is not Station-Master-reachable", a strict
-      // blocking finding, against a consumer whose YAML was perfectly valid.
-      // Found by running this provider against a Bun consumer written from scratch.
-      const flow = l.match(/^\s*actions:\s*\[([^\]]*)\]\s*(?:#.*)?$/);
-      if (flow) {
-        for (const raw of flow[1].split(",")) {
-          const a = raw.trim().replace(/^["']|["']$/g, "");
-          if (a) actions.push(a);
-        }
-        continue;
-      }
-      if (/^\s*actions:\s*(?:#.*)?$/.test(l)) {
-        for (let j = i + 1; j < lines.length; j++) {
-          const am = lines[j].match(/^\s*-\s*["']?([^"'#\n]+?)["']?\s*(?:#.*)?$/);
-          if (am) actions.push(am[1].trim());
-          else break;
-        }
-      }
-    }
-  }
-  return { interlockingId, routes, exposed, actions, rawText: text };
-}
+// Interlocking YAML parse: interlocking_id + a non-empty routes list (core #1248, snake_case planner data).
+// Registry/projection docs with no routes yield null. One parser for every detector, in lib/.
+export { parseInterlocking } from "../../../lib/interlocking.mjs";
 
 export function lineOf(text, pattern, def = 1) {
   const lines = text.split(/\r?\n/);
