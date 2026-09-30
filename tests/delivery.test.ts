@@ -903,3 +903,22 @@ test("a ready record is judged by the policy at its approved_sha: dropping a wri
     expect((await validateDelivery(dir, { gate: false })).map(f => `${f.rule_id} ${f.file}`)).toEqual(["delivery.model-allowed delivery/next/evidence.yaml"]);
   });
 });
+
+test("pre-push scoping: a record unchanged since the branch left its base is not judged again; one the branch adds is", async () => {
+  await tranche(async (dir, commit) => {
+    // A record already on main that a later rule flags: merged records are final, so it can never be repaired.
+    await sh(dir, "git", "checkout", "-q", "main");
+    await commit("chore: merged record", { "delivery/old/evidence.yaml": record(FULL, { tranche: "elsewhere" }) });
+    await sh(dir, "git", "checkout", "-qb", "tranche/next");
+    await commit("feat: next", { "src/app.ts": "export const a = 3;\n" });
+    const mismatch = (folder: string) => expect.stringContaining(`does not match its folder '${folder}'`);
+    expect(await evidence(dir)).toEqual([mismatch("old")]);
+    expect(await validateDelivery(dir, { gate: false, since: "main" })).toEqual([]);
+    await commit("chore: new record", { "delivery/next/evidence.yaml": record(FULL, { tranche: "other" }) });
+    expect((await validateDelivery(dir, { gate: false, since: "main" })).map(f => f.evidence)).toEqual([mismatch("next")]);
+    // A since that does not resolve scopes nothing.
+    const unscoped = (await validateDelivery(dir, { gate: false, since: "no-such-ref" })).map(f => f.evidence);
+    expect(unscoped).toHaveLength(2);
+    expect(unscoped).toEqual(expect.arrayContaining([mismatch("next"), mismatch("old")]));
+  });
+});

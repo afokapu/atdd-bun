@@ -18,7 +18,7 @@ content:
     Record the full or abbreviated SHA the final review named. After a rebase, run the final review again on the new head.
   exceptions:
   - >-
-    At the gate, a record the change does not touch is not judged again: it was judged when it merged, and its tranche branch may be gone. Outside the gate every ready record is judged.
+    At the gate, a record the change does not touch is not judged again: it was judged when it merged, and its tranche branch may be gone. The pre-push hook scopes the same way, from where the branch left its base branch; with no base found it judges every record. Everywhere else every ready record is judged.
   - >-
     A shallow clone may lack the commit: CI must fetch full history (the generated workflow uses fetch-depth 0).
 metadata:
