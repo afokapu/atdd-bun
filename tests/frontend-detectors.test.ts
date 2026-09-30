@@ -123,3 +123,17 @@ test("a train acceptance's full URN resolves when the plan states it", async () 
     expect(found.filter(v => v.rule_id === "tester.bun.acceptance-resolves-to-declared")).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("the tester checks skip the integrity test atdd-bun generates, and only while it is exactly what was generated", async () => {
+  // A consumer may not edit that file, so a tester rule on it could never be repaired (resolver-os, atdd-maintainer
+  // #XoNpJXRL5i9y). Recognised by content: an edited copy is judged like any test.
+  const root = await mkdtemp(join(tmpdir(), "atdd-integrity-test-"));
+  try {
+    const file = join(root, "atdd-bun.integrity.test.ts"), template = await Bun.file(resolve(import.meta.dir, "../templates/agents/atdd-bun.integrity.test.ts")).text();
+    const judged = async () => (await runImplementation("bun_tester_discipline_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.file.endsWith("atdd-bun.integrity.test.ts"));
+    await writeFile(file, template.replace("{{VERSION}}", "0.10.11"));
+    expect(await judged()).toEqual([]);
+    await writeFile(file, `${template.replace("{{VERSION}}", "0.10.11")}// an edit\n`);
+    expect((await judged()).map(v => v.rule_id)).toContain("tester.bun.test-carries-urn-identity");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
