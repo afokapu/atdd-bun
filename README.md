@@ -217,6 +217,21 @@ The journey view `atdd-bun docs journeys` generates is exempt from the size caps
 alone can exceed them, and never from the `docs` profile, which refuses a copy that is not exactly
 what the plan generates.
 
+## Docs-site theme
+
+A repository that publishes its AsciiDoc docs as a site does not need its own theme.
+`templates/docs/site.css` styles Asciidoctor's default HTML5 output (`toc: left`), light and
+dark, and is clean under the `design` profile. Use it from the package rather than copying it,
+so it stays out of your scans and updates with the toolkit. Asciidoctor embeds it into each page;
+write the site to `dist/`, which no profile scans:
+
+```sh
+asciidoctor -a stylesheet="$PWD/node_modules/@afokapu/atdd-bun/templates/docs/site.css" -D dist docs/index.adoc
+```
+
+To re-theme it, override its custom properties (`--paper`, `--ink`, `--accent`, `--sans`, …) on
+`:root` in a stylesheet of your own, using your design tokens.
+
 ## Agents and integrity
 
 The skill gives every coding agent the lifecycle PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE and
