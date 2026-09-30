@@ -18,6 +18,7 @@ import {
   rel,
   mk,
   writeReport,
+  unbuiltWagons,
 } from "../_shared/interlocking.mjs";
 
 const RULE = "tester.bun.interlocking-route-coverage";
@@ -34,6 +35,7 @@ for (const scanRoot of roots) {
     for (const { file, rec } of records) {
       for (const route of rec.routes) {
         if (isRouteCovered(route, e2eTexts)) continue;
+        if (unbuiltWagons(croot, route.trainId).length) continue;   // pending: a wagon on its train has no source yet
         const cat =
           route.category !== null
             ? `category "${route.category}"`

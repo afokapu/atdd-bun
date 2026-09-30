@@ -319,3 +319,36 @@ export function writeReport(violations) {
   writeFileSync(rp, JSON.stringify({ violations }, null, 2), "utf8");
   process.exit(0);
 }
+
+// A route whose train passes through a wagon with no source yet is pending: the plan promises it, and nothing exists to
+// drive yet. The route rules skip it until every wagon on its train has source, then judge it. Derived from the plan and
+// the source tree, never declared, so it cannot be used to park a route; topology keeps reporting the missing source.
+const pendingCache = new Map();
+export function unbuiltWagons(croot, trainId) {
+  if (!trainId) return [];
+  let byTrain = pendingCache.get(croot);
+  if (!byTrain) {
+    byTrain = new Map();
+    let sourceRoot = "src/wagons";
+    try { sourceRoot = Bun.YAML.parse(readText(join(croot, "atdd-bun.yaml")))?.topology?.source_root || sourceRoot; } catch { /* default layout */ }
+    const hasSource = (wagon) => [...walkFiles(join(croot, sourceRoot, wagon), isTs)].some((f) => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(f));
+    (function rec(dir) {
+      let entries;
+      try { entries = readdirSync(dir).sort(); } catch { return; }
+      for (const name of entries) {
+        const full = join(dir, name);
+        let st;
+        try { st = statSync(full); } catch { continue; }
+        if (st.isDirectory()) { if (name !== "_interlockings") rec(full); continue; }
+        if (!/\.ya?ml$/.test(name)) continue;
+        let doc;
+        try { doc = Bun.YAML.parse(readText(full)); } catch { continue; }
+        if (!doc || typeof doc.train_id !== "string" || !Array.isArray(doc.sequence)) continue;
+        const wagons = new Set(doc.sequence.flatMap((step) => [step?.from, step?.to]).filter((end) => typeof end === "string" && end.startsWith("wagon:")).map((end) => end.slice(6).trim()));
+        byTrain.set(doc.train_id, [...wagons].filter((wagon) => !hasSource(wagon)));
+      }
+    })(join(croot, PLAN_ROOT));
+    pendingCache.set(croot, byTrain);
+  }
+  return byTrain.get(trainId) ?? [];
+}
