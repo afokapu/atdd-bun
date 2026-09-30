@@ -217,8 +217,10 @@ function appFile(croot) {
       /* absent */
     }
   }
+  // Beyond the named files, only the module that declares the map counts: a test or wagon that imports it only
+  // mentions it, and taking the first mention made a route test the Station Master (C1, #MjeoAs7SZUHk).
   for (const f of walkFiles(croot, isTs)) {
-    if (/\bJOURNEY_MAP\b/.test(readText(f))) return f;
+    if (!/\.(test|spec)\.[cm]?[jt]sx?$/.test(f) && /\b(?:const|let|var)\s+JOURNEY_MAP\b/.test(readText(f))) return f;
   }
   return null;
 }

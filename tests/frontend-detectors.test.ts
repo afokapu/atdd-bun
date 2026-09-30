@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
@@ -135,5 +135,17 @@ test("the tester checks skip the integrity test atdd-bun generates, and only whi
     expect(await judged()).toEqual([]);
     await writeFile(file, `${template.replace("{{VERSION}}", "0.10.11")}// an edit\n`);
     expect((await judged()).map(v => v.rule_id)).toContain("tester.bun.test-carries-urn-identity");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("the Station Master is the module that declares JOURNEY_MAP, not a test that imports it", async () => {
+  // With the Station Master at src/server.ts, a route test importing the map sorted first and was taken for it, so its
+  // empty view of the map reported every correctly wired action (C1, atdd-maintainer #MjeoAs7SZUHk).
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_binding", "fixtures", "clean"), root, { recursive: true });
+    await rename(join(root, "server.ts"), join(root, "src", "server.ts"));
+    await writeFile(join(root, "e2e", "interlockings", "aa-imports-map.test.ts"), 'import { JOURNEY_MAP } from "../../src/server";\nexport const actions = Object.keys(JOURNEY_MAP);\n');
+    expect((await runImplementation("bun_interlocking_binding", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).map(v => `${v.rule_id} ${v.file.slice(root.length + 1)}`)).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
