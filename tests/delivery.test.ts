@@ -922,3 +922,13 @@ test("pre-push scoping: a record unchanged since the branch left its base is not
     expect(unscoped).toEqual(expect.arrayContaining([mismatch("next"), mismatch("old")]));
   });
 });
+
+test("a reviewer passes over a model that independence forbids without a fallback; a skipped model it could have used still needs one", async () => {
+  // resolver-os #gZaMNpzLYYEo: glm first as writer and reviewer. Under different-model glm may not review glm's plan, so
+  // claude-opus reviews; that is ineligibility, not unavailability, and no fallback can honestly record it.
+  const policy = (independence: string) => `profiles: [delivery]\ndelivery:\n  root: delivery\n  independence: ${independence}\n  stages: ${JSON.stringify({ plan: { writer: ["glm", "claude-opus"], reviewer: ["glm", "claude-opus"] }, final: { reviewer: ["glm", "claude-opus"] } })}\n`;
+  const evidence = record([review("plan", "1111111", null, ["claude-opus", "r1"])], { work: [write("plan", "1111111", ["glm", "w-plan"])] });
+  const allowed = async (independence: string) => { let out: string[] = []; await withRepo({ "atdd-bun.yaml": policy(independence), "delivery/api/evidence.yaml": evidence }, async dir => { out = (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.model-allowed").map(f => f.evidence); }); return out; };
+  expect(await allowed("different-model")).toEqual([]);
+  expect(await allowed("fresh-process")).toEqual([expect.stringContaining("no fallback from 'glm'")]);
+});

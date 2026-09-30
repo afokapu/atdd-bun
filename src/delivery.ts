@@ -234,14 +234,16 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
   return out;
 }
 
-/** A model must come from the stage's list; a model after the first needs a recorded fallback from each one before it. */
-function checkModel(file: string, at: string, stage: Stage, role: "writer" | "reviewer", actor: Actor, list: string[], fallbacks: Fallback[], defaultRole: "writer" | "reviewer", fallback: DeliveryPolicy["fallback"]): PlanFinding[] {
+/** A model must come from the stage's list; a model after the first needs a recorded fallback from each one before it,
+ * except one the stage could not use: under different-model independence a reviewer skips every model that wrote the
+ * work it reviews (delivery.reviewer-independent's fix hint). Ineligible is not unavailable, so no fallback records it. */
+function checkModel(file: string, at: string, stage: Stage, role: "writer" | "reviewer", actor: Actor, list: string[], fallbacks: Fallback[], defaultRole: "writer" | "reviewer", fallback: DeliveryPolicy["fallback"], ineligible: string[] = []): PlanFinding[] {
   const out: PlanFinding[] = [];
   const index = list.indexOf(actor.model);
   if (index < 0) return [finding("delivery.model-allowed", file, `${at}: ${role} model '${actor.model}' is not in ${stage}.${role} [${list.join(", ")}]`)];
   // `author` is the 0.9 spelling of `writer`.
   const recorded = fallbacks.filter(entry => ((entry.role === "author" ? "writer" : entry.role) ?? defaultRole) === role).map(entry => entry.from);
-  for (const skipped of list.slice(0, index)) if (!recorded.includes(skipped)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} '${actor.model}' is a fallback, but no fallback from '${skipped}' records why it was unavailable`));
+  for (const skipped of list.slice(0, index)) if (!recorded.includes(skipped) && !ineligible.includes(skipped)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} '${actor.model}' is a fallback, but no fallback from '${skipped}' records why it was unavailable`));
   for (const from of recorded) if (!list.slice(0, index).includes(from)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} fallback from '${from}' does not precede '${actor.model}' in [${list.join(", ")}]`));
   return out;
 }
@@ -305,10 +307,11 @@ function checkEvidence(file: string, evidence: Evidence, policy: DeliveryPolicy)
     const at = `reviews[${index}] (${review.stage} @ ${review.sha})`, stage = policy.stages[review.stage];
     if (!stage?.reviewer.length) { out.push(finding("delivery.evidence-schema", file, `${at}: ${review.stage} has no reviewer in delivery.stages`)); return; }
     const fallbacks = review.fallback ?? [];
-    out.push(...checkFallbacks(file, at, fallbacks, policy.fallback), ...checkModel(file, at, review.stage, "reviewer", review.reviewer, stage.reviewer, fallbacks, "reviewer", policy.fallback));
-    if (review.author && stage.writer.length) out.push(...checkModel(file, at, review.stage, "writer", review.author, stage.writer, fallbacks, "reviewer", policy.fallback));
     // Independence is judged against everyone who wrote what this review answers for.
     const covered = coveredStages(review.stage, policy, work), writers = [...work.filter(entry => covered.includes(entry.stage)).map(entry => entry.writer), ...(review.author ? [review.author] : [])];
+    const ineligible = stage.independence === "different-model" ? writers.map(writer => writer.model) : [];
+    out.push(...checkFallbacks(file, at, fallbacks, policy.fallback), ...checkModel(file, at, review.stage, "reviewer", review.reviewer, stage.reviewer, fallbacks, "reviewer", policy.fallback, ineligible));
+    if (review.author && stage.writer.length) out.push(...checkModel(file, at, review.stage, "writer", review.author, stage.writer, fallbacks, "reviewer", policy.fallback));
     if (!writers.length) out.push(finding("delivery.evidence-schema", file, `${at}: names no writer of the work it reviews (${covered.join(", ")}); record each stage's work, or the review's author, so independence can be judged`));
     if (writerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' also wrote in this tranche; a reviewer that edits becomes a writer`));
     if (reviewerRuns.has(review.reviewer.run)) out.push(finding("delivery.reviewer-independent", file, `${at}: reviewer run '${review.reviewer.run}' already reviewed reviews[${reviewerRuns.get(review.reviewer.run)}]; every review is a fresh process`));
