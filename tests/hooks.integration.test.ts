@@ -152,3 +152,19 @@ test("the generated journey view is exempt from the size caps but never from the
     expect(generated.message).not.toContain("planner.docs.journey-view-current");
   } finally { await cleanup(root); }
 }, 60_000);
+
+test("pre-push does not judge a delivery record again that is unchanged since the branch left its base, and judges all without a base", async () => {
+  const root = await repo("main"); try {
+    // A record on main that is flagged now: merged records are final, so only the gate's scoping keeps it from blocking every push.
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [delivery]\ndelivery:\n  root: delivery\n");
+    await mkdir(join(root, "delivery", "old"), { recursive: true });
+    await writeFile(join(root, "delivery", "old", "evidence.yaml"), JSON.stringify({ tranche: "elsewhere", status: "open", base_sha: "0abcdef", reviews: [] }));
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "merged record"]); await git(root, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    await git(root, ["checkout", "-qb", "feature"]); await writeFile(join(root, "atdd-bun.yaml"), "# policy edit\nprofiles: [delivery]\ndelivery:\n  root: delivery\n"); await git(root, ["commit", "-qam", "policy edit"]);
+    expect(await runHook("pre-push", root, ["origin"], "")).toEqual({ ok: true, message: "validation clean" });
+    expect(process.env.ATDD_DELIVERY_SINCE).toBeUndefined();
+    await git(root, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    expect((await runHook("pre-push", root, ["origin"], "")).ok).toBeFalse();
+  }
+  finally { await cleanup(root); }
+}, 20_000);

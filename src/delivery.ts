@@ -394,8 +394,10 @@ async function againstRef(root: string, ref: string): Promise<{ base: string; he
   return since && head ? { base: since, head } : null;
 }
 
-/** `gate: true` is the pre-merge gate; `false` disables it; unset reads ATDD_DELIVERY_GATE. */
-export type DeliveryOptions = { gate?: boolean | GateMode; base?: string };
+/** `gate: true` is the pre-merge gate; `false` disables it; unset reads ATDD_DELIVERY_GATE. `since` (unset: reads
+ * ATDD_DELIVERY_SINCE, which only the pre-push hook sets) scopes a run outside the gate as the gate is scoped: a record
+ * unchanged since that commit is not judged again. An unresolvable commit scopes nothing, so every record is judged. */
+export type DeliveryOptions = { gate?: boolean | GateMode; base?: string; since?: string };
 
 export async function validateDelivery(root = process.cwd(), options: DeliveryOptions = {}): Promise<PlanFinding[]> {
   const absolute = resolve(root), config = await readConfig(absolute);
@@ -434,9 +436,11 @@ export async function validateDelivery(root = process.cwd(), options: DeliveryOp
   const mode = options.gate === undefined ? gateMode() : options.gate === true ? "merge" : options.gate || null;
   // At the gate, a record the change does not touch was judged when it merged. It is not judged again, against a
   // later policy, schema or history: records are append-only and could never be repaired, so one tightening would
-  // fail every later change. Outside the gate every record is judged. The gate itself still rejects any change to
-  // an untouched record's folder (mergeGate).
-  const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null : null;
+  // fail every later change. Outside the gate every record is judged, unless a `since` commit scopes the run the same
+  // way (the pre-push hook). The gate itself still rejects any change to an untouched record's folder (mergeGate).
+  const since = options.since ?? process.env.ATDD_DELIVERY_SINCE;
+  const onBase = mode ? (await gateRange(absolute, mode, options.base))?.base ?? null
+    : since ? (await git(absolute, ["rev-parse", "--verify", "--quiet", `${since}^{commit}`])).out || null : null;
   // At the gate, like records, a stray the change does not touch was there when it merged and is not judged again.
   // A data file belongs only as a report some record in its tranche names; an unnamed one is authored content by another name.
   // Per tranche: a data file is a report only when a record in its own tranche names it.
