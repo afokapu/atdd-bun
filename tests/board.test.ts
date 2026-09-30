@@ -2,7 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { boardUrl, DIRECTORY, localUrl, parseEnvelope, topicName } from "../src/board";
+import { boardUrl, DIRECTORY, localUrl, parseEnvelope, topicName, waitFor } from "../src/board";
 import { knownTopics, render } from "../src/board-ui";
 
 // A stand-in for ntfy's publish and poll endpoints, enough for atdd-bun chat: messages per topic, in order, with ids.
@@ -36,8 +36,10 @@ const enabled = await mkdtemp(join(tmpdir(), "atdd-board-on-"));
 await writeFile(join(enabled, "atdd-bun.yaml"), "profiles: [delivery]\ndelivery:\n  board: {}\n");
 const state = await mkdtemp(join(tmpdir(), "atdd-board-state-"));
 afterAll(() => Promise.all([rm(enabled, { recursive: true, force: true }), rm(state, { recursive: true, force: true })]));
+// Each call states its own identity: the caller's (an agent running these tests) never leaks in.
+const { ATDD_AGENT: _agent, ATDD_TOPICS: _topics, ...ambient } = process.env;
 async function chat(env: Record<string, string>, args: string[], stdin = "", cwd = enabled) {
-  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], cwd, env: { ...process.env, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
+  const child = Bun.spawn({ cmd: ["bun", cli, "chat", ...args], cwd, env: { ...ambient, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...env }, stdin: new Blob([stdin]), stdout: "pipe", stderr: "pipe" });
   return { code: await child.exited, out: await new Response(child.stdout).text(), err: await new Response(child.stderr).text() };
 }
 const as = (agent: string, ...topics: string[]) => ({ ATDD_AGENT: agent, ATDD_TOPICS: topics.join(",") });
@@ -181,4 +183,14 @@ test("wait remembers its place: the same command, run again, continues after the
   expect((await chat(me, same)).out).toContain("third");
   // Another identity keeps its own place.
   expect((await chat(as("other@resume", topic), ["wait", topic, "--timeout", "1"])).code).toBe(2);
+});
+
+test("wait ends at its timeout even when the board accepts a poll and never answers", async () => {
+  // A half-open connection after the board restarts or the machine sleeps: an unbounded poll held the wait for hours.
+  const silent = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Promise<Response>(() => {}) });
+  try {
+    const started = Date.now();
+    expect(await waitFor(`http://127.0.0.1:${silent.port}`, ["t"], "me@x", "all", 1)).toBeNull();
+    expect(Date.now() - started).toBeLessThan(3000);
+  } finally { silent.stop(true); }
 });
