@@ -1,3 +1,4 @@
+// Phase: SMOKE
 // CLEAN fixture — the Station Master reached as a MODULE, not a class.
 //
 // The smoke check used to demand a symbol literally named StationMaster. The coder
