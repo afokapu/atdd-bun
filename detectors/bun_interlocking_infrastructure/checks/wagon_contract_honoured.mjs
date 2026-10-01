@@ -111,10 +111,17 @@ const violations = [];
 
 for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
   for (const croot of consumerRoots(root, excludes)) {
-    const contracts = [];
+    // Only a wagon some train carries moves Cargo, so only its contract can be honoured or broken in Cargo-moving code.
+    // A wagon no train's sequence carries yet (implemented, composed in a later tranche) is not judged until one does
+    // (S4 #qSWeDfXJVXcv; the convention's exception is per wagon, not per repository).
+    const contracts = [], carried = new Set();
     for (const f of walk(join(croot, PLAN_ROOT), (p) => /\.ya?ml$/.test(p), excludes)) {
-      const c = wagonContract(read(f));
-      if (c) contracts.push({ file: f, ...c });
+      const text = read(f), c = wagonContract(text);
+      if (c) contracts.push({ file: f, wagon: text.match(/^wagon:\s*["']?([^"'#\s]+)/m)?.[1] ?? null, ...c });
+      let doc;
+      try { doc = Bun.YAML.parse(text); } catch { continue; }
+      if (doc && typeof doc.train_id === "string" && Array.isArray(doc.sequence))
+        for (const step of doc.sequence) for (const end of [step?.from, step?.to]) if (typeof end === "string" && end.startsWith("wagon:")) carried.add(end.slice(6).trim());
     }
     if (!contracts.length) continue;                     // no declared contract
 
@@ -128,6 +135,7 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
 
     const blob = wagonCode.map((s) => maskComments(s.text)).join("\n");
     for (const c of contracts) {
+      if (c.wagon && !carried.has(c.wagon)) continue;   // no train carries this wagon yet
       for (const [kind, names] of [["produce", c.produce], ["consume", c.consume]]) {
         for (const name of names) {
           if (blob.includes(name)) continue;

@@ -1,0 +1,5 @@
+train_id: train:orders:checkout
+sequence:
+- step: 1
+  from: customer:active
+  to: wagon:confirm-order

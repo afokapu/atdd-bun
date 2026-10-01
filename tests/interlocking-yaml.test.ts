@@ -104,3 +104,22 @@ test("an E2E that drives the production Station Master uses the runners it compo
     expect(await flagged()).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a wagon contract is judged only once some train carries the wagon", async () => {
+  // S4 #qSWeDfXJVXcv: wagon B is implemented but composed into a train only in a later tranche, so no Cargo carries it.
+  const root = await mkdtemp(join(tmpdir(), "atdd-carried-"));
+  try {
+    const wagon = (id: string, artifact: string) => `wagon: ${id}\nproduce:\n  - name: ${artifact}\nconsume: []\n`;
+    await mkdir(join(root, "plan", "a"), { recursive: true }); await mkdir(join(root, "plan", "b"), { recursive: true }); await mkdir(join(root, "plan", "_trains"), { recursive: true });
+    await writeFile(join(root, "plan", "a", "_a.yaml"), wagon("a", "x:a"));
+    await writeFile(join(root, "plan", "b", "_b.yaml"), wagon("b", "x:b"));
+    await writeFile(join(root, "plan", "_trains", "t-a.yaml"), "train_id: train:x:t-a\nsequence:\n- step: 1\n  from: user:u\n  to: wagon:a\n");
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "a.ts"), 'export function runA(cargo: { put(k: string, v: unknown): void }) { cargo.put("x:a", 1); }\n');
+    await writeFile(join(root, "src", "b.ts"), "export const backfill = () => 1;\n");
+    const contract = async () => (await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.wagon-honours-its-contract");
+    expect(await contract()).toEqual([]);
+    await writeFile(join(root, "plan", "_trains", "t-b.yaml"), "train_id: train:x:t-b\nsequence:\n- step: 1\n  from: wagon:a\n  to: wagon:b\n");
+    expect((await contract()).map(v => v.evidence)).toEqual([expect.stringContaining('"x:b"')]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
