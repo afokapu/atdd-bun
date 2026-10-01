@@ -75,3 +75,16 @@ test("a route id covers its route only in a test of its own interlocking", async
     expect(coverage.map(v => v.file)).toEqual([expect.stringContaining("beta.yaml")]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("only a test declared Phase: SMOKE covers an exposed Station Master action", async () => {
+  // FWS #TzSCGS5ajYhP: a local E2E naming the action beside the runners cleared the rule, though it is not a smoke.
+  const root = await mkdtemp(join(tmpdir(), "atdd-smoke-phase-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "clean", "interlocking_smoke_coverage"), root, { recursive: true });
+    const smoke = join(root, "e2e", "smoke", "resolve-match.smoke.test.ts");
+    const rule = async () => (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-smoke-coverage-for-station-master");
+    expect(await rule()).toEqual([]);
+    await writeFile(smoke, (await readFile(smoke, "utf8")).replace("// Phase: SMOKE\n", "// Phase: E2E\n"));
+    expect((await rule()).length).toBe(1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

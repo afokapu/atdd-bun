@@ -29,10 +29,14 @@ const RULE = "tester.bun.interlocking-smoke-coverage-for-station-master";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
 const violations = [];
 
-function actionSmokeCovered(action, e2eTexts) {
-  return e2eTexts.some(
-    (t) =>
-      tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN),
+// Only a smoke test counts: one whose header declares `Phase: SMOKE` (tester.bun.test-phase-declared), which also puts
+// it under the smoke rules (no substituted collaborators, observable outcome). A local E2E that names the action beside
+// the runners is not a smoke and no longer clears the rule (FWS #TzSCGS5ajYhP).
+const SMOKE_PHASE = /^\s*\/\/\s*Phase:\s*SMOKE\b/m;
+function actionSmokeCovered(action, e2eFiles) {
+  return e2eFiles.some(
+    ({ raw, text: t }) =>
+      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN),
   );
 }
 
@@ -41,7 +45,7 @@ for (const scanRoot of roots) {
     const records = interlockingFiles(croot)
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
-    const e2eTexts = e2eFiles(croot).map((f) => maskComments(readText(f)));
+    const e2eTexts = e2eFiles(croot).map((f) => { const raw = readText(f); return { raw, text: maskComments(raw) }; });
 
     for (const { file, rec } of records) {
       if (!rec.exposed) continue;

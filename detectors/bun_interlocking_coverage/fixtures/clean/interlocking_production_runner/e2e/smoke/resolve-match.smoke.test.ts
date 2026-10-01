@@ -1,3 +1,4 @@
+// Phase: SMOKE
 // Station Master smoke test for the exposed resolve_match action — drives the real entrypoint ->
 // Station Master -> InterlockingRunner -> TrainRunner path.
 import { StationMaster } from "../../convex/app";
