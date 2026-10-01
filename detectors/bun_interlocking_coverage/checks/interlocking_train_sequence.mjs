@@ -16,7 +16,7 @@
 // suite green. The runtime obeyed the new plan; no test looked.
 import {
   parseJsonEnv, readText, findConsumerRoots, interlockingFiles, e2eFiles,
-  parseInterlocking, tokenCovered, rel, mk, PLAN_ROOT,
+  parseInterlocking, tokenCovered, rel, mk, PLAN_ROOT, unbuiltWagons,
 } from "../_shared/interlocking.mjs";
 import { writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -88,6 +88,7 @@ export function scanExecution(scanRoot) {
     const anchor = files.length ? rel(files[0].file, croot) : "e2e/";
     for (const trainId of [...trainsReachableFromRoutes(records)].sort()) {
       if (!declaresASequence(croot, trainId)) continue;   // nothing declared to exercise
+      if (unbuiltWagons(croot, trainId).length) continue;   // pending: a wagon on it has no source yet
       if (trainSequenceCovered(trainId, texts)) continue;
       violations.push(
         mk(RULE_SEQUENCE, anchor, 1, 0,
