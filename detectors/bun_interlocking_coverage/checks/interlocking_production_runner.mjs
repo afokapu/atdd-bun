@@ -5,6 +5,7 @@
 // (route resolution) and TrainRunner (linear execution), core afokapu/atdd#1251 — and MUST NOT
 // substitute a mock/spy/hand-built resolver for them. Bun mirror of core
 // tester.interlocking.production-runner-used. Scans `e2e/**/*.ts` interlocking tests.
+import { join } from "node:path";
 import {
   parseJsonEnv,
   readText,
@@ -32,6 +33,11 @@ const violations = [];
 
 for (const scanRoot of roots) {
   for (const croot of findConsumerRoots(scanRoot)) {
+    // A test that imports the Station Master drives the runners it composes: the call model's entry point
+    // (FWS #sEW3F9b49iA7). It counts only when the Station Master module itself references both production runners;
+    // substitutes are still caught by FORBIDDEN_PATTERNS above.
+    const station = ["server.ts", join("src", "server.ts")].map((name) => readText(join(croot, name))).find((t) => t && tokenCovered(PROD_INTERLOCKING, maskComments(t)) && tokenCovered(PROD_TRAIN, maskComments(t)));
+    const drivesStationMaster = (text) => Boolean(station) && /\bfrom\s+["'][^"']*\bserver(?:\.ts)?["']|import\(\s*["'][^"']*\bserver(?:\.ts)?["']\s*\)/.test(text);
     const records = interlockingFiles(croot)
       .map((f) => parseInterlocking(readText(f)))
       .filter(Boolean);
@@ -61,7 +67,7 @@ for (const scanRoot of roots) {
         }
       }
 
-      const missing = [PROD_INTERLOCKING, PROD_TRAIN].filter((sym) => !tokenCovered(sym, text));
+      const missing = drivesStationMaster(text) ? [] : [PROD_INTERLOCKING, PROD_TRAIN].filter((sym) => !tokenCovered(sym, text));
       if (missing.length) {
         violations.push(
           mk(

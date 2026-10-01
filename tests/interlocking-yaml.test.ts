@@ -88,3 +88,19 @@ test("only a test declared Phase: SMOKE covers an exposed Station Master action"
     expect((await rule()).length).toBe(1);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("an E2E that drives the production Station Master uses the runners it composes", async () => {
+  // FWS #sEW3F9b49iA7: an HTTP E2E through src/server.ts was flagged unless it named a runner symbol it does not need.
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-runner-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "clean", "interlocking_production_runner"), root, { recursive: true });
+    const test_ = join(root, "e2e", "interlockings", "match-resolution", "via-station.test.ts");
+    await writeFile(test_, 'import { expect, test } from "bun:test";\nimport { dispatch } from "../../../src/server";\ntest("nominal-all-voted", async () => expect(await dispatch("resolve_match", {})).toBeDefined());\n');
+    const flagged = async () => (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-production-runner-used" && v.file.endsWith("via-station.test.ts"));
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "server.ts"), "export const dispatch = async (_action: string, _inputs: object) => ({});\n");
+    expect((await flagged()).length).toBe(1);   // a Station Master that composes no runners proves nothing
+    await writeFile(join(root, "src", "server.ts"), 'import { InterlockingRunner } from "./trains/interlocking";\nimport { TrainRunner } from "./trains/runner";\nconst runner = new InterlockingRunner(new TrainRunner());\nexport const dispatch = (action: string, inputs: object) => runner.resolveTrain(action, inputs, {});\n');
+    expect(await flagged()).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
