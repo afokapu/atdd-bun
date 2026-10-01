@@ -345,9 +345,14 @@ export function unbuiltWagons(croot, trainId) {
         try { doc = Bun.YAML.parse(readText(full)); } catch { continue; }
         if (!doc || typeof doc.train_id !== "string" || !Array.isArray(doc.sequence)) continue;
         const wagons = new Set(doc.sequence.flatMap((step) => [step?.from, step?.to]).filter((end) => typeof end === "string" && end.startsWith("wagon:")).map((end) => end.slice(6).trim()));
-        byTrain.set(doc.train_id, [...wagons].filter((wagon) => !hasSource(wagon)));
+        byTrain.set(doc.train_id, [...wagons]);
       }
     })(join(croot, PLAN_ROOT));
+    // Only a repository that keeps wagon code under the source root can show a wagon as not built yet. Where no wagon has
+    // source there (the code lives elsewhere, as in decision-os), nothing is pending and every route is judged.
+    const built = new Map([...new Set([...byTrain.values()].flat())].map((wagon) => [wagon, hasSource(wagon)]));
+    const layoutInUse = [...built.values()].some(Boolean);
+    for (const [trainId, wagons] of byTrain) byTrain.set(trainId, layoutInUse ? wagons.filter((wagon) => !built.get(wagon)) : []);
     pendingCache.set(croot, byTrain);
   }
   return byTrain.get(trainId) ?? [];

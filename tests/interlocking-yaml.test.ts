@@ -34,11 +34,29 @@ test("a route whose train passes through a wagon with no source yet is pending; 
   try {
     await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "dirty", "interlocking_route_coverage"), root, { recursive: true });
     await writeFile(join(root, "plan", "_trains", "match-resolution-timeout.yaml"), "train_id: train:match:match-resolution-timeout\nsequence:\n- step: 1\n  from: user:player\n  to: wagon:match-voting\n");
+    // The repository keeps wagon code under the source root: another train's wagon is built there.
+    await writeFile(join(root, "plan", "_trains", "match-resolution-standard.yaml"), "train_id: train:match:match-resolution-standard\nsequence:\n- step: 1\n  from: user:player\n  to: wagon:match-core\n");
+    await mkdir(join(root, "src", "wagons", "match-core", "features", "core", "domain"), { recursive: true });
+    await writeFile(join(root, "src", "wagons", "match-core", "features", "core", "domain", "core.ts"), "export const core = 1;\n");
     const routes = async () => (await found("bun_interlocking_coverage", root)).filter(line => line.startsWith("tester.bun.interlocking-route-coverage"));
     const pending = await routes();
     const built = async () => { await mkdir(join(root, "src", "wagons", "match-voting", "features", "vote", "domain"), { recursive: true }); await writeFile(join(root, "src", "wagons", "match-voting", "features", "vote", "domain", "vote.ts"), "export const vote = 1;\n"); return routes(); };
     const judged = await built();
     // The other route, whose train document is absent, is judged throughout; the pending one comes back once built.
     expect(judged.length).toBe(pending.length + 1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("where no wagon has source under the source root, nothing is pending and every route is judged", async () => {
+  // C1 #yPaL9lCipO9p: decision-os keeps wagon code outside src/wagons, and 0.10.18 read that as every wagon unbuilt, so
+  // both route rules went silent. A repository that does not use the layout is judged exactly as before.
+  const root = await mkdtemp(join(tmpdir(), "atdd-no-layout-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "dirty", "interlocking_route_coverage"), root, { recursive: true });
+    const before = await found("bun_interlocking_coverage", root);
+    await writeFile(join(root, "plan", "_trains", "match-resolution-timeout.yaml"), "train_id: train:match:match-resolution-timeout\nsequence:\n- step: 1\n  from: user:player\n  to: wagon:match-voting\n");
+    await mkdir(join(root, "src", "db"), { recursive: true });
+    await writeFile(join(root, "src", "db", "vote.ts"), "export const vote = 1;\n");
+    expect((await found("bun_interlocking_coverage", root)).filter(line => line.startsWith("tester.bun.interlocking-route-coverage"))).toEqual(before.filter(line => line.startsWith("tester.bun.interlocking-route-coverage")));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
