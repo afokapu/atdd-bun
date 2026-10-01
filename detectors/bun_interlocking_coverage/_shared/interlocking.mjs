@@ -287,8 +287,13 @@ export function tokenCovered(token, text) {
   return new RegExp("(?<![\\w-])" + esc + "(?![\\w-])").test(text);
 }
 
-export function isRouteCovered(route, e2eTexts) {
-  return e2eTexts.some((t) => tokenCovered(route.routeId, t) || tokenCovered(route.trainId, t));
+// A train id is unique, so naming it covers the route. A route id is not: `refuse` or `record` can be routes of several
+// interlockings, and a test of one must not cover the others (FWS #liu3vKZYAPXD). A route id counts only in a test that
+// also names its interlocking, by id or slug.
+export function isRouteCovered(route, e2eTexts, interlockingId = null) {
+  const slug = interlockingId ? interlockingId.replace(/^interlocking:/, "") : null;
+  const ownInterlocking = (t) => !interlockingId || tokenCovered(interlockingId, t) || tokenCovered(slug, t);
+  return e2eTexts.some((t) => tokenCovered(route.trainId, t) || (tokenCovered(route.routeId, t) && ownInterlocking(t)));
 }
 
 export function interlockingTokenSet(records) {

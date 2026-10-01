@@ -60,3 +60,18 @@ test("where no wagon has source under the source root, nothing is pending and ev
     expect((await found("bun_interlocking_coverage", root)).filter(line => line.startsWith("tester.bun.interlocking-route-coverage"))).toEqual(before.filter(line => line.startsWith("tester.bun.interlocking-route-coverage")));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a route id covers its route only in a test of its own interlocking", async () => {
+  // FWS #liu3vKZYAPXD: `refuse` is a route of two interlockings; a test of one used to cover the other with no test.
+  const root = await mkdtemp(join(tmpdir(), "atdd-route-scope-"));
+  try {
+    const doc = (id: string) => `interlocking_id: interlocking:${id}\nroutes:\n  - route_id: refuse\n    train_id: train:${id}:refuse-${id}\n    category: error\n`;
+    await mkdir(join(root, "plan", "_trains", "_interlockings"), { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "_interlockings", "alpha.yaml"), doc("alpha"));
+    await writeFile(join(root, "plan", "_trains", "_interlockings", "beta.yaml"), doc("beta"));
+    await mkdir(join(root, "e2e", "interlockings", "alpha"), { recursive: true });
+    await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { test } from "bun:test";\ntest("interlocking:alpha refuse", () => {});\n');
+    const coverage = (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-route-coverage");
+    expect(coverage.map(v => v.file)).toEqual([expect.stringContaining("beta.yaml")]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
