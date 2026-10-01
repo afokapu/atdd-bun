@@ -27,6 +27,9 @@ for (const root of readRoots()) {
     if (!text) continue;
     const masked = maskLiteralsAndComments(text);
     for (const m of masked.matchAll(BARE_FETCH)) {
+      // A method DEFINED as fetch is not a call: Bun.serve({ async fetch(request) { … } }) is the inbound handler, and
+      // Bun requires that name (resolver-os #iFlkkL7jvEbC). A definition's parameter list is followed by its body.
+      if (m[0].startsWith("fetch") && /^\([^()]*\)\s*(?::\s*[^{=;]+)?\{/.test(masked.slice(m.index + m[0].length - 1))) continue;
       violations.push({ rule_id: RULE, file, ...locate(text, m.index),
         evidence: `${layerOf(file)} layer calls the platform HTTP primitive directly; route it through the centralized client in integration/` });
     }

@@ -149,3 +149,14 @@ test("the Station Master is the module that declares JOURNEY_MAP, not a test tha
     expect((await runImplementation("bun_interlocking_binding", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).map(v => `${v.rule_id} ${v.file.slice(root.length + 1)}`)).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("defining Bun.serve's fetch handler is not an outbound fetch call; a real call still is", async () => {
+  // resolver-os #iFlkkL7jvEbC: `async fetch(request) {` was reported as a presentation-layer HTTP call.
+  const root = await mkdtemp(join(tmpdir(), "atdd-fetch-handler-"));
+  try {
+    await mkdir(join(root, "features", "logs", "presentation"), { recursive: true });
+    await writeFile(join(root, "features", "logs", "presentation", "index.ts"), 'export const server = Bun.serve({\n  port: 8090,\n  async fetch(request: Request): Promise<Response> {\n    return new Response("ok");\n  },\n});\nexport const ping = () => fetch("https://example.test/ping");\n');
+    const found = (await runImplementation("bun_clean_architecture_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.boundaries-http-client");
+    expect(found.map(v => v.line)).toEqual([7]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
