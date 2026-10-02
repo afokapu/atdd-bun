@@ -124,7 +124,7 @@ test("wait is bounded: with nothing addressed to the agent it exits 2 with the o
   expect(waited.code).toBe(2);
   expect(waited.out).toContain("CHECK-IN for reviewer@quiet: no message");
   expect(waited.out).toContain("blocked on someone, and do they know?");
-  expect(waited.out).toContain("never post just to say you are still here");
+  expect(waited.out).toContain("never post just to say you are still here. Then re-arm this listener.");
 });
 
 test("the board lists its topics: each topic's first message names it once in the directory, and chat alone lists them", async () => {
@@ -221,6 +221,7 @@ test("follow prints the check-in after --check-in quiet seconds, and keeps liste
   const out = await new Response(run.stdout).text();
   expect(await run.exited).toBe(0);
   expect(out).toContain("CHECK-IN for driver@quiet-follow: no message for 1 s");
+  expect(out).not.toContain("re-arm");   // follow is still listening
   const off = Bun.spawn({ cmd: ["bun", cli, "chat", "follow", topic, "--timeout", "2", "--check-in", "0"], cwd: enabled, env: { ...ambient, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...as("driver@quiet-follow", topic) }, stdout: "pipe", stderr: "pipe" });
   expect(await new Response(off.stdout).text()).not.toContain("CHECK-IN");
 }, 20_000);
