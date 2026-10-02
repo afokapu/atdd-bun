@@ -164,6 +164,19 @@ export async function chat(args: string[], env: Record<string, string | undefine
       console.log(format(message, topics.length > 1));
       return 0;
     }
+    if (command === "follow") {
+      // The listener for a host that wakes its agent on each line a running process prints: every message addressed to
+      // this identity, as it arrives, until --timeout (seconds; none = until stopped). Same place-keeping as wait.
+      const file = cursorFile(me, topics, env), skip = list(flag("skip")), total = Number(flag("timeout") ?? 0);
+      const deadline = total > 0 ? Date.now() + total * 1000 : Infinity;
+      let since = flag("since") || loadCursor(file) || "all";
+      for (;;) {
+        const left = Math.ceil((deadline - Date.now()) / 1000);
+        if (left <= 0) return 0;
+        const message = await waitFor(url, topics, me, since, Math.min(60, left), skip, 500, id => { since = id; saveCursor(file, id); });
+        if (message) console.log(format(message, topics.length > 1));
+      }
+    }
     if (topics.length !== 1) throw new Error(`${command} takes one topic`);
     const topic = topics[0];
     if (command === "post") {
