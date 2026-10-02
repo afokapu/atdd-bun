@@ -194,3 +194,21 @@ test("wait ends at its timeout even when the board accepts a poll and never answ
     expect(Date.now() - started).toBeLessThan(3000);
   } finally { silent.stop(true); }
 });
+
+test("follow streams every message addressed to its agent as it arrives, without exiting", async () => {
+  // For a host that wakes its agent on each printed line (Claude Code's Monitor): one listener, no re-arm per message.
+  const topic = topicName("demo", "follow");
+  const child = Bun.spawn({ cmd: ["bun", cli, "chat", "follow", topic, "--timeout", "8"], cwd: enabled, env: { ...ambient, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...as("driver@follow", topic) }, stdout: "pipe", stderr: "pipe" });
+  const reader = child.stdout.getReader(), decoder = new TextDecoder();
+  let seen = "";
+  const until = async (text: string) => { while (!seen.includes(text)) { const { value, done } = await reader.read(); if (done) break; seen += decoder.decode(value); } return seen.includes(text); };
+  await chat(as("writer-glm@follow", topic), ["post", topic, "--to", "driver@follow", "--kind", "result"], "first result");
+  expect(await until("first result")).toBe(true);
+  await chat(as("writer-glm@follow", topic), ["post", topic, "--to", "someone@else", "--kind", "result"], "not for the driver");
+  await chat(as("writer-glm@follow", topic), ["post", topic, "--to", "driver@follow", "--kind", "result"], "second result");
+  expect(await until("second result")).toBe(true);
+  expect(seen).not.toContain("not for the driver");
+  expect(child.exitCode).toBeNull();   // still listening
+  child.kill();
+  await child.exited;
+});
