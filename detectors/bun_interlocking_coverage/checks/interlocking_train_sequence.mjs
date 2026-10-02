@@ -57,6 +57,7 @@ export function trainSequenceCovered(trainId, texts) {
 // reported "no test asserts the wagon SEQUENCE" about a sequence that does not exist,
 // and a route pointing at a missing train is the binding family's concern
 // (declared_route_not_runtime_resolvable), not this one.
+// The plan document that declares `trainId`'s sequence, or null when none does.
 export function declaresASequence(croot, trainId) {
   const found = [];
   (function rec(dir) {
@@ -73,9 +74,9 @@ export function declaresASequence(croot, trainId) {
   for (const f of found) {
     const text = readText(f);
     if (!text.includes(trainId)) continue;
-    if (/^\s*sequence:\s*$/m.test(text) || /^\s*sequence:\s*\[/m.test(text)) return true;
+    if (/^\s*sequence:\s*$/m.test(text) || /^\s*sequence:\s*\[/m.test(text)) return f;
   }
-  return false;
+  return null;
 }
 
 export function scanExecution(scanRoot) {
@@ -85,13 +86,14 @@ export function scanExecution(scanRoot) {
     if (!records.length) continue;
     const files = e2eFiles(croot).map((f) => ({ file: f, text: readText(f) }));
     const texts = files.map((x) => x.text);
-    const anchor = files.length ? rel(files[0].file, croot) : "e2e/";
     for (const trainId of [...trainsReachableFromRoutes(records)].sort()) {
-      if (!declaresASequence(croot, trainId)) continue;   // nothing declared to exercise
+      // The finding points at the train's own document, where the sequence a test must assert is declared (FWS #fqUGvWHn25mq).
+      const declared = declaresASequence(croot, trainId);
+      if (!declared) continue;   // nothing declared to exercise
       if (unbuiltWagons(croot, trainId).length) continue;   // pending: a wagon on it has no source yet
       if (trainSequenceCovered(trainId, texts)) continue;
       violations.push(
-        mk(RULE_SEQUENCE, anchor, 1, 0,
+        mk(RULE_SEQUENCE, rel(declared, croot), 1, 0,
           `declared train "${trainId}" is selected by a route but no test asserts the wagon ` +
           `SEQUENCE it executes; reorder or empty its definition and the suite stays green`,
           ""),
