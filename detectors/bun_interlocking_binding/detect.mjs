@@ -21,6 +21,7 @@
 // Zero third-party deps: Node and Bun builtins only. The plan/_trains interlocking YAML route space is
 // stack-neutral planner data (snake_case, core #1248); the runtime + JOURNEY_MAP + trace are Bun/TS.
 
+import { excludedPath } from "../../lib/scan.mjs";
 import { parseInterlocking as parseInterlockingDoc } from "../../lib/interlocking.mjs";
 import { readFileSync, writeFileSync, statSync, readdirSync } from "node:fs";
 import { scanExecution } from "./checks/interlocking_runtime_executes.mjs";
@@ -112,8 +113,7 @@ const SCAN_EXCLUDES = (() => {
 })();
 
 function isExcluded(path) {
-  const segments = path.split(sep);
-  return SCAN_EXCLUDES.some((ex) => segments.includes(ex) || path.includes(ex));
+  return excludedPath(path, SCAN_EXCLUDES);
 }
 
 function hasChildDir(dir, name) {

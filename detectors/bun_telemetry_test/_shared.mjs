@@ -6,6 +6,7 @@
 // kind segment (-TELEMETRY- / -EVENT- / -METRIC-), or by *.telemetry.test.*
 // colocation — the same identification tester.bun.telemetry-emit uses, plus the
 // binding header this profile adds.
+import { excludedPath } from "../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync } from "node:fs";
 import { join, extname, sep } from "node:path";
 import { loadTelemetryFiles, CONCRETE_URN } from "../../src/telemetry-plan.ts";
@@ -14,8 +15,7 @@ const TEST_RE = /\.(test|spec)\.[cm]?[jt]sx?$/;
 const DEFAULT_EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
 
 function isExcluded(path, excludes) {
-  const segs = path.split(sep);
-  return excludes.some((ex) => segs.includes(ex) || path.includes(ex));
+  return excludedPath(path, excludes);
 }
 
 export function* walkTests(root, excludes) {

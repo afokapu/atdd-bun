@@ -23,6 +23,7 @@
 // per-file rename: one spec file is wagon-level and legitimately covers many
 // acceptances, so a one-acceptance-per-file naming rule would fragment a real
 // suite. Both levels are parsed here.
+import { excludedPath } from "../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,8 +51,7 @@ export function parseJsonEnv(name, fallback) {
 }
 
 function isExcluded(path, excludes) {
-  const segs = path.split(sep);
-  return excludes.some((ex) => segs.includes(ex) || path.includes(ex));
+  return excludedPath(path, excludes);
 }
 
 // Walks TEST FILES ONLY. The tester persona governs the suite; source files are

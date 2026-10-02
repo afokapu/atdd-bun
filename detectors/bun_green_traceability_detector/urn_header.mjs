@@ -30,6 +30,7 @@
 //      is content, so neither may displace the URN from "first real line" — the
 //      Vite parser counts a shebang as the first non-empty line and fails such a
 //      file for a header it actually has. `firstMeaningfulNo` skips both.
+import { excludedPath } from "../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { join, extname, sep } from "node:path";
 
@@ -50,8 +51,7 @@ export function parseJsonEnv(name, fallback) {
 }
 
 export function isExcluded(path, excludes) {
-  const segs = path.split(sep);
-  return excludes.some((ex) => segs.includes(ex) || path.includes(ex));
+  return excludedPath(path, excludes);
 }
 
 function isScannable(file) {

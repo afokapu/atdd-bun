@@ -6,6 +6,7 @@
 // ZERO third-party deps — node builtins only. The interlocking route space is stack-neutral planner
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
+import { excludedPath } from "../../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { join, sep } from "node:path";
 
@@ -184,8 +185,7 @@ const SCAN_EXCLUDES = (() => {
 })();
 
 function isExcluded(path) {
-  const segments = path.split(sep);
-  return SCAN_EXCLUDES.some((ex) => segments.includes(ex) || path.includes(ex));
+  return excludedPath(path, SCAN_EXCLUDES);
 }
 
 function hasChildDir(dir, name) {
