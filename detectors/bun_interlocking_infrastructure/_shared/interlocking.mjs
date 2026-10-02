@@ -21,6 +21,7 @@
 //                        Mirrors python/<wagon>/wagon.py and convex/<wagon>/wagon.ts;
 //                        `wagon.ts` is already vocabulary in coder.bun.composition-root.
 
+import { excludedPath } from "../../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { join, sep, basename } from "node:path";
 
@@ -88,8 +89,7 @@ const SCAN_EXCLUDES = (() => {
 })();
 
 function isExcluded(path) {
-  const segments = path.split(sep);
-  return SCAN_EXCLUDES.some((ex) => segments.includes(ex) || path.includes(ex));
+  return excludedPath(path, SCAN_EXCLUDES);
 }
 
 function hasChildDir(dir, name) {

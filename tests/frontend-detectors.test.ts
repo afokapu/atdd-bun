@@ -160,3 +160,20 @@ test("defining Bun.serve's fetch handler is not an outbound fetch call; a real c
     expect(found.map(v => v.line)).toEqual([7]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a checkout whose path contains an exclude word is still scanned: excludes match segments under the scan root", async () => {
+  // FWS #U3vqdzo2RwFa: under ~/Github/frg-workstation-building-profile-activation, `build` matched `building` in the absolute
+  // path and every file was excluded, so the profiles passed on nothing.
+  const base = await mkdtemp(join(tmpdir(), "atdd-exclude-"));
+  try {
+    for (const detector of ["bun_clean_architecture_detector", "bun_tester_discipline_detector", "bun_interlocking_coverage"]) {
+      const plain = join(base, "plain", detector), building = join(base, "frg-building-dist", detector);
+      await cp(join(detectors, detector, "fixtures", "dirty"), plain, { recursive: true });
+      await cp(join(detectors, detector, "fixtures", "dirty"), building, { recursive: true });
+      const found = async (root: string) => (await runImplementation(detector, { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).map(v => `${v.rule_id} ${v.file.replace(root, "")}:${v.line}`).sort();
+      const expected = await found(plain);
+      expect(expected.length).toBeGreaterThan(0);
+      expect(await found(building)).toEqual(expected);
+    }
+  } finally { await rm(base, { recursive: true, force: true }); }
+});
