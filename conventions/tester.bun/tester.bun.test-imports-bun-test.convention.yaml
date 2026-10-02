@@ -42,8 +42,8 @@ content:
     changed. `strict` — a test the gate cannot actually run is worse than no test.
   exceptions:
   - Non-test files are never scanned; a harness import outside a test file is a different smell.
-  - A test deliberately retained on a foreign runner during a migration should be scoped out via the
-    consumer scope map, so the exemption is explicit and reviewable rather than invisible.
+  - atdd-bun has no per-rule scope, so a test deliberately retained on a foreign runner during a migration stays
+    reported until it moves, since the finding is the migration's open item, explicit and reviewable rather than invisible.
 metadata:
   aliases:
   - BUN-TEST-HARNESS-001

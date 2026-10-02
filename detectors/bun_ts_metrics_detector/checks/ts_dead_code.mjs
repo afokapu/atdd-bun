@@ -2,7 +2,8 @@
 // Member check: coder.bun.dead-code-reachability  (TypeScript metrics family)
 //
 // Cross-file, unlike its siblings: it builds the module import graph, walks it
-// from the structural roots (index/wagon/composition/main/app), and reports files
+// from the structural roots (index/wagon/composition/main/app, and files package.json
+// scripts run), and reports files
 // reached by nothing in either direction.
 //
 // The import edges come from Bun's IN-PROCESS TypeScript parser rather than the
@@ -11,9 +12,31 @@
 // obligation, measured correctly, and only possible because the runtime is Bun.
 import { walk, readRoots, readExcludes, readText, emit } from "../../../lib/scan.mjs";
 import * as M from "../ts_metrics.mjs";
-import { basename } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
+import { existsSync } from "node:fs";
 
 const RULE = "coder.bun.dead-code-reachability";
+
+// A file a package.json script runs (`bun run docs/gen.ts`, `bun tools/x.ts`) is an entry point the
+// repository itself declares, so it is a root too. The nearest package.json at or above the scan root.
+function scriptRoots(root, all) {
+  for (let dir = resolve(root); ; dir = dirname(dir)) {
+    const manifest = join(dir, "package.json");
+    if (existsSync(manifest)) {
+      let scripts = {};
+      try { scripts = JSON.parse(readText(manifest) || "{}").scripts ?? {}; } catch { return []; }
+      const out = [];
+      for (const command of Object.values(scripts)) {
+        for (const [, path] of String(command).matchAll(/(?:^|[\s"'=])((?:\.\/)?[\w@./-]+\.tsx?)(?=$|[\s"';&|)])/g)) {
+          const file = join(dir, path);
+          if (all.has(file)) out.push(file);
+        }
+      }
+      return out;
+    }
+    if (dirname(dir) === dir) return [];
+  }
+}
 
 const violations = [];
 const excludes = readExcludes();
@@ -34,7 +57,7 @@ for (const root of readRoots()) {
     graph.set(f, targets);
   }
 
-  const roots = new Set(files.filter(M.isRootFile));
+  const roots = new Set([...files.filter(M.isRootFile), ...scriptRoots(root, all)]);
   // No structural root means no anchor to measure reachability FROM; reporting
   // every file as dead would be noise, not a finding. The Python sibling bails
   // the same way.

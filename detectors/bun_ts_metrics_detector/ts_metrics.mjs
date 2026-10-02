@@ -228,12 +228,24 @@ export function normalizeLine(line) {
 const TRIVIAL = new Set(["", "{", "}", "};", ");", "],", ")", "]", "});"]);
 export const isTrivial = (n) => TRIVIAL.has(n);
 
+// Import and re-export declarations are not code: two files that import the same names
+// from one shared module match line for line BECAUSE the logic was shared, so the lines of
+// a declaration (one line, or `import {` through `} from "…"`) are left out of the windows.
+const DECLARATION = /^(import\b|export (type )?(\{|\*))/;
+const DECLARATION_END = /\bfrom "S"|^import "S"|\}/;
+
 // A 16-hex-char digest of each `minLines` window of non-trivial normalized lines —
 // the same fingerprint shape the Python detector hashes with sha256[:16].
 export function fragments(source, minLines, hasher) {
   const nonTrivial = [];
+  let inDeclaration = false;
   source.split("\n").forEach((line, i) => {
     const n = normalizeLine(line);
+    if (!inDeclaration && DECLARATION.test(n)) inDeclaration = true;
+    if (inDeclaration) {
+      if (DECLARATION_END.test(n)) inDeclaration = false;
+      return;
+    }
     if (!isTrivial(n)) nonTrivial.push([i + 1, n]);
   });
   if (nonTrivial.length < minLines) return [];

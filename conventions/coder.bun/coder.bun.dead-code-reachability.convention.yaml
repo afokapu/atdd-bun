@@ -13,7 +13,8 @@ statement: >-
 terms:
 - term_id: structural_root
   text: >-
-    a file the graph is walked from: index, wagon, composition, main or app.
+    a file the graph is walked from: index, wagon, composition, main or app, or a file a script in the nearest
+    package.json runs (`bun run docs/gen.ts`), since the repository itself declares it as an entry point.
 - term_id: type_only_import
   text: >-
     an `import type` edge. Erased at compile time, so it creates no runtime edge and cannot keep
