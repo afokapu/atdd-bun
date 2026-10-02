@@ -117,12 +117,14 @@ test("an agent uses only the topics it was launched with; a reviewer cannot read
   expect((await chat(reviewer, ["post", review], "to nobody")).err).toContain("--to is required");
 });
 
-test("wait is bounded: with nothing addressed to the agent it exits 2 and says how to continue", async () => {
+test("wait is bounded: with nothing addressed to the agent it exits 2 with the owner's check-in", async () => {
   const review = topicName("demo", "quiet", "final", 1);
   await chat(as("driver@quiet", review), ["post", review, "--to", "someone-else"], "not for the reviewer");
   const waited = await chat(as("reviewer@quiet", review), ["wait", review, "--timeout", "1"]);
   expect(waited.code).toBe(2);
-  expect(waited.err).toContain("run the same wait again to continue");
+  expect(waited.out).toContain("CHECK-IN for reviewer@quiet: no message");
+  expect(waited.out).toContain("blocked on someone, and do they know?");
+  expect(waited.out).toContain("never post just to say you are still here");
 });
 
 test("the board lists its topics: each topic's first message names it once in the directory, and chat alone lists them", async () => {
@@ -212,6 +214,16 @@ test("follow streams every message addressed to its agent as it arrives, without
   child.kill();
   await child.exited;
 });
+
+test("follow prints the check-in after --check-in quiet seconds, and keeps listening", async () => {
+  const topic = topicName("demo", "follow-quiet");
+  const run = Bun.spawn({ cmd: ["bun", cli, "chat", "follow", topic, "--timeout", "4", "--check-in", "1"], cwd: enabled, env: { ...ambient, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...as("driver@quiet-follow", topic) }, stdout: "pipe", stderr: "pipe" });
+  const out = await new Response(run.stdout).text();
+  expect(await run.exited).toBe(0);
+  expect(out).toContain("CHECK-IN for driver@quiet-follow: no message for 1 s");
+  const off = Bun.spawn({ cmd: ["bun", cli, "chat", "follow", topic, "--timeout", "2", "--check-in", "0"], cwd: enabled, env: { ...ambient, ATDD_BOARD_URL: BOARD, ATDD_BOARD_STATE: state, ...as("driver@quiet-follow", topic) }, stdout: "pipe", stderr: "pipe" });
+  expect(await new Response(off.stdout).text()).not.toContain("CHECK-IN");
+}, 20_000);
 
 test("on a topic set it never listened to, wait starts from the identity's oldest saved place instead of replaying history", async () => {
   // score-os #vswrQORsiHCW: switching to one combined listener replayed the seat's whole addressed history.

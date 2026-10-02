@@ -43,8 +43,8 @@ content:
   exceptions:
   - A vendored or fixture lockfile inside an excluded tree (`node_modules`, `dist`, `build`,
     `_generated`) is never scanned.
-  - A monorepo package that is deliberately NOT on Bun should be scoped out via the consumer scope map,
-    not suppressed here.
+  - atdd-bun has no per-rule scope, so a monorepo package that is deliberately NOT on Bun stays reported until it
+    moves to Bun or out of the scanned tree; the finding is the stack decision's open item, not something to suppress.
 metadata:
   aliases:
   - BUN-SINGLE-LOCKFILE-001

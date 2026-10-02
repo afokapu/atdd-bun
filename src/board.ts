@@ -111,6 +111,13 @@ export async function read(url: string, topics: string[], since = "all", signal?
 /** The longest one poll may take. ntfy answers a poll at once, so only a stalled request ever reaches it. */
 const POLL_LIMIT_MS = 10_000;
 
+/** What a listener prints when nothing has arrived for a while: the owner's check-in, for the agent to act on (move
+ * the work, or tell whoever it waits on), never to answer with a "still here" post. */
+export function checkIn(agent: string, quietSeconds: number): string {
+  const quiet = quietSeconds <= 0 ? "" : quietSeconds < 60 ? ` for ${quietSeconds} s` : ` for ${Math.round(quietSeconds / 60)} min`;
+  return `CHECK-IN for ${agent}: no message${quiet}. Where are you? Are you moving forward, or blocked on someone, and do they know? Is your stakeholder informed? Are you avoiding ceremony and rabbit holes, effectiveness first, then efficiency? Act on it: move the work, or post once to whoever you wait on; never post just to say you are still here. Then re-arm this listener.`;
+}
+
 export async function waitFor(url: string, topics: string[], agent: string, since = "all", timeoutSeconds = 0, skip: string[] = [], intervalMs = 500, seen: (id: string) => void = () => {}): Promise<Message | null> {
   const deadline = timeoutSeconds > 0 ? Date.now() + timeoutSeconds * 1000 : Infinity;
   for (;;) {
@@ -170,7 +177,7 @@ export async function chat(args: string[], env: Record<string, string | undefine
       // Without --since, continue from where this identity last stopped on these topics; either way, remember the place.
       const file = cursorFile(me, topics, env);
       const message = await waitFor(url, topics, me, flag("since") || loadCursor(file) || seedCursor(me, env) || "all", Number(flag("timeout") ?? 0), list(flag("skip")), 500, id => saveCursor(file, id));
-      if (!message) { console.error(`no message for ${me} on ${topics.join(", ")} yet; run the same wait again to continue`); return 2; }
+      if (!message) { console.log(checkIn(me, Number(flag("timeout") ?? 0))); return 2; }
       console.log(format(message, topics.length > 1));
       return 0;
     }
@@ -180,11 +187,15 @@ export async function chat(args: string[], env: Record<string, string | undefine
       const file = cursorFile(me, topics, env), skip = list(flag("skip")), total = Number(flag("timeout") ?? 0);
       const deadline = total > 0 ? Date.now() + total * 1000 : Infinity;
       let since = flag("since") || loadCursor(file) || seedCursor(me, env) || "all";
+      // After --check-in seconds without a message (default 20 minutes; 0 = never), the agent is asked to check itself.
+      const quietLimit = Number(flag("check-in") ?? 1200) * 1000;
+      let quietSince = Date.now();
       for (;;) {
         const left = Math.ceil((deadline - Date.now()) / 1000);
         if (left <= 0) return 0;
-        const message = await waitFor(url, topics, me, since, Math.min(60, left), skip, 500, id => { since = id; saveCursor(file, id); });
-        if (message) console.log(format(message, topics.length > 1));
+        const message = await waitFor(url, topics, me, since, Math.min(60, left, quietLimit > 0 ? Math.max(1, Math.ceil((quietSince + quietLimit - Date.now()) / 1000)) : 60), skip, 500, id => { since = id; saveCursor(file, id); });
+        if (message) { console.log(format(message, topics.length > 1)); quietSince = Date.now(); }
+        else if (quietLimit > 0 && Date.now() - quietSince >= quietLimit) { console.log(checkIn(me, Math.round((Date.now() - quietSince) / 1000))); quietSince = Date.now(); }
       }
     }
     if (topics.length !== 1) throw new Error(`${command} takes one topic`);

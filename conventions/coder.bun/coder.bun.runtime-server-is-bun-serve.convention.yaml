@@ -50,7 +50,7 @@ content:
     hold the stack decision, so it is not suppressible.
   exceptions:
   - A `createServer(` call that is not an HTTP server (a test double, an unrelated factory) is a known
-    imprecision of the name-based match; rename it or scope it out via the consumer scope map.
+    imprecision of the name-based match; rename it (atdd-bun has no per-rule scope).
   - Test files are excluded — spinning a throwaway server in a test is not an application server.
   - Names appearing inside strings or comments are masked and never flagged.
 metadata:

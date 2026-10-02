@@ -31,7 +31,7 @@ content:
   exceptions:
   - Occurrences inside comments or string literals are masked and never flagged.
   - Test files and vendored/build directories are excluded.
-  - A CLI whose stdout IS its user interface should scope itself out via the consumer scope map.
+  - A CLI whose stdout IS its user interface writes that output with `process.stdout.write` (or `process.stderr.write` for its errors), which says plainly that it is the interface, not a log; only `console.*` is matched. atdd-bun has no per-rule scope to exempt a file.
 metadata:
   aliases:
   # LOGGING-PRINT-001 is the SHARED core alias, also carried by the agnostic node and its
