@@ -16,3 +16,11 @@ test("a regex literal's contents are masked, and division is not a regex", () =>
   expect(maskLiteralsAndComments('const half = total / 2; console.log(half / 3);\n')).toContain("console.log(half / 3)");
   expect(maskLiteralsAndComments('return /a"b/.test(s) && console.error(s);\n')).toContain("console.error(s)");
 });
+
+// C1 #CXTpX6rO0vgi: a template nested in a substitution, with escaped backticks, ended the outer template too early.
+test("a template literal ends only at a backtick outside its substitutions", () => {
+  const source = 'const xs = ["a"];\nconst a = `it names ${xs.map((x) => `\\`${x}\\``).join(", ")} here`;\nconsole.log(a);\n';
+  expect(maskLiteralsAndComments(source)).toContain("console.log(a)");
+  expect(maskLiteralsAndComments('const b = `x ${[1].map((y) => `${y}`).join("")} z`;\nconsole.warn(b);\n')).toContain("console.warn(b)");
+  expect(maskLiteralsAndComments('const c = `console.log(${"}"})`;\n')).not.toContain("console.log");
+});
