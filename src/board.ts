@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -132,6 +132,16 @@ function cursorFile(agent: string, topics: string[], env: Record<string, string 
   return join(env.ATDD_BOARD_STATE || join(homedir(), ".atdd-board", "cursors"), key);
 }
 const loadCursor = (file: string) => { try { return readFileSync(file, "utf8").trim() || undefined; } catch { return undefined; } };
+/** The place to start from on a topic set this identity has never listened to: its OLDEST saved place on any other set,
+ * so nothing unread is skipped and nothing older is replayed. Without one, the start of the board, as before. */
+function seedCursor(agent: string, env: Record<string, string | undefined>): string | undefined {
+  const dir = env.ATDD_BOARD_STATE || join(homedir(), ".atdd-board", "cursors"), prefix = `${agent}__`.replace(/[^A-Za-z0-9@+_.-]/g, "_");
+  try {
+    const saved = readdirSync(dir).filter(name => name.startsWith(prefix)).map(name => ({ file: join(dir, name), at: statSync(join(dir, name)).mtimeMs })).sort((a, b) => a.at - b.at);
+    for (const { file } of saved) { const id = loadCursor(file); if (id) return id; }
+  } catch { /* no saved places */ }
+  return undefined;
+}
 const saveCursor = (file: string, id: string) => { try { mkdirSync(join(file, ".."), { recursive: true }); writeFileSync(file, `${id}\n`); } catch { /* best effort */ } };
 
 export function format(message: Message, withTopic = false): string {
@@ -159,7 +169,7 @@ export async function chat(args: string[], env: Record<string, string | undefine
     if (command === "wait") {
       // Without --since, continue from where this identity last stopped on these topics; either way, remember the place.
       const file = cursorFile(me, topics, env);
-      const message = await waitFor(url, topics, me, flag("since") || loadCursor(file) || "all", Number(flag("timeout") ?? 0), list(flag("skip")), 500, id => saveCursor(file, id));
+      const message = await waitFor(url, topics, me, flag("since") || loadCursor(file) || seedCursor(me, env) || "all", Number(flag("timeout") ?? 0), list(flag("skip")), 500, id => saveCursor(file, id));
       if (!message) { console.error(`no message for ${me} on ${topics.join(", ")} yet; run the same wait again to continue`); return 2; }
       console.log(format(message, topics.length > 1));
       return 0;
@@ -169,7 +179,7 @@ export async function chat(args: string[], env: Record<string, string | undefine
       // this identity, as it arrives, until --timeout (seconds; none = until stopped). Same place-keeping as wait.
       const file = cursorFile(me, topics, env), skip = list(flag("skip")), total = Number(flag("timeout") ?? 0);
       const deadline = total > 0 ? Date.now() + total * 1000 : Infinity;
-      let since = flag("since") || loadCursor(file) || "all";
+      let since = flag("since") || loadCursor(file) || seedCursor(me, env) || "all";
       for (;;) {
         const left = Math.ceil((deadline - Date.now()) / 1000);
         if (left <= 0) return 0;

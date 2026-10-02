@@ -212,3 +212,14 @@ test("follow streams every message addressed to its agent as it arrives, without
   child.kill();
   await child.exited;
 });
+
+test("on a topic set it never listened to, wait starts from the identity's oldest saved place instead of replaying history", async () => {
+  // score-os #vswrQORsiHCW: switching to one combined listener replayed the seat's whole addressed history.
+  const a = topicName("demo", "seed-a"), b = topicName("demo", "seed-b");
+  await chat(as("writer@seed", a), ["post", a, "--to", "driver@seed", "--kind", "task"], "old, already handled");
+  expect((await chat(as("driver@seed", a), ["wait", a, "--timeout", "3"])).out).toContain("old, already handled");
+  await chat(as("writer@seed", a), ["post", a, "--to", "driver@seed", "--kind", "task"], "new, unread");
+  const combined = await chat(as("driver@seed", a, b), ["wait", `${a},${b}`, "--timeout", "3"]);
+  expect(combined.out).toContain("new, unread");
+  expect(combined.out).not.toContain("old, already handled");
+});

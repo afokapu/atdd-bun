@@ -53,3 +53,24 @@ test("every documentation rule has a deliberate failing scenario", async () => {
   for (const item of (await checkDocumentation({ root, declaration: { impact: "change", artifacts: [] }, changeSet: [], render: async () => ({ findings: [{ rule_id: "planner.docs.reference-integrity" as const, file: "docs/a.adoc", line: 1, col: 1, evidence: "broken xref", source_line: "" }] }) })).findings) if (item.rule_id) observed.add(item.rule_id);
   expect(observed).toEqual(new Set(DOC_RULE_IDS));
 });
+
+test("docs adr-register regenerates the marked region, so the derived-registry rule passes without a typed entry", async () => {
+  // resolver-os #dwbmACoYwOnz: the rule required regenerating the register and the toolkit shipped no way to do it.
+  const { adrRegister, scanDocumentation } = await import("../src/docs-capability");
+  const root = await (await import("node:fs/promises")).mkdtemp(join((await import("node:os")).tmpdir(), "atdd-adr-"));
+  const { mkdir, writeFile, rm } = await import("node:fs/promises");
+  try {
+    await mkdir(join(root, "docs", "architecture", "decisions"), { recursive: true });
+    await writeFile(join(root, "docs", "architecture", "decisions", "adr-20261001-033-runtime.adoc"), ":doc-id: adr-runtime\n:adr-id: ADR-20261001-033\n:status: accepted\n:date: 2026-10-01\n:decides: adr-runtime\n\n= Managed runtime pivot\n");
+    const index = join(root, "docs", "architecture", "decisions", "index.adoc");
+    await writeFile(index, ":doc-id: adr-index\n\n= Decisions\n\n// BEGIN GENERATED: adr-register\n// END GENERATED: adr-register\n");
+    const registry = async () => (await scanDocumentation(root)).filter(v => v.rule_id === "planner.docs.adr-registry-derived");
+    expect((await registry()).length).toBe(1);
+    expect((await adrRegister(root, true)).ok).toBe(false);
+    expect((await adrRegister(root)).ok).toBe(true);
+    expect(await registry()).toEqual([]);
+    expect((await adrRegister(root, true)).ok).toBe(true);
+    await writeFile(index, ":doc-id: adr-index\n\n= Decisions\n");
+    expect((await adrRegister(root)).message).toContain("no adr-register region");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

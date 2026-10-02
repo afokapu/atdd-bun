@@ -184,3 +184,26 @@ export async function checkDocumentation(input: { root: string; declaration: Doc
   try { return await checkDocumentationInner(input); }
   catch (error) { return { verdict: "FAIL", findings: [{ rule_id: null, where: input.root, message: `the documentation capability raised ${error instanceof Error ? error.name : "Error"}: ${String(error)}. A capability that crashes has not discharged the obligation.` }], checked: [] }; }
 }
+
+const ADR_REGION = /^(\/\/\s*BEGIN GENERATED:\s*adr-register\b[^\n]*\n)[\s\S]*?(^\/\/\s*END GENERATED:\s*adr-register\b[^\n]*$)/m;
+
+/** Regenerates the ADR register: the `// BEGIN GENERATED: adr-register` … `// END GENERATED: adr-register` region of
+ * docs/architecture/decisions/index.adoc, one line per ADR by :adr-id:, which planner.docs.adr-registry-derived
+ * requires to be projected, never typed. `check` reports drift without writing. Without the markers it writes nothing
+ * and says where they go: where the list belongs in the index is the corpus's choice. */
+export async function adrRegister(root = process.cwd(), check = false): Promise<{ ok: boolean; message: string }> {
+  const index = join(root, ADR_INDEX);
+  if (!existsSync(index)) return { ok: false, message: `${ADR_INDEX} does not exist; create it with the adr-register markers where the list belongs` };
+  const text = await readFile(index, "utf8");
+  if (!ADR_REGION.test(text)) return { ok: false, message: `${ADR_INDEX} has no adr-register region; add "// BEGIN GENERATED: adr-register" and "// END GENERATED: adr-register" on their own lines where the list belongs` };
+  const adr = (await documents(root)).filter(d => d.path.startsWith(`${ADR_DIR}/`) && /^adr-\d{8}-\d{3}-[a-z0-9][a-z0-9-]*\.adoc$/.test(basename(d.path)) && d.attrs["adr-id"]);
+  const lines = adr.sort((a, b) => a.attrs["adr-id"].localeCompare(b.attrs["adr-id"])).map(d => {
+    const title = d.text.match(/^=\s+(.+)$/m)?.[1]?.trim() ?? d.attrs["adr-id"], status = d.attrs.status ? ` (${d.attrs.status})` : "";
+    return `* xref:${basename(d.path)}[${d.attrs["adr-id"]}] ${title}${status}`;
+  });
+  const next = text.replace(ADR_REGION, (_m, begin: string, end: string) => `${begin}${lines.join("\n")}${lines.length ? "\n" : ""}${end}`);
+  if (next === text) return { ok: true, message: `ADR register is current (${lines.length} ADRs)` };
+  if (check) return { ok: false, message: `ADR register has drifted; run atdd-bun docs adr-register` };
+  await Bun.write(index, next);
+  return { ok: true, message: `ADR register regenerated (${lines.length} ADRs)` };
+}
