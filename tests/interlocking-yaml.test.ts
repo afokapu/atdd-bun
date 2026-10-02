@@ -61,6 +61,31 @@ test("where no wagon has source under the source root, nothing is pending and ev
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("a wagon whose produced artifact Cargo-moving code names is built wherever its code lives, so its route is judged", async () => {
+  // C1 #lVuJXXe3mM9E: one wagon built under src/wagons switched the whole repository to the layout, and every route through
+  // a wagon coded elsewhere (decision-os: src/trains) went pending and silent. The wagon-contract rule's own evidence,
+  // Cargo-moving code naming the artifact, marks such a wagon built.
+  const root = await mkdtemp(join(tmpdir(), "atdd-mixed-layout-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "dirty", "interlocking_route_coverage"), root, { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "match-resolution-timeout.yaml"), "train_id: train:match:match-resolution-timeout\nsequence:\n- step: 1\n  from: user:player\n  to: wagon:match-voting\n");
+    await writeFile(join(root, "plan", "_trains", "match-resolution-standard.yaml"), "train_id: train:match:match-resolution-standard\nsequence:\n- step: 1\n  from: user:player\n  to: wagon:match-core\n");
+    await mkdir(join(root, "plan", "match-voting"), { recursive: true });
+    await writeFile(join(root, "plan", "match-voting", "_match-voting.yaml"), "wagon: match-voting\nproduce:\n  - name: match:vote-cast\nconsume:\n  - name: match:ballot\n");
+    await mkdir(join(root, "src", "wagons", "match-core", "features", "core", "domain"), { recursive: true });
+    await writeFile(join(root, "src", "wagons", "match-core", "features", "core", "domain", "core.ts"), "export const core = 1;\n");
+    const routes = async () => (await found("bun_interlocking_coverage", root)).filter(line => line.startsWith("tester.bun.interlocking-route-coverage"));
+    const pending = await routes();
+    // match-voting's code lives outside the layout, and moves its artifact through Cargo.
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "src", "trains", "handlers.ts"), 'export const vote = (cargo: Cargo) => cargo.put("match:vote-cast", 1);\n');
+    expect((await routes()).length).toBe(pending.length + 1);
+    // Only a mention in a comment, or in a test, builds nothing.
+    await writeFile(join(root, "src", "trains", "handlers.ts"), '// cargo.put("match:vote-cast")\nexport const vote = (cargo: Cargo) => cargo;\n');
+    expect((await routes()).length).toBe(pending.length);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("a route id covers its route only in a test of its own interlocking", async () => {
   // FWS #liu3vKZYAPXD: `refuse` is a route of two interlockings; a test of one used to cover the other with no test.
   const root = await mkdtemp(join(tmpdir(), "atdd-route-scope-"));

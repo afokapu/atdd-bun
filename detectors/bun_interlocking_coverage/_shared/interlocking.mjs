@@ -337,6 +337,7 @@ export function unbuiltWagons(croot, trainId) {
     let sourceRoot = "src/wagons";
     try { sourceRoot = Bun.YAML.parse(readText(join(croot, "atdd-bun.yaml")))?.topology?.source_root || sourceRoot; } catch { /* default layout */ }
     const hasSource = (wagon) => [...walkFiles(join(croot, sourceRoot, wagon), isTs)].some((f) => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(f));
+    const produces = new Map();
     (function rec(dir) {
       let entries;
       try { entries = readdirSync(dir).sort(); } catch { return; }
@@ -348,6 +349,8 @@ export function unbuiltWagons(croot, trainId) {
         if (!/\.ya?ml$/.test(name)) continue;
         let doc;
         try { doc = Bun.YAML.parse(readText(full)); } catch { continue; }
+        if (doc && typeof doc.wagon === "string" && Array.isArray(doc.produce))
+          produces.set(doc.wagon.trim(), doc.produce.map((p) => p?.name).filter((name) => typeof name === "string" && name));
         if (!doc || typeof doc.train_id !== "string" || !Array.isArray(doc.sequence)) continue;
         const wagons = new Set(doc.sequence.flatMap((step) => [step?.from, step?.to]).filter((end) => typeof end === "string" && end.startsWith("wagon:")).map((end) => end.slice(6).trim()));
         byTrain.set(doc.train_id, [...wagons]);
@@ -355,7 +358,18 @@ export function unbuiltWagons(croot, trainId) {
     })(join(croot, PLAN_ROOT));
     // Only a repository that keeps wagon code under the source root can show a wagon as not built yet. Where no wagon has
     // source there (the code lives elsewhere, as in decision-os), nothing is pending and every route is judged.
-    const built = new Map([...new Set([...byTrain.values()].flat())].map((wagon) => [wagon, hasSource(wagon)]));
+    // A wagon coded outside the source root is built all the same when Cargo-moving code names an artifact it produces:
+    // the wagon-contract rule's own evidence (C1 #lVuJXXe3mM9E). Comments are masked, tests are not read.
+    let cargoCode = null;
+    const named = (wagon) => {
+      const names = produces.get(wagon) ?? [];
+      if (!names.length) return false;
+      cargoCode ??= [...walkFiles(croot, isTs)].filter((f) => !/\.(test|spec)\.[cm]?[jt]sx?$/.test(f)).map((f) => readText(f) ?? "")
+        .filter((text) => /\bCargo\b|\bcargo\s*\.\s*(?:put|get)\s*\(/.test(text))
+        .map((text) => text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:\\])\/\/[^\n]*/g, "$1")).join("\n");
+      return names.some((name) => cargoCode.includes(name));
+    };
+    const built = new Map([...new Set([...byTrain.values()].flat())].map((wagon) => [wagon, hasSource(wagon) || named(wagon)]));
     const layoutInUse = [...built.values()].some(Boolean);
     for (const [trainId, wagons] of byTrain) byTrain.set(trainId, layoutInUse ? wagons.filter((wagon) => !built.get(wagon)) : []);
     pendingCache.set(croot, byTrain);
