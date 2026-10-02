@@ -31,7 +31,7 @@ content:
   exceptions:
   - Test, spec, and `.d.ts` files are excluded, as are `index.ts` barrels and `__tests__` directories.
   - Trivial lines (bare braces, closing punctuation) are not counted toward the 7.
-  - Import and re-export declarations are not counted: two files importing the same names from one shared module match because the logic was shared, which is the fix this rule asks for.
+  - Import and re-export declarations are not counted, because two files importing the same names from one shared module match because the logic was shared, which is the fix this rule asks for.
   - Files whose layer cannot be determined are compared only against each other.
 metadata:
   aliases:
