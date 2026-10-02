@@ -13,7 +13,7 @@ content:
   summary: >-
     The skill and the validators read the same policy. A misspelled key would be ignored by one and not the other, so a malformed block is a finding, and the rest of the run judges evidence against the package defaults.
   normative_text: |
-    The policy decides which models may write and review each stage, in preference order, how independent a reviewer must be, and when a model counts as unavailable. It is read by the delivery skill when it dispatches work and by this profile when it judges the record, so both must see the same, valid document.
+    The policy decides which models may write and review each stage (an allowed set, in no order; "*" allows any), how independent a reviewer must be, and when a model counts as unavailable. It is read by the delivery skill when it dispatches work and by this profile when it judges the record, so both must see the same, valid document.
   fix_hint: |
     Correct the key the finding names. The defaults are:
 

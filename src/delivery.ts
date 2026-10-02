@@ -39,7 +39,7 @@ export type DeliveryPolicy = {
 };
 
 /** The default operating model: two reviews, the plan and the whole change; the stages between them are written and
- * held by their deterministic gates. Lists are preference orders; a later model is used only as a recorded fallback. */
+ * held by their deterministic gates. Each list is the set of models allowed for the role, in no order; "*" allows any. */
 const DEFAULT_STAGES: Partial<Record<Stage, { writer?: string[]; reviewer?: string[] }>> = {
   plan: { writer: ["codex", "claude-opus", "kimi"], reviewer: ["glm", "claude-opus", "codex", "kimi"] },
   red: { writer: ["glm", "claude-sonnet", "deepseek-flash", "claude-opus", "codex", "kimi"] },
@@ -122,10 +122,7 @@ export function loosenedDelivery(base: unknown, current: unknown): string[] {
     for (const role of ["reviewer", "writer"] as const) {
       const added = c[role].filter(model => !b[role].includes(model));
       if (added.length && b[role].length) out.push(`delivery.stages.${stage}.${role} adds ${added.join(", ")}`);
-      // The lists are preference orders: moving a model earlier, by reordering or removing one before it, makes a
-      // fallback model usable without the fallback.
-      const promoted = c[role].filter(model => b[role].includes(model) && c[role].indexOf(model) < b[role].indexOf(model));
-      if (promoted.length) out.push(`delivery.stages.${stage}.${role} [${b[role].join(", ")}] → [${c[role].join(", ")}] promotes ${promoted.join(", ")}`);
+      // The lists are allowed sets: reordering one changes nothing; only an added model (or "*") is a loosening.
     }
     // A stage that had no writer list now accepting writers is a loosening too: before, nothing could be written there.
     if (!b.writer.length && c.writer.length) out.push(`delivery.stages.${stage}.writer adds ${c.writer.join(", ")}`);
@@ -235,18 +232,12 @@ export async function loadEvidence(root: string, policy: DeliveryPolicy): Promis
   return out;
 }
 
-/** A model must come from the stage's list; a model after the first needs a recorded fallback from each one before it,
- * except one the stage could not use: under different-model independence a reviewer skips every model that wrote the
- * work it reviews (delivery.reviewer-independent's fix hint). Ineligible is not unavailable, so no fallback records it. */
-function checkModel(file: string, at: string, stage: Stage, role: "writer" | "reviewer", actor: Actor, list: string[], fallbacks: Fallback[], defaultRole: "writer" | "reviewer", fallback: DeliveryPolicy["fallback"], ineligible: string[] = []): PlanFinding[] {
-  const out: PlanFinding[] = [];
-  const index = list.indexOf(actor.model);
-  if (index < 0) return [finding("delivery.model-allowed", file, `${at}: ${role} model '${actor.model}' is not in ${stage}.${role} [${list.join(", ")}]`)];
-  // `author` is the 0.9 spelling of `writer`.
-  const recorded = fallbacks.filter(entry => ((entry.role === "author" ? "writer" : entry.role) ?? defaultRole) === role).map(entry => entry.from);
-  for (const skipped of list.slice(0, index)) if (!recorded.includes(skipped) && !ineligible.includes(skipped)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} '${actor.model}' is a fallback, but no fallback from '${skipped}' records why it was unavailable`));
-  for (const from of recorded) if (!list.slice(0, index).includes(from)) out.push(finding("delivery.model-allowed", file, `${at}: ${role} fallback from '${from}' does not precede '${actor.model}' in [${list.join(", ")}]`));
-  return out;
+/** A model must be one the stage allows: its list is the set of allowed models, in no order, and "*" allows any. Which
+ * listed model does the work is the operator's choice at any moment, so no fallback has to explain it; the record still
+ * names the model that ran, and reviewer independence is judged separately (delivery.reviewer-independent). */
+function checkModel(file: string, at: string, stage: Stage, role: "writer" | "reviewer", actor: Actor, list: string[], _fallbacks: Fallback[], _defaultRole: "writer" | "reviewer", _fallback: DeliveryPolicy["fallback"], _ineligible: string[] = []): PlanFinding[] {
+  if (list.includes("*") || list.includes(actor.model)) return [];
+  return [finding("delivery.model-allowed", file, `${at}: ${role} model '${actor.model}' is not allowed for ${stage}.${role} [${list.join(", ")}]`)];
 }
 
 /** The count and window of every recorded fallback are the driver's claims, but explicit ones: outside the policy is out of policy. */

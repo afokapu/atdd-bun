@@ -85,18 +85,16 @@ test("stages the policy omits are not required, and a review of one is out of po
   });
 });
 
-test("a fallback model needs a recorded reason for every model it skipped, in list order", async () => {
-  const skipped = [...FULL4.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"]), FULL4[3]];
-  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(skipped) }, async dir => {
-    expect(await evidence(dir)).toEqual([expect.stringContaining("no fallback from 'glm'")]);
-  });
-  const recorded = [...FULL4.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"], { fallback: [{ from: "glm", kind: "rate_limit", failures: 3, window: WINDOW, reason: "rate limit: 3 failures in 10 minutes" }] }), FULL4[3]];
-  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(recorded) }, async dir => expect(await rules(dir)).toEqual([]));
-  // An author fallback is recorded under its own role: a reviewer fallback does not excuse it.
-  const author = [...FULL4.slice(0, 2), review("code_review", "3333333", ["claude", "a2"], ["glm", "r3"], { fallback: [{ from: "glm", kind: "outage", failures: 3, window: WINDOW, reason: "provider outage since 09:00" }] }), FULL4[3]];
-  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(author) }, async dir => {
-    expect(await evidence(dir)).toEqual([expect.stringContaining("reviewer fallback from 'glm' does not precede 'glm'"), expect.stringContaining("writer 'claude' is a fallback")]);
-  });
+test("a stage's model list is the set of allowed models: any listed model may be used, in any order, without a fallback", async () => {
+  // Owner, 2026-10-01: switching models must not need a policy edit or fallback paperwork; the record names the model.
+  const later = [...FULL4.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["claude", "r3"]), FULL4[3]];
+  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(later) }, async dir => expect(await rules(dir)).toEqual([]));
+  // A model the stage does not list is still reported.
+  const unlisted = [...FULL4.slice(0, 2), review("code_review", "3333333", ["glm", "a2"], ["gpt", "r3"]), FULL4[3]];
+  await withRepo({ "atdd-bun.yaml": ADOPT4, "delivery/api/evidence.yaml": record(unlisted) }, async dir => expect(await evidence(dir)).toEqual([expect.stringContaining("reviewer model 'gpt' is not allowed for refactor.reviewer")]));
+  // "*" allows any model.
+  const any = `${ADOPT}  independence: fresh-process\n  stages:\n    plan_review: { reviewers: ["*"] }\n    test_review: { reviewers: ["*"] }\n    code_review: { reviewers: ["*"] }\n    final_review: { reviewers: ["*"] }\n`;
+  await withRepo({ "atdd-bun.yaml": any, "delivery/api/evidence.yaml": record(unlisted) }, async dir => expect(await rules(dir)).toEqual([]));
 });
 
 test("independence: a fresh process per review, never an author, and a different model where the stage asks", async () => {
@@ -432,11 +430,12 @@ test("R2: a report lives in its tranche's folder, so it cannot exempt a source f
     });
 });
 
-test("R3: reordering or removing a model so a fallback becomes primary is a loosening", () => {
+test("R3: model lists are allowed sets: reordering or removing is no loosening; adding a model or \"*\" is", () => {
   const stages = deliveryPolicy({}).stages, base = { delivery: {} };
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "codex", "claude-opus", "kimi"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus, kimi] → [glm, codex, claude-opus, kimi] promotes glm"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "claude-opus"] } } } })).toEqual(["delivery.stages.final.reviewer [codex, glm, claude-opus, kimi] → [glm, claude-opus] promotes glm, claude-opus"]);
-  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["codex", "glm"] } } } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "codex", "claude-opus", "kimi"] } } } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["glm", "claude-opus"] } } } })).toEqual([]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["codex", "gpt"] } } } })).toEqual(["delivery.stages.final.reviewer adds gpt"]);
+  expect(loosenedDelivery(base, { delivery: { stages: { ...stages, final: { reviewer: ["*"] } } } })).toEqual(["delivery.stages.final.reviewer adds *"]);
 });
 
 test("R4: a fallback's failures fall within the policy's window", async () => {
@@ -881,7 +880,7 @@ test("a stage with nothing written records nothing; a plan-only final review is 
   // A writer outside the stage's list is out of policy, as a reviewer is.
   const stranger = JSON.parse(record(FULL)); stranger.work[1].writer.model = "gpt";
   await withRepo({ "atdd-bun.yaml": ADOPT, "delivery/api/evidence.yaml": JSON.stringify(stranger) }, async dir => {
-    expect(await evidence(dir)).toEqual([expect.stringContaining("writer model 'gpt' is not in red.writer")]);
+    expect(await evidence(dir)).toEqual([expect.stringContaining("writer model 'gpt' is not allowed for red.writer")]);
   });
 });
 
@@ -930,7 +929,7 @@ test("a reviewer passes over a model that independence forbids without a fallbac
   const evidence = record([review("plan", "1111111", null, ["claude-opus", "r1"])], { work: [write("plan", "1111111", ["glm", "w-plan"])] });
   const allowed = async (independence: string) => { let out: string[] = []; await withRepo({ "atdd-bun.yaml": policy(independence), "delivery/api/evidence.yaml": evidence }, async dir => { out = (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.model-allowed").map(f => f.evidence); }); return out; };
   expect(await allowed("different-model")).toEqual([]);
-  expect(await allowed("fresh-process")).toEqual([expect.stringContaining("no fallback from 'glm'")]);
+  expect(await allowed("fresh-process")).toEqual([]);   // since lists are allowed sets, no order and no fallback
 });
 
 test("an operator fallback records a substitution the operator ordered, for a model the stage lists, and names its ruling", async () => {
@@ -941,7 +940,7 @@ test("an operator fallback records a substitution the operator ordered, for a mo
   const found = async (writers: string[], fallback: Record<string, unknown>[]) => { let out: string[] = []; await withRepo({ "atdd-bun.yaml": policy(writers), "delivery/api/evidence.yaml": record([review("plan", "1111111", null, ["glm", "r1"])], { work: [{ ...write("plan", "1111111", ["kimi", "w-plan"]), fallback }] }) }, async dir => { out = (await validateDelivery(dir, { gate: false })).filter(f => f.rule_id === "delivery.model-allowed" || f.rule_id === "delivery.evidence-schema").map(f => `${f.rule_id}: ${f.evidence}`); }); return out; };
   expect(await found(["claude-opus", "kimi"], [operator])).toEqual([]);
   // The policy keeps the final word: an operator fallback never admits a model the stage does not list.
-  expect(await found(["claude-opus"], [operator])).toEqual([expect.stringContaining("writer model 'kimi' is not in plan.writer")]);
+  expect(await found(["claude-opus"], [operator])).toEqual([expect.stringContaining("writer model 'kimi' is not allowed for plan.writer")]);
   const { ruling: _ruling, ...unreferenced } = operator;
   expect((await found(["claude-opus", "kimi"], [unreferenced])).some(line => line.startsWith("delivery.evidence-schema"))).toBeTrue();
   // A failure fallback still counts its failures.
