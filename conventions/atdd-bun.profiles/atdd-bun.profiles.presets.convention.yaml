@@ -13,6 +13,25 @@ terms:
     planning: [planner]
     building: [coder, tester, traceability, security]
     instrumenting: [telemetry]
+- term_id: profile_registries
+  text: >-
+    A deterministic, profile-scoped projection of the detector manifests, convention paths, and
+    direct relationship edges. Read the selected profile's registry instead of the complete graph.
+  values:
+    architecture: conventions/_profiles/architecture.yaml
+    coder: conventions/_profiles/coder.yaml
+    design: conventions/_profiles/design.yaml
+    docs: conventions/_profiles/docs.yaml
+    htmx: conventions/_profiles/htmx.yaml
+    interlocking: conventions/_profiles/interlocking.yaml
+    metrics: conventions/_profiles/metrics.yaml
+    planner: conventions/_profiles/planner.yaml
+    runtime: conventions/_profiles/runtime.yaml
+    security: conventions/_profiles/security.yaml
+    telemetry: conventions/_profiles/telemetry.yaml
+    tester: conventions/_profiles/tester.yaml
+    topology: conventions/_profiles/topology.yaml
+    traceability: conventions/_profiles/traceability.yaml
 content:
   summary: >-
     A goal is easier to name than a profile. The presets map what the user is doing to the profiles that judge it, in the order the work creates what they check.

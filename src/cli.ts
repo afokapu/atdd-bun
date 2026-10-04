@@ -8,6 +8,7 @@ import { journeyDocs } from "./journey-docs";
 import { adrRegister } from "./docs-capability";
 import { releaseCheck } from "./release";
 import { initializeRepository } from "./setup";
+import { profileRegistries } from "./profile-registry";
 
 const args = process.argv.slice(2);
 const usage = {
@@ -19,6 +20,7 @@ const usage = {
     "atdd-bun worktree <start|finish|status>",
     "atdd-bun ci <init|status> [--replace]",
     "atdd-bun agent <init|status> [--replace]",
+    "atdd-bun profiles registry [--check]",
     "atdd-bun integrity [init|status] [--replace]",
     "atdd-bun docs journeys [--out <dir>] [--check] [--force]",
     "atdd-bun docs adr-register [--check]",
@@ -92,6 +94,11 @@ if (args[0] === "integrity") {
 }
 if (args[0] === "agent") {
   const result = args[1] === "init" ? await agentInit(process.cwd(), args.includes("--replace")) : args[1] === "status" ? await agentStatus() : fail("agent requires init or status");
+  console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
+}
+if (args[0] === "profiles") {
+  if (args[1] !== "registry") fail("profiles requires registry");
+  const result = await profileRegistries({ check: args.includes("--check") });
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "release") {
