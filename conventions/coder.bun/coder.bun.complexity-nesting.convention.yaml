@@ -24,12 +24,32 @@ content:
   normative_text: |
     Nesting is the metric readers feel most directly: at depth five a reader must hold five simultaneous conditions to know whether a line executes, which is past what working memory does reliably.
     It is also the most mechanically fixable — a guard clause or an extracted helper usually removes a level without changing behaviour, which is why the threshold is enforced rather than advised.
+    Treat excessive depth as a sensor for too much conditional context being carried at once. The objective is to make the execution conditions easier to understand, not merely to remove braces or encode the same nesting in expressions the metric counts differently.
   fix_hint: |
-    Flatten the control flow:
+    Flatten the control flow by removing unnecessary conditional context.
 
-      * invert conditions into early-return guard clauses,
-      * extract the innermost block into its own function,
-      * replace a nested loop with a single pass over a prepared collection.
+    Diagnose:
+      * identify conditions that reject work early and can become guards,
+      * identify an inner block that performs one cohesive operation,
+      * identify nested iteration that can be expressed as preparation followed by one clear pass.
+
+    Prefer:
+      * invert conditions into early-return guard clauses when doing so preserves cleanup, error, and ordering semantics,
+      * extract a cohesive inner operation into a named function with a small, meaningful input,
+      * prepare or filter a collection before iterating when that makes the algorithm clearer.
+
+    Avoid:
+      * converting statements into clever boolean or ternary expressions solely to evade the depth count,
+      * extracting an inner block that requires a long parameter list or still depends on the caller's hidden conditional context,
+      * duplicating cleanup, logging, or error handling across new guard clauses,
+      * changing evaluation order or exception behavior while flattening the function.
+
+    Verify:
+      * existing behavior and tests remain green, including error and boundary paths,
+      * the triggering nesting violation is gone,
+      * the flattened flow reads with fewer simultaneous preconditions,
+      * extracted functions satisfy the applicable length and complexity conventions,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - Functions with fewer than 3 code lines are not scored.
   - Comment lines are ignored when measuring brace balance.

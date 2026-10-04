@@ -28,8 +28,32 @@ content:
     This rule is MORE ACCURATE than its Python sibling, and the difference is worth stating because it is the one place the port is not a transcription.
     The Python detector reads imports with five regexes — the best a Python process can do without a TypeScript parser. A regex cannot distinguish `import type { T } from "./t"` from a value import, so a module whose only referrer is a TYPE import is counted as reachable. But a type-only import is erased at compile time and creates no runtime edge, so that module is dead and the regex reports it alive.
     Bun ships a real TypeScript parser in-process, which returns the actual import records and omits type-only ones. Same obligation, measured correctly — and available only because the runtime is Bun. Verified on a fixture where the Python detector finds one dead file and this one finds two.
+    Treat an unreachable file as a sensor for unclear ownership or incomplete integration, not as a request to manufacture an import edge. A meaningful repair either removes code that has no runtime responsibility or connects code through the module that genuinely owns and uses it.
   fix_hint: |
-    Either wire the file into the graph — import it from the module that should own it — or delete it. A file reachable only through a type import is a types module whose values have already been removed; move the type into the module that uses it.
+    Decide first whether the reported file should exist at runtime.
+
+    Diagnose:
+      * identify the responsibility the file claims to own,
+      * find the module that would naturally call or import it if that responsibility is required,
+      * determine whether the file is obsolete, incompletely integrated, or only carrying types.
+
+    Prefer:
+      * delete code that is genuinely unused,
+      * wire required runtime behavior through the module that owns that behavior,
+      * move a type into the module that uses it when the remaining file has no runtime values.
+
+    Avoid:
+      * adding a dummy import, barrel export, or other synthetic edge solely to make the file reachable,
+      * introducing a side-effect import unless the side effect is itself required runtime behavior,
+      * renaming or relocating a file merely to exploit structural-root detection,
+      * preserving obsolete code "just in case" instead of removing it.
+
+    Verify:
+      * existing behavior and tests remain green,
+      * any new import represents a real runtime dependency,
+      * deleted code has no required caller or entry point,
+      * the reachability finding is gone without creating a new architecture or dependency-flow violation,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - "`index.ts` / `index.tsx` are structural (like `__init__.py`) and are never reported."
   - Test files are entrypoints, not dead code, and are excluded.
