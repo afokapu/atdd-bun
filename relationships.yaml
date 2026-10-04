@@ -68,6 +68,7 @@ nodes:
   - coder.bun.layer-naming
   - coder.bun.logging-console
   - coder.bun.logging-structured
+  - coder.bun.phase-discipline
   - coder.bun.quality-comments
   - coder.bun.quality-mi
   - coder.bun.responsive-breakpoints-declared
@@ -5176,6 +5177,76 @@ edges:
     strength: important
     target_ref: tester.bun.telemetry-emit
     type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.complexity-cyclomatic
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.complexity-length
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.complexity-nesting
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.dead-code-reachability
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.duplication-intra-layer
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.quality-comments
+    type: runs_alongside
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: start_to_start
+    reason: phase discipline directs the response to each refactor sensor without weakening its enforcement
+    source_ref: coder.bun.phase-discipline
+    strength: important
+    target_ref: coder.bun.quality-mi
+    type: runs_alongside
     origin: "@afokapu/atdd-bun"
   - confidence: 1
     constraint: mandatory
