@@ -13,9 +13,30 @@ terms:
     A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: Every declared train has a browser spec.
-  normative_text: 'A train with no browser spec is a silent gap: the journey it declares can regress with nothing
-    turning red.'
-  fix_hint: 'Add `e2e/<train-slug>.e2e.ts` bound with `// Train: <train id>`.'
+  normative_text: |
+    A train with no browser spec is a silent gap: the journey it declares can regress with nothing turning red.
+    The `// Train:` binding is the detector's coverage handle, not the proof itself. A meaningful browser spec starts from the declared user-facing entrypoint, performs the interactions that make the train relevant, and asserts the user-observable business outcome the journey promises. A spec that only binds the train, navigates successfully, or mentions its identifier can satisfy structural coverage while leaving the journey behavior unproven.
+  fix_hint: |
+    Add `e2e/<train-slug>.e2e.ts` bound with `// Train: <train id>`, then make that spec prove the train rather than merely name it.
+
+    Claim:
+      * read the declared train/journey behavior and identify the user-observable outcome it is meant to deliver.
+
+    Stimulus:
+      * enter through the declared user-facing entrypoint,
+      * perform the real browser interactions that exercise the train.
+
+    Witness:
+      * assert the final user-visible business outcome, not only navigation, a 200 response, or an internal state token.
+
+    Avoid:
+      * adding the Train header solely for coverage credit,
+      * calling an internal handler instead of walking the assembled journey,
+      * seeding the final result directly,
+      * asserting only that the page loaded while the train behavior itself remains unobserved.
+
+    Verify:
+      * the spec would turn red if the train's user-facing behavior regressed.
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - The rule reports at the train's plan file, where the gap was declared.

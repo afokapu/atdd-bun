@@ -25,6 +25,10 @@ content:
     The core runtime call model (afokapu/atdd#1251) is `Station Master -> InterlockingRunner.resolveTrain
     -> TrainRunner.execute`. A test that claims to exercise an interlocking route but replaces either
     runner with a test double exercises the double, not production route control.
+    Referencing both production symbols is the detector's structural proxy; it is not sufficient semantic
+    proof by itself. The case must drive the production objects with guard-relevant inputs and observe the
+    route/train behavior it claims. Importing or instantiating the real runners while obtaining the asserted
+    result from a parallel fake path would be another descriptive green.
 
     REQUIRED production symbols an interlocking test must reference:
       - InterlockingRunner
@@ -43,13 +47,31 @@ content:
     WHICH per-stack discovery applies (here: Bun `e2e/**/*.ts` scanned for the production symbols and
     the forbidden patterns) is delegated to this realization.
   fix_hint: |
-    Rewrite the flagged interlocking test to drive the real runners: import and call
-    `new InterlockingRunner(interlockingYamlPath).resolveTrain(action, inputs)` to get the selected
-    trainId, then `new TrainRunner(selectedTrainId).execute(...)`. Delete any `MockInterlockingRunner` /
-    `MockTrainRunner`, any `mock.module` / `spyOn` / `mock` / `mock.restore` (bun:test) or
-    `vi.mock` / `vi.spyOn` / jest equivalent aimed at the runners or their `resolveTrain` / `execute`
-    methods, and any locally hand-built route resolver. This rule is `strict`: an interlocking test that
-    mocks the route-control path is a descriptive green proving nothing about production and blocks.
+    Rewrite the flagged case so the production runner path is the path that produces the asserted evidence.
+
+    Boundary:
+      * import and call `new InterlockingRunner(interlockingYamlPath).resolveTrain(action, inputs)`,
+      * pass its selected `trainId` into the production `TrainRunner`,
+      * execute the selected train through the real runtime path.
+
+    Witness:
+      * assert the selected train and the route- or acceptance-specific result produced by its execution.
+
+    Remove:
+      * `MockInterlockingRunner` / `MockTrainRunner`,
+      * `mock.module` / `spyOn` / `mock` / `mock.restore` aimed at the runners,
+      * `vi.mock` / `vi.spyOn` / Jest equivalents around runner behavior,
+      * any locally hand-built route resolver standing in for InterlockingRunner.
+
+    Avoid:
+      * importing the production symbols only to satisfy this detector while assertions still depend on a fake path,
+      * asserting a plan literal without driving production resolution and execution.
+
+    Verify:
+      * breaking production `resolveTrain` or `execute` behavior would make the test red,
+      * the evidence comes from the real runner chain.
+
+    This rule is `strict`: an interlocking test that mocks the route-control path is a descriptive green proving nothing about production and blocks.
   exceptions:
     - Non-interlocking e2e tests (no reference to any interlocking route/train/interlocking token and no
       runner symbol) are out of scope — they are not interlocking tests.

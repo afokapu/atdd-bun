@@ -12,9 +12,26 @@ terms:
     A unit test that merely mentions a journey URN in a string is not one.'
 content:
   summary: A journey spec binds to a train or journey plan/ declares.
-  normative_text: 'A spec bound to an undeclared subject is orphaned: it can pass forever while the plan it claims
-    to cover says nothing about it.'
-  fix_hint: Bind the spec to the declared id, or declare the train or journey.
+  normative_text: |
+    The binding is how a browser test is traced to the plan it exercises. A spec with no binding, two bindings, or an id the planner would reject cannot be traced.
+    Resolution is necessary but not sufficient: the declared train or journey must also be the subject the spec actually walks. Binding an arbitrary declared subject merely to make the file resolvable creates false journey coverage. Conversely, do not declare a new train or journey solely to rescue an already-written spec; the plan should change only because the product behavior requires that subject.
+  fix_hint: |
+    Bind the spec to the declared train or journey it actually exercises.
+
+    Derive:
+      * identify the plan subject reached by the spec's entrypoint and interactions,
+      * use that exact declared id in the header.
+
+    Avoid:
+      * choosing any resolvable subject merely to clear this finding,
+      * changing the binding to match a convenient test that proves another journey,
+      * declaring a new train or journey solely so the spec has something to bind.
+
+    Verify:
+      * the browser path actually walks the bound subject,
+      * the final observable assertion proves that subject's user-facing behavior.
+
+    If the intended subject is genuinely absent from the plan, return to the authorized planning flow rather than inventing it inside the tester repair.
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - A repository with no plan (no trains, no journeys) is out of scope.

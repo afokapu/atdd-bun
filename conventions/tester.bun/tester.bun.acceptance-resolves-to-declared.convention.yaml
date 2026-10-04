@@ -19,29 +19,32 @@ content:
     `// WMBT:` header names one the plan never mentions. Member of the `bun_tester_discipline_detector`
     FAMILY detector (checks/t_acceptance_resolves.mjs).
   normative_text: |
-    Its sibling `tester.bun.acceptance-binding-declared` asks only whether a header is PRESENT, which
-    a test satisfies by naming anything at all. Measured on a consumer, a test bound to
-    `acc:does-not-exist:E999-NEVER-DECLARED` passed every gated rule in this workspace. That is the
-    recurring defect this hub keeps finding: a NAME accepted where a CLAIM is required. The two rules
-    are complementary — one requires the binding to exist, this one requires it to be true.
+    Its sibling `tester.bun.acceptance-binding-declared` asks only whether a header is PRESENT, which a test satisfies by naming anything at all. Measured on a consumer, a test bound to `acc:does-not-exist:E999-NEVER-DECLARED` passed every gated rule in this workspace. That is the recurring defect this hub keeps finding: a NAME accepted where a CLAIM is required. The two rules are complementary — one requires the binding to exist, this one requires it to be true.
 
-    Declared URNs are read as TOKENS rather than parsed structurally, on purpose: acceptances are
-    stated under several keys across wagon, feature and WMBT documents, and a reference resolves if
-    the plan states that URN anywhere. Over-accepting is the safe direction — the failure this rule
-    exists to catch is a reference to something the plan never mentions.
+    Resolution is still only the structural half of truth. A header can resolve to a real acceptance and still be semantically false if the case exercises or asserts something else. During test authoring, the plan is authoritative: repair a stale or mistaken binding to the acceptance the case genuinely proves. Do not create, rename, or repurpose a plan acceptance merely to make an already-written test resolve; adding behavior to the plan is planner work and must be justified by the behavior itself, not by this detector.
 
-    NOT_APPLICABLE when the consumer declares no acceptances at all: a repository with no plan has
-    nothing to resolve against, and reporting there would fire on every unplanned project rather than
-    on a broken reference.
+    Declared URNs are read as TOKENS rather than parsed structurally, on purpose: acceptances are stated under several keys across wagon, feature and WMBT documents, and a reference resolves if the plan states that URN anywhere. Over-accepting is the safe direction — the failure this rule exists to catch is a reference to something the plan never mentions.
+
+    NOT_APPLICABLE when the consumer declares no acceptances at all: a repository with no plan has nothing to resolve against, and reporting there would fire on every unplanned project rather than on a broken reference.
   fix_hint: |
-    Point the header at an acceptance the plan declares, or declare the acceptance:
+    Repair the binding from the plan, not the plan from the test.
 
-      // URN: test:orders:checkout:E001-SMOKE-001-renders-row
-      // Acceptance: acc:orders:E001-SMOKE-001-renders-row   # stated in plan/orders/E001.yaml
-      // WMBT: wmbt:orders:E001
+    If the acceptance was renamed or the header is stale:
+      * point the test at the declared acceptance it actually exercises and proves.
 
-    A renamed acceptance is the common cause — the plan moved and the header did not. This rule is
-    `strict`: a test bound to an artifact that does not exist is not suppressible and fails CI.
+        // URN: test:orders:checkout:E001-SMOKE-001-renders-row
+        // Acceptance: acc:orders:E001-SMOKE-001-renders-row   # stated in plan/orders/E001.yaml
+        // WMBT: wmbt:orders:E001
+
+    If the test proves different behavior:
+      * bind it to that behavior's existing declared acceptance,
+      * adjust the test rather than the label when the current case does not prove the claimed acceptance.
+
+    If no declared acceptance represents the intended behavior:
+      * do not invent one merely to clear this tester finding,
+      * return to the authorized planning flow so the behavior can be declared deliberately before the test claims coverage.
+
+    A renamed acceptance is the common mechanical cause; a convenient but semantically unrelated acceptance is the dangerous gaming case. This rule is `strict`: a test bound to an artifact that does not exist is not suppressible and fails CI.
   exceptions:
     - A test carrying no binding header at all is NOT reported here; that is
       `tester.bun.acceptance-binding-declared`'s obligation, and reporting both would double-count

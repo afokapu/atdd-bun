@@ -21,12 +21,30 @@ content:
     Identifies security tests from the URN and flags those whose body contains no denial assertion.
   normative_text: |
     A security test that only walks the happy path is a SILENT GREEN GAP — the worst shape a test can have. It passes CI, the gate counts it as covering the security acceptance, and it proves nothing about the denial path, which is the only path the acceptance is actually about.
+    The denial assertion should be the witness for the specific security claim, not a generic refusal added to satisfy the detector. Construct the unauthorized or under-privileged stimulus described by the acceptance and assert the refusal it requires. When the acceptance protects a mutation or other side effect, also observe that the protected effect did not occur; returning 403 after performing the mutation is still a security failure.
     Identification is by URN kind segment rather than filename, consistent with the rest of this package: the header is authoritative.
   fix_hint: |
-    Assert the refusal, not the permission:
+    Prove the refusal named by the security acceptance.
+
+    Stimulus:
+      * construct the missing, invalid, or insufficient authorization state the acceptance describes,
+      * exercise the real protected boundary.
+
+    Witness:
+      * assert the expected denial signal — for example 401, 403, a permission error, rejection, or throw,
+      * when the acceptance protects a side effect, also assert that the protected state or action remains unchanged.
 
       const res = await fetch("/orders", { method: "POST" });   // anonymous
       expect(res.status).toBe(403);
+
+    Avoid:
+      * using a happy-path permission case as the only security proof,
+      * adding an unrelated 403 assertion that does not come from the bound protected operation,
+      * mocking away the authorization decision the acceptance is meant to prove.
+
+    Verify:
+      * the case would turn red if authorization were accidentally removed,
+      * where applicable, a denied request cannot still perform the protected effect.
 
     A happy-path case is welcome too — but it cannot be the only one.
   exceptions:

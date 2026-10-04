@@ -22,13 +22,47 @@ content:
     For each `it()` in a RED-phase file, brace-matches the case body and reports it when it contains no
     `expect(` at all, or when every `expect(` is an existence matcher.
   normative_text: |
-    RED's entire job is to fail before the implementation exists. `expect(checkout).toBeDefined()` passes the moment an empty function is exported, so it goes green against a stub — the test was never RED in any meaningful sense, and the acceptance it claims to prove is unproven from that point forward.
-    The rule is deliberately narrow: it fires only when EVERY assertion in the case is vacuous. A case that checks existence and then checks behaviour is fine, because the behavioural assertion is the one that must fail.
+    RED's entire job is not merely to be red; it is to construct the smallest executable proof of the declared acceptance before implementation makes that proof pass. `expect(checkout).toBeDefined()` passes the moment an empty function is exported, so it goes green against a stub — the acceptance it claims to prove is unproven from that point forward.
+    Treat the acceptance as the source of the test, not the implementation. The acceptance identifies the claim; any declared harness and execution context constrain the proof boundary; its Given supplies only required preconditions; its When supplies the primary stimulus; and its Then supplies the behavioral witness. The assertion should observe the consequence the acceptance promises, not an implementation mechanism used to produce it.
+    A useful RED sensor is counterfactually sensitive: if the named behavior were absent, inverted, or replaced by a stub, the behavioral assertion would fail. Expected values computed by the production subject, assertions on mocks that replace the behavior being proved, or unrelated assertions added only to satisfy this detector can all produce structurally acceptable tests that prove the wrong thing.
+    The detector is deliberately narrower than that semantic obligation: it fires only when EVERY assertion in the case is vacuous. A case that checks existence and then checks behaviour is not flagged, because the behavioral assertion is the machine-visible proxy. The convention guidance defines what that assertion is for.
   fix_hint: |
-    Assert the behaviour that does not yet exist:
+    Construct the RED case from the declared acceptance rather than from the code you expect to write.
 
-      expect(checkout).toBeDefined();                        // passes against a stub
-      expect(() => checkout({ items: [] })).toThrow("CART_EMPTY");  // must fail first
+    Claim:
+      * read the bound Acceptance / @covers declaration and identify the one behavior this case is meant to prove,
+      * derive the expected outcome from the acceptance's Then; do not invent a more convenient assertion from the current implementation.
+
+    Boundary:
+      * honor the planned harness and execution context when they are declared,
+      * enter through the narrowest boundary that still proves the declared behavior,
+      * do not move inward to an easier internal seam when that would stop exercising the thing the acceptance claims.
+
+    Stimulus:
+      * translate the acceptance's When into one primary action,
+      * create only the Given state required for that action.
+
+    Witness:
+      * assert the observable consequence named by the acceptance — for example an exact error, status/body, state change, emitted item, or other declared outcome,
+      * prefer a witness that would turn red if the behavior were removed or inverted.
+
+    Avoid:
+      * existence-only assertions such as `toBeDefined()` as the behavioral proof,
+      * mocking or substituting the subject or collaboration whose behavior the acceptance is meant to prove,
+      * asserting incidental implementation details instead of the declared outcome,
+      * computing the expected value with the production code under test,
+      * copying the production algorithm into the test,
+      * adding an unrelated behavioral assertion merely to clear this detector,
+      * broadening one case to prove several unrelated behaviors.
+
+    Verify:
+      * run the target case against the current implementation,
+      * confirm execution reaches the intended stimulus and behavioral oracle,
+      * confirm the behavioral expectation is red because the required behavior is absent or wrong — not because of syntax, imports, fixture setup, unavailable infrastructure, or an unrelated exception,
+      * ask the counterfactual: if the acceptance behavior disappeared, would this case definitely turn red?
+
+      expect(checkout).toBeDefined();                                 // passes against a stub
+      expect(() => checkout({ items: [] })).toThrow("CART_EMPTY");   // behavioral witness
   exceptions:
   - Only RED-phase files are scanned.
   - A case mixing existence and behavioural assertions is not flagged.

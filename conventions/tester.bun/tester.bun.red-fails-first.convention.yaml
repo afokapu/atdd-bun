@@ -24,16 +24,33 @@ content:
     Flags any `Phase: RED` file containing none of the core TypeScript RED markers. `test.failing(` is
     bun:test's spelling of vitest's `it.fails(` and is accepted identically.
   normative_text: |
-    Whether a test ACTUALLY fails first is a RUNTIME property no static detector can observe. Core supplies the decidable STRUCTURAL proxy — a guaranteed-fail marker must be present — and that proxy is exactly what a per-stack detector can check. The obligation is agnostic; only the marker syntax is stack-specific.
-    This rule and `red-behavioral-assertion` are complementary, not redundant. That one asks whether the assertions are about behaviour; this one asks whether anything guarantees the test is red at all.
+    Whether a test ACTUALLY fails first is a RUNTIME property no static detector can observe. Core therefore supplies a decidable STRUCTURAL proxy — a guaranteed-fail marker must be present — and that proxy is exactly what this per-stack detector checks. The obligation is agnostic; only the marker syntax is stack-specific.
+    The marker is a detector aid, not the RED objective and not the behavioral oracle. A test whose only meaningful reason for failing is `expect.fail(...)`, an unconditional throw before the stimulus, or a failing wrapper around an otherwise passing case is mechanically red while the acceptance remains unproven. The case must also contain the behavioral witness required by `red-behavioral-assertion`.
+    The two rules are therefore complementary: `red-behavioral-assertion` asks whether the case encodes the missing behavior; this rule gives the static gate evidence that the artifact is intentionally in RED. The strongest local check is causal: apart from the structural marker, the behavioral witness itself should fail for the expected missing-behavior reason.
   fix_hint: |
-    Add a marker that cannot pass until the implementation exists:
+    Establish the behavioral oracle first, then add the guaranteed-fail marker required by the static RED gate.
 
-      expect.fail("checkout rejection not implemented yet");
-      // or
-      throw new Error("Not implemented: checkout rejection");
+    Behavioral proof:
+      * derive the case from the bound acceptance's Given / When / Then,
+      * include an assertion that would fail because the required behavior is not implemented correctly.
 
-    Remove it in GREEN, when the behavioural assertion carries the test on its own.
+    Structural proxy:
+      * add one accepted RED marker so the static detector can recognize the phase:
+
+        expect.fail("checkout rejection not implemented yet");
+        // or
+        throw new Error("Not implemented: checkout rejection");
+
+    Avoid:
+      * using the marker as the only meaningful reason the test is red,
+      * throwing before the declared stimulus is exercised,
+      * wrapping a vacuous or already-passing case in `it.fails` / `test.failing`,
+      * weakening the behavioral assertion because the marker already guarantees failure.
+
+    Verify:
+      * run the target case and confirm it reaches the intended behavior,
+      * confirm the behavioral oracle would still fail for the expected reason without relying on the unconditional marker,
+      * remove the marker in GREEN only when the behavioral assertion itself carries the proof and passes.
   exceptions:
   - Only RED-phase files are scanned.
   - "`it.fails` / `test.failing` are markers, NOT self-skips — `no-self-skip` deliberately does not flag them."
