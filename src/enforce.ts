@@ -48,7 +48,7 @@ export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string
   architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
   flow: [
     { rule_id: "atdd-bun.review.behavioral-reconciliation", path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml" },
-    { rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" },
+    { rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-flow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" },
   ],
 };
 

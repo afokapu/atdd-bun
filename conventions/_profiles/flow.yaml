@@ -5,7 +5,7 @@ conventions:
   - rule_id: "atdd-bun.review.behavioral-reconciliation"
     path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml"
   - rule_id: "atdd-workflow.workflow.lifecycle"
-    path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml"
+    path: "../atdd-flow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml"
 relationships:
   - confidence: 1
     constraint: "mandatory"
