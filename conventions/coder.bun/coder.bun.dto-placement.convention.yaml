@@ -21,7 +21,22 @@ content:
   normative_text: |
     A DTO belongs to the contract, not to either side of it. Declared inside one feature's layer it becomes that feature's private type that another feature imports anyway — and the boundary it was meant to define now runs through somebody's internals.
   fix_hint: |
-    Move the type to `contracts/` and import it from both sides.
+    Canonical path:
+      * declare a DTO in `contracts/` and import that shared boundary shape from both sides.
+    
+    During GREEN:
+      * reuse an existing contract type when it already represents the required payload,
+      * add only the fields required by the current acceptance,
+      * create a new DTO only when the behavior introduces a genuinely distinct boundary shape.
+    
+    Do not broaden:
+      * do not move unrelated internal types into contracts,
+      * do not add speculative fields for future callers,
+      * do not declare the DTO inside a feature layer as a temporary shortcut.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * every affected DTO declaration lives under `contracts/`.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

@@ -21,11 +21,22 @@ content:
   normative_text: |
     The 80-character cap is the whole rule. An unbounded field becomes a paragraph, a paragraph goes stale, and a stale paragraph is worse than no description because it is believed. A single line that must fit forces the author to name the file's one job — and a file whose job will not fit in 80 characters is usually a file doing more than one thing, which makes this a design signal as much as a documentation rule.
   fix_hint: |
-    State the one job in a single line:
-
-      // Purpose: render one order row fragment for htmx to swap
-
-    If it will not fit, that is evidence the file has more than one responsibility; split it rather than expanding the line.
+    Canonical path:
+      * state the file's one actual job in a single `Purpose:` line of at most 80 characters.
+    
+    During GREEN:
+      * derive the purpose from the responsibility introduced for the current acceptance,
+      * use concrete responsibility language rather than implementation mechanics,
+      * if the purpose genuinely cannot fit because the new file owns multiple jobs, split only the responsibilities required by the current behavior.
+    
+    Do not broaden:
+      * do not invent a vague purpose just to meet the length cap,
+      * do not perform unrelated decomposition,
+      * do not describe hypothetical future responsibilities.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the purpose truthfully names one job and fits the limit.
   exceptions:
   - Exactly 80 characters passes; 81 does not.
   - A missing description is reported at the URN line.

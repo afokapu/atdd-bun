@@ -23,7 +23,22 @@ content:
     ADDED TO THE MIRROR, and worth flagging: the Convex sibling accepts only the FILENAME form, because its function tree is flat. A full-stack Bun repo commonly nests (`features/orders/domain/total.ts`), so accepting only filenames would refuse the idiomatic layout. This realization accepts BOTH.
     The obligation is unchanged: a reader should know a file's role before opening it, and the layering rules need something to read.
   fix_hint: |
-    Either rename the file to its layer, or move it into the layer directory it belongs to.
+    Canonical path:
+      * place the module in the architectural layer that owns its responsibility, or name the file with that layer when the repository uses the filename form.
+    
+    During GREEN:
+      * derive the layer from the responsibility the current behavior actually implements,
+      * follow the nearest existing feature layout,
+      * move or rename only the affected module when placement is wrong.
+    
+    Do not broaden:
+      * do not reorganize sibling features,
+      * do not invent a new layer name,
+      * do not choose a layer merely to make another import rule pass.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the file's declared location or name matches its actual architectural responsibility.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.
