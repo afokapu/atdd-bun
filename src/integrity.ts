@@ -156,7 +156,10 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown 
   // (explicit → implicit → narrower would otherwise be a two-step bypass) is loosening a human approves.
   const before = explicitProfiles(base), after = explicitProfiles(current);
   if (before && !after) out.push(`profiles becomes implicit: the explicit list [${before.join(", ")}] was removed`);
-  const dropped = before && after ? before.filter(name => !after.includes(name)) : [];
+  // delivery was retired in favour of the workflow companion. This is a one-way package migration,
+  // not a general escape hatch for removing profiles: its replacement must be explicit in the same
+  // policy change, and every other removed profile remains a loosening.
+  const dropped = before && after ? before.filter(name => !after.includes(name) && !(name === "delivery" && after.includes("workflow"))) : [];
   if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
   return out;
 }

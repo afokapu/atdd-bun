@@ -31,6 +31,13 @@ test("the optional workflow profile is available only by explicit adoption", asy
   expect(await enforce({ root, profiles: ["workflow"] })).toEqual([]);
 });
 
+test("the retired delivery profile may migrate only to workflow", () => {
+  expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["workflow"] })).toEqual([]);
+  expect(loosenedPolicy({ profiles: ["delivery", "security"] }, { profiles: ["workflow"] })).toEqual(["profiles drops security"]);
+  expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["docs"] })).toEqual(["profiles drops delivery"]);
+  expect(loosenedPolicy({ profiles: ["delivery"] }, {})).toEqual(["profiles becomes implicit: the explicit list [delivery] was removed"]);
+});
+
 test("all runs only the profiles the operator lists; a named profile still runs on request", async () => {
   const root = await repo({ ...TRACE, ...CODER, "atdd-bun.yaml": "profiles: [traceability]\n" });
   expect(await enabledProfiles(root)).toEqual(["traceability"]);
