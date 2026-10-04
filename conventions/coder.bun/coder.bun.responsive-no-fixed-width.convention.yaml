@@ -14,7 +14,23 @@ content:
   summary: No width or min-width wider than the smallest viewport.
   normative_text: An element wider than the screen forces horizontal scrolling on every phone. Wide layouts are
     expressed with `max-width`, percentages, or layouts that wrap.
-  fix_hint: 'Replace `width: 960px` with `width: 100%; max-width: 960px`.'
+  fix_hint: |
+    Canonical path:
+      * make content fluid at small viewports, usually with `width: 100%` plus an appropriate `max-width` rather than an oversized fixed `width` or `min-width`.
+    
+    During GREEN:
+      * fix only the element responsible for the current overflow,
+      * reuse existing layout containers and responsive primitives,
+      * preserve the intended large-screen cap while allowing the element to shrink.
+    
+    Do not broaden:
+      * do not redesign unrelated layout,
+      * do not hide overflow to mask an oversized element,
+      * do not remove useful max-width constraints merely to pass the detector.
+    
+    Prove:
+      * the current responsive acceptance passes at the smallest governed viewport,
+      * the affected declaration no longer forces horizontal overflow.
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - '`max-width` is not judged; it is how wide layouts are meant to be bounded.'

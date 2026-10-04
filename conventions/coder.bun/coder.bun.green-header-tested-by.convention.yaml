@@ -23,17 +23,22 @@ content:
     This is the rule that makes the whole header load-bearing rather than decorative. The URN says what the file IS; `Tested-By:` says what PROVES it. Together they close the loop from acceptance to implementation that ATDD exists to keep closed — which is exactly the loop that a stack migration breaks silently, because the new files are written without headers and nothing notices.
     An empty block is treated as absent deliberately: it is the shape a half-finished backfill leaves behind, and accepting it would let a repo report full header coverage with zero acceptance bindings.
   fix_hint: |
-    Name at least one acceptance:
-
-      // Tested-By:
-      // - test:orders:checkout:E001-SMOKE-001-renders-row
-
-    and in a template:
-
-      <!-- Tested-By: -->
-      <!-- - test:orders:checkout:E001-SMOKE-002-panel-loads -->
-
-    Whether the named acceptances EXIST is a plan-graph question this rule cannot answer; it enforces that the binding is declared.
+    Canonical path:
+      * bind the implementation file to at least one real acceptance URN in its `Tested-By:` block.
+    
+    During GREEN:
+      * derive the binding from the acceptance currently being implemented,
+      * keep existing valid bindings and add only the acceptance that genuinely covers this file,
+      * use the exact declared acceptance URN.
+    
+    Do not broaden:
+      * do not invent acceptance IDs,
+      * do not add unrelated tests merely to make the block non-empty,
+      * do not claim coverage from an acceptance that does not exercise the implementation.
+    
+    Prove:
+      * the named behavioral acceptance passes,
+      * the file's `Tested-By:` block names the acceptance that actually proves it.
   exceptions:
   - Test files are excluded — they are the other end of this binding.
   - One entry satisfies the rule; more are encouraged.

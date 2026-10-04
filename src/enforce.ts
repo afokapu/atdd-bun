@@ -42,9 +42,9 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
   workflow: [],
 };
 
-/** Conventions which an installed companion package contributes to an otherwise policy-only profile. */
+/** Additional policy conventions a profile loads, whether local or contributed by an installed companion package. */
 export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string; path: string }>> = {
-  traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [], tester: [], security: [],
+  traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [{ rule_id: ["coder.bun", "phase-discipline"].join("."), path: "conventions/coder.bun/coder.bun.phase-discipline.convention.yaml" }], tester: [], security: [],
   architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
   workflow: [{ rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" }],
 };

@@ -21,10 +21,22 @@ content:
   normative_text: |
     The layer segment is what the boundary and dependency-flow rules read to decide whether an import is legal. A file declaring a layer outside the vocabulary is not merely mislabelled — it is unreachable by every layering rule, so it becomes a hole through which any dependency may pass unchallenged.
   fix_hint: |
-    Use a layer from the vocabulary:
-
-      // URN: component:orders:checkout:OrderRow:backend:widgets       // ✗
-      // URN: component:orders:checkout:OrderRow:backend:presentation  // ✓
+    Canonical path:
+      * declare one of `domain`, `application`, `integration`, `presentation`, or `assembly` according to the file's real responsibility.
+    
+    During GREEN:
+      * derive the layer from the existing architecture and the responsibility required by the current acceptance,
+      * follow the nearest existing compliant feature pattern,
+      * if the file is actually misplaced, move only the affected implementation to its proper layer.
+    
+    Do not broaden:
+      * do not invent a new layer,
+      * do not relabel a misplaced module to make dependency checks disappear,
+      * do not reorganize adjacent features.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the URN layer matches the implementation's actual architectural layer.
   exceptions:
   - URNs that are not six segments are skipped.
   - The vocabulary is fixed by core, not by this extension; a new layer is a core change.

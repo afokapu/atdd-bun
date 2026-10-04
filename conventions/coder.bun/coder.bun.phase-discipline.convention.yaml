@@ -1,0 +1,111 @@
+schema_version: 1.1.0
+rule_id: coder.bun.phase-discipline
+kind: policy
+status: active
+name: GREEN establishes behavior before REFACTOR optimizes design
+statement: >-
+  During governed coding work, GREEN MUST target the smallest correct implementation that makes the current
+  behavioral acceptance pass while respecting active construction constraints. REFACTOR begins only after
+  behavioral GREEN and uses quality findings as design sensors. Phase ordering never waives strict
+  enforcement: review-ready work MUST pass all active profiles.
+terms:
+- term_id: behavioral_green
+  text: >-
+    the point where the current RED behavioral acceptance passes against the implementation. It proves the
+    requested behavior exists; it is not yet the end of the coding loop.
+- term_id: construction_constraint
+  text: >-
+    a rule that constrains what counts as a legal implementation while behavior is being discovered:
+    traceability and topology, architecture and dependency direction, runtime, design-system and responsive
+    boundaries, plus every other active non-refactor profile such as security.
+- term_id: refactor_sensor
+  text: >-
+    a quality finding whose metric is evidence of a design smell rather than the design objective itself.
+    In the Bun coder profile these are the seven bun_ts_metrics_detector rules: complexity-cyclomatic,
+    complexity-length, complexity-nesting, dead-code-reachability, duplication-intra-layer,
+    quality-comments, and quality-mi.
+- term_id: review_ready
+  text: >-
+    the point after behavioral GREEN and REFACTOR when the required behavior still passes and all active
+    ATDD Bun profiles are green. Only this state is completion.
+content:
+  summary: >-
+    Keep GREEN and REFACTOR as different search problems without changing enforcement. GREEN finds the
+    smallest legal implementation of the required behavior; REFACTOR then uses the seven metrics findings
+    as guided design sensors while preserving that behavior.
+  normative_text: |
+    The `green-*` rule prefix is a traceability family name, not a phase assignment. Those conventions
+    declare implementation identity, proof, runtime, purpose, side and layer; they stay where they are and
+    remain construction constraints during GREEN.
+
+    GREEN starts from one failing behavioral acceptance. Its objective is the smallest correct implementation
+    that makes that acceptance pass while respecting the active system constraints. Reuse existing contracts,
+    components, dependencies and patterns. Add only the boundary or abstraction the current behavior actually
+    needs. Do not redesign adjacent systems, generalize for hypothetical callers, or perform unrelated cleanup
+    while behavior is still being discovered.
+
+    Within the coder profile, the construction-constraint families are the rules emitted by
+    `atdd_topology`, `bun_green_traceability_detector`, `bun_clean_architecture_detector`,
+    `bun_fullstack_detector`, `bun_design_system_detector`, and `bun_responsive_detector`. They constrain the
+    solution during GREEN; they are not debts to knowingly violate and repair later. Other active profiles,
+    especially tester, traceability and security, remain equally binding.
+
+    The refactor-sensor family is `bun_ts_metrics_detector`:
+      * coder.bun.complexity-cyclomatic
+      * coder.bun.complexity-length
+      * coder.bun.complexity-nesting
+      * coder.bun.dead-code-reachability
+      * coder.bun.duplication-intra-layer
+      * coder.bun.quality-comments
+      * coder.bun.quality-mi
+
+    These sensors may run at any time and remain strict. The phase distinction changes the agent's response,
+    not the validator. While the acceptance is still red, do not broaden the implementation merely to optimize
+    a quality metric and do not game a finding. Prefer a naturally simple implementation, but keep the search
+    objective on the missing behavior. Once the acceptance first passes, hold behavior fixed and use each
+    sensor's smell-specific Diagnose / Prefer / Avoid / Verify guidance to improve the design.
+
+    `dead-code-reachability` is the one sensor that can expose a false GREEN: a unit-level acceptance can pass
+    against code that no production root can reach. When the finding applies to the newly implemented behavior,
+    wire it through the real owner before treating the behavior as complete; never manufacture an import edge.
+
+    GREEN is therefore not permission to write deliberately poor code, and REFACTOR is not permission to add
+    behavior. The intended loop is RED -> smallest legal behavioral GREEN -> guided REFACTOR -> full-profile
+    proof. A task is not review-ready until the target behavior still passes and every active strict finding is
+    cleared.
+  fix_hint: |
+    During GREEN:
+      * start from the current failing behavioral acceptance,
+      * derive traceability metadata from the plan and the acceptance rather than inventing it,
+      * reuse the nearest existing compliant pattern, contract and dependency,
+      * implement the smallest path that makes the required behavior pass,
+      * introduce a new boundary only when no existing compliant path can express the behavior,
+      * stop expanding scope once the behavior passes and the construction constraints are satisfied.
+
+    During REFACTOR:
+      * keep the now-green behavior fixed,
+      * address the seven refactor sensors one finding at a time,
+      * follow the finding's smell-specific Diagnose / Prefer / Avoid / Verify guidance,
+      * reject metric gaming and unrelated redesign.
+
+    Before review:
+      * rerun the behavioral proof,
+      * run the applicable ATDD Bun profiles,
+      * correct every strict finding caused by or exposed by the work.
+  exceptions:
+  - >-
+    A narrow structural change may precede behavioral GREEN when the existing design makes the required
+    behavior impossible to implement correctly. Preserve already-proven behavior and change only the verified
+    blocker.
+  - >-
+    Phase ordering never suppresses a validator, weakens a threshold, or permits a security, architecture,
+    runtime, traceability or other active constraint to remain violated in review-ready work.
+  - >-
+    If a refactor sensor is already satisfied by the smallest correct implementation, keep that result; do not
+    force a violation merely to preserve a ceremonial phase boundary.
+metadata:
+  aliases:
+  - BUN-CODER-PHASE-DISCIPLINE-001
+  introduced_in: 0.10.10
+implementation:
+  type: none

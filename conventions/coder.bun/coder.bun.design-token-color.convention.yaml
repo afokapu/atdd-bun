@@ -20,7 +20,23 @@ content:
     raw color literals in their values.
   normative_text: A raw color is a theme decision made in one place. It does not follow dark mode, it drifts from
     the palette, and nobody can find it when the palette changes.
-  fix_hint: 'Define the color once as a custom property in the tokens layer and reference it: `color: var(--danger)`.'
+  fix_hint: |
+    Canonical path:
+      * define the required color once in the tokens layer and reference that token from UI code.
+    
+    During GREEN:
+      * reuse an existing semantic color token when it already expresses the required role,
+      * add the smallest new semantic token only when the current visual behavior needs a distinct value,
+      * change only the affected UI reference.
+    
+    Do not broaden:
+      * do not retheme unrelated components,
+      * do not duplicate an existing token under a new name,
+      * do not use a raw literal as a temporary shortcut.
+    
+    Prove:
+      * the current visual or behavioral acceptance passes,
+      * affected UI files contain no raw color literal outside the tokens layer.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - 'Custom property definitions (`--danger: #b91c1c`) define tokens wherever they live and are not flagged.'

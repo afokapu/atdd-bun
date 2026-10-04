@@ -22,7 +22,23 @@ content:
     The Vite sibling forbids react/preact/@tanstack/gsap because those are ITS frameworks. The obligation is identical — the domain expresses rules, not machinery — and only the list of machinery changes with the stack. For a full-stack Bun app the machinery is the server and transport primitives.
     The practical test: the domain must be runnable with no server started. `Bun.` in a domain module means it is not.
   fix_hint: |
-    Move the machinery to `integration/` and pass the result in. A domain function should take data and return data.
+    Canonical path:
+      * keep domain code as data-in / data-out logic,
+      * move Bun, Node, htmx, server, or framework machinery to an outer layer and pass the needed value inward.
+    
+    During GREEN:
+      * adapt at the nearest existing integration or presentation boundary,
+      * pass the smallest value or domain-facing collaborator the behavior needs,
+      * add a new boundary only when no existing one can express the current behavior correctly.
+    
+    Do not broaden:
+      * do not wrap a framework API in a domain-named helper and keep the coupling,
+      * do not redesign adjacent layers,
+      * do not import runtime machinery just to satisfy the acceptance quickly.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the domain remains executable without runtime machinery.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

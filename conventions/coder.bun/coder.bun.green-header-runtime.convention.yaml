@@ -22,12 +22,21 @@ content:
   normative_text: |
     `isomorphic` has no Vite counterpart and is the substantive addition. A bundler stack decides at BUILD time which code reaches the browser, so a file is server or client by where the bundler puts it. Bun decides at RUN time, and a full-stack Bun app routinely runs one module in both places — a fragment renderer used server-side and again after a client-side swap. Without a value for that, authors would be forced to pick a wrong one, and every downstream reader would inherit the error.
   fix_hint: |
-    Declare the runtime the file actually executes in:
-
-      // Runtime: deno         // ✗ not this stack
-      // Runtime: bun          // ✓ server-side
-      // Runtime: browser      // ✓ ships to the client
-      // Runtime: isomorphic   // ✓ genuinely runs in both
+    Canonical path:
+      * declare the runtime where the file actually executes: `bun`, `browser`, or `isomorphic`.
+    
+    During GREEN:
+      * derive the value from the real execution path created or used by the current acceptance,
+      * keep an existing correct runtime declaration,
+      * change only the header when the implementation already executes in the correct place.
+    
+    Do not broaden:
+      * do not move code between server and browser merely to fit a preferred label,
+      * do not guess `isomorphic` because the file could theoretically run in both places.
+    
+    Prove:
+      * the current behavioral acceptance passes in its real runtime,
+      * the declaration matches where the file actually executes.
   exceptions:
   - A missing declaration is reported at the URN line (or the first meaningful line when there is no URN).
   - Test files are excluded.

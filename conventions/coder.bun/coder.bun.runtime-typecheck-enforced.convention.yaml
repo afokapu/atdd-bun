@@ -53,15 +53,22 @@ content:
     fixtures that must NOT typecheck — `fixtures/dirty/interlocking_resolution_model/...` exists
     precisely to be malformed.
   fix_hint: |
-    Three small additions to a consumer project:
-
-      package.json   "devDependencies": { "typescript": "^5.6.0" }
-                     "scripts": { "typecheck": "tsc --noEmit",
-                                  "check": "bun run typecheck && bun test" }
-      tsconfig.json  { "compilerOptions": { "strict": true, "noEmit": true } }
-
-    Any equivalent satisfies it — `svelte-check`, `astro check`, `vue-tsc`, or extending a strict
-    base config. What must not happen is types being stripped and never checked anywhere.
+    Canonical path:
+      * provide a real no-emit TypeScript check and wire it into the repository's check path.
+    
+    During GREEN:
+      * reuse the existing typechecker and strict configuration when present,
+      * add only the minimal missing typecheck dependency, config, or script required to make TypeScript checking real,
+      * fix type errors introduced by the current behavior rather than weakening compiler options.
+    
+    Do not broaden:
+      * do not disable strict checks or add blanket ignores,
+      * do not replace the project's typechecker without necessity,
+      * do not migrate unrelated configuration while establishing the required check.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the no-emit typecheck succeeds through the repository's normal check path.
   exceptions:
   - A Bun project with no TypeScript sources is out of scope entirely.
   - A tsconfig that `extends` a base config is never reported for strictness (see terms).

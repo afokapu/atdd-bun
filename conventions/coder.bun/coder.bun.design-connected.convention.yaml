@@ -18,7 +18,23 @@ content:
   summary: Flags rendering component files outside the design root that import nothing from it.
   normative_text: A screen built without the system is where the next one-off style lands. Requiring one design
     import makes the connection explicit and reviewable.
-  fix_hint: Compose the screen from a template, component, or primitive — at minimum wrap it in the page template.
+  fix_hint: |
+    Canonical path:
+      * compose application UI from the existing design-system template, component, or primitive that owns the required role.
+    
+    During GREEN:
+      * reuse the nearest existing design-system surface before creating a new one,
+      * add only the connection required by the current rendered behavior,
+      * if no suitable surface exists, introduce the smallest design-system component that expresses the current need.
+    
+    Do not broaden:
+      * do not redesign the screen or migrate unrelated markup,
+      * do not create a generic component library for hypothetical callers,
+      * do not add a meaningless import merely to satisfy connectivity.
+    
+    Prove:
+      * the current behavioral or rendering acceptance passes,
+      * the rendered app component is genuinely composed from the design system.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - Non-rendering modules (routes, handlers, data) are not judged.

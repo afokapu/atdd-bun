@@ -20,12 +20,21 @@ content:
   normative_text: |
     The vocabulary is unchanged from the Python and Vite realizations, and it matters MORE in a full-stack Bun app than in either. A Vite repo is frontend by construction and a python-pytest service is backend by construction, so the segment is close to redundant there. Here one repo, one language and one runtime span both halves, and the only thing that says which side a module belongs to is this segment — so it must be declared per file and cannot be inferred from the stack.
   fix_hint: |
-    Declare the side explicitly:
-
-      // URN: component:orders:checkout:OrderRow:server:presentation    // ✗ not a side
-      // URN: component:orders:checkout:OrderRow:backend:presentation   // ✓
-
-    Server-rendered htmx fragments are `backend` (they are produced by the server); markup and behaviour that live in the browser are `frontend`.
+    Canonical path:
+      * declare `frontend` for browser-owned implementation and `backend` for server-owned implementation.
+    
+    During GREEN:
+      * derive side from where responsibility lives, not merely from file syntax,
+      * treat server-rendered htmx fragments as backend and browser-resident behavior as frontend,
+      * change only the side segment when the rest of the URN is correct.
+    
+    Do not broaden:
+      * do not move implementation between client and server just to fix a header,
+      * do not use `Runtime:` as a substitute for the side decision.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the side segment matches the implementation's real ownership.
   exceptions:
   - URNs that are not six segments are skipped.
   - "`Runtime:` is a different axis — a `backend` file may declare `Runtime: isomorphic`."

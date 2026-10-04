@@ -20,8 +20,23 @@ content:
     the design system's own primitives and components.
   normative_text: Spacing and motion are the rhythm of an interface. Each hardcoded `13px` is a new step on a scale
     nobody chose, and the rhythm erodes one component at a time.
-  fix_hint: 'Use the foundations scale: `padding: var(--space-3)`, `border-radius: var(--radius)`, `transition:
-    opacity var(--fast)`. Add a step to the scale in the tokens layer if none fits.'
+  fix_hint: |
+    Canonical path:
+      * take spacing, inset, radius, and duration values from the existing foundations scale.
+    
+    During GREEN:
+      * reuse the nearest existing semantic or scale token,
+      * add a new foundation value only when the current design genuinely requires a distinct value,
+      * change only the declaration needed by the acceptance.
+    
+    Do not broaden:
+      * do not normalize unrelated styling,
+      * do not create one-off tokens that merely rename a hardcoded literal,
+      * do not bypass the scale for speed.
+    
+    Prove:
+      * the current visual or behavioral acceptance passes,
+      * affected UI values come from the declared foundations.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - 0 and 1px (hairline borders) are not design decisions and are allowed.

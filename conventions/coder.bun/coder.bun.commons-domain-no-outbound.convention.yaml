@@ -23,7 +23,23 @@ content:
     Dependencies point INWARD only. The domain is the centre: it holds the rules, and it must not know what orchestrates them or what transports them.
     An outward import inverts that and makes the rules unusable without the machinery — which shows up first as a domain test that needs a database.
   fix_hint: |
-    Move the shared thing into the domain, or invert the dependency by defining a port in the domain that the outer layer implements.
+    Canonical path:
+      * keep commons domain dependencies inward,
+      * move genuinely domain-owned data or behavior into domain, or invert an outer capability behind a domain-facing port.
+    
+    During GREEN:
+      * prefer existing domain types, functions, and ports,
+      * introduce a new port only when the current behavior requires the domain to request an outer capability,
+      * keep the port as narrow as the acceptance requires.
+    
+    Do not broaden:
+      * do not move unrelated application or integration behavior into domain,
+      * do not invent a future-proof abstraction,
+      * do not import outward as a temporary shortcut.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * commons domain imports no application or integration code.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

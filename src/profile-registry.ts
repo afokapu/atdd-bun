@@ -54,9 +54,11 @@ export async function renderProfileRegistries(root = resolve(import.meta.dir, ".
     const missing = ruleIds.filter(id => !conventions.has(id));
     if (missing.length) throw new Error(`${profile} declares rule IDs without exactly one convention: ${missing.join(", ")}`);
     const supplementary = profileConventions[profile];
-    const duplicate = supplementary.find(convention => conventions.has(convention.rule_id) || ruleIds.includes(convention.rule_id));
+    const duplicate = supplementary.find(convention => ruleIds.includes(convention.rule_id));
     if (duplicate) throw new Error(`${profile} duplicates convention ${duplicate.rule_id}`);
-    const selectedConventions = [...ruleIds.map(id => conventions.get(id)!), ...supplementary];
+    const mismatchedLocal = supplementary.find(convention => conventions.has(convention.rule_id) && conventions.get(convention.rule_id)!.path !== convention.path);
+    if (mismatchedLocal) throw new Error(`${profile} declares local convention ${mismatchedLocal.rule_id} at ${mismatchedLocal.path}, but it lives at ${conventions.get(mismatchedLocal.rule_id)!.path}`);
+    const selectedConventions = sorted([...ruleIds.map(id => conventions.get(id)!), ...supplementary], (left, right) => left.rule_id.localeCompare(right.rule_id));
     const rules = new Set(selectedConventions.map(convention => convention.rule_id));
     const relationships = sorted(graph.edges.filter(edge => rules.has(edge.source_ref) || rules.has(edge.target_ref)), (left, right) => relationshipKey(left).localeCompare(relationshipKey(right)));
     rendered.set(`${PROFILE_REGISTRY_DIR}/${profile}.yaml`, render(profile, implementations, selectedConventions, relationships));

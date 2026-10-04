@@ -20,7 +20,22 @@ content:
   normative_text: |
     Mapping is translation across a boundary, which is precisely what the integration layer is for. A mapper in the domain drags the wire format inward; a mapper in presentation duplicates itself once a second caller appears.
   fix_hint: |
-    Move the mapper to `integration/`, where both the DTO and the entity are legitimately visible.
+    Canonical path:
+      * keep DTO-to-domain and domain-to-DTO translation in the integration layer where both shapes are legitimately visible.
+    
+    During GREEN:
+      * reuse an existing mapper for the same boundary when one exists,
+      * add only the field mapping required by the current acceptance,
+      * create a new mapper only for a genuinely new boundary translation.
+    
+    Do not broaden:
+      * do not move domain behavior into the mapper,
+      * do not migrate unrelated mappings,
+      * do not place translation in presentation or domain as a shortcut.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the mapper lives in integration and preserves the intended boundary.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

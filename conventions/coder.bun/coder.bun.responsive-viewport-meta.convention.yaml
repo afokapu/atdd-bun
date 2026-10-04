@@ -14,7 +14,22 @@ content:
   summary: Every HTML document declares a device-width viewport and allows zoom.
   normative_text: Without a device-width viewport a phone renders the page as a zoomed-out desktop layout, whatever
     the CSS says. Blocking zoom fails users who need to enlarge text, which is also an accessibility failure.
-  fix_hint: '`<meta name="viewport" content="width=device-width, initial-scale=1">`'
+  fix_hint: |
+    Canonical path:
+      * declare `<meta name="viewport" content="width=device-width, initial-scale=1">` in each full HTML document and keep zoom available.
+    
+    During GREEN:
+      * add or correct the single viewport declaration in the document/layout that serves the current behavior,
+      * reuse the existing shared layout when one owns the document head.
+    
+    Do not broaden:
+      * do not duplicate viewport tags across fragments,
+      * do not disable zoom with `user-scalable=no` or restrictive scale limits,
+      * do not restructure unrelated head markup.
+    
+    Prove:
+      * the current browser acceptance passes,
+      * the full document declares device width and permits zoom.
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
   - HTML fragments that are not full documents (no `<html>`) are out of scope.

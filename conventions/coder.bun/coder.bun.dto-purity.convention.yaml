@@ -22,7 +22,23 @@ content:
     A DTO is the shape crossing a boundary. A method on it means behaviour crossed too, and the two sides are now coupled to an implementation rather than to data. A mutable field means the receiver can change what the sender said.
     Both faults look harmless in one file and become impossible to unpick once a second consumer exists.
   fix_hint: |
-    Strip methods to free functions in the layer that needs them, and mark every field `readonly`.
+    Canonical path:
+      * keep DTOs as immutable data: readonly fields and no methods,
+      * put behavior in the layer that consumes or produces the DTO.
+    
+    During GREEN:
+      * add only the readonly data fields required by the current boundary behavior,
+      * reuse existing functions for transformation or behavior when available,
+      * add a small free function only when the current acceptance needs it.
+    
+    Do not broaden:
+      * do not attach convenience methods to the DTO,
+      * do not make fields mutable to simplify implementation,
+      * do not introduce unrelated helpers or abstractions.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the affected DTO remains pure immutable data.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

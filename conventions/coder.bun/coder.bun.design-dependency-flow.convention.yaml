@@ -19,8 +19,23 @@ content:
   summary: Resolves each import of a design-system file to its target layer and flags any edge that points upward.
   normative_text: A hierarchy is only a hierarchy if dependencies flow one way. A primitive that imports a component
     can no longer be reused without dragging that component along, and the layers collapse into one tangle.
-  fix_hint: 'Move the shared piece down to the lowest layer that needs it, or compose upward: the component imports
-    the primitive, never the reverse.'
+  fix_hint: |
+    Canonical path:
+      * keep design-system imports at the same layer or pointing downward through tokens -> foundations -> primitives -> components -> templates.
+    
+    During GREEN:
+      * reuse an existing lower-layer value or component when possible,
+      * move a genuinely shared piece only to the lowest layer that actually owns it,
+      * compose upward rather than importing upward.
+    
+    Do not broaden:
+      * do not reshuffle unrelated design-system files,
+      * do not create a new layer or generic abstraction for one dependency,
+      * do not hide an upward dependency behind a barrel.
+    
+    Prove:
+      * the current behavioral or rendering acceptance passes,
+      * all affected design-system imports follow the declared direction.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - Imports within the same layer are allowed.

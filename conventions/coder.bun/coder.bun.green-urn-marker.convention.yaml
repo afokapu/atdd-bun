@@ -28,15 +28,22 @@ content:
     The URN is the only edge between a source file and the plan graph. Without it a file is invisible to traceability: no acceptance can claim it, no wagon owns it, and coverage reporting cannot see it exists.
     "First meaningful line" excludes a shebang (`#!/usr/bin/env bun`) and an HTML doctype, because neither is content and neither should be able to displace the marker. The Vite sibling counts a shebang as the first non-empty line and so reports a header it actually has as missing; this realization does not.
   fix_hint: |
-    Put the marker on the first meaningful line:
-
-      // URN: component:orders:checkout:OrderRow:backend:presentation
-
-    and in a template:
-
-      <!doctype html>
-      <!-- URN: component:orders:checkout:OrderPanel:frontend:presentation -->
-
+    Canonical path:
+      * put the component URN on the first meaningful line, after only an allowed shebang or HTML doctype.
+    
+    During GREEN:
+      * derive the URN from the plan ownership of the implementation being added,
+      * use source-comment syntax for code and HTML-comment syntax for templates,
+      * add only the marker; do not restructure the file when the implementation is otherwise correctly placed.
+    
+    Do not broaden:
+      * do not invent a wagon, feature, component, side, or layer,
+      * do not copy a nearby file's URN without verifying ownership,
+      * do not move code merely to make the marker easier to write.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the file is traceable from its real component URN.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) are excluded — they are bound by their acceptance URNs instead.
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.

@@ -24,10 +24,22 @@ content:
   normative_text: |
     Each segment is a join key. Wagon and feature locate the work item, name identifies the component, side and layer place it in the architecture. A URN missing a segment does not degrade gracefully — it resolves to nothing, and the file is as unbound as one with no marker at all, while LOOKING traceable in review.
   fix_hint: |
-    Supply every segment:
-
-      // URN: component:orders:checkout:OrderRow                       // ✗ four segments
-      // URN: component:orders:checkout:OrderRow:backend:presentation  // ✓
+    Canonical path:
+      * use exactly `component:{wagon}:{feature}:{Name}:{side}:{layer}` with every segment present.
+    
+    During GREEN:
+      * derive each segment from the plan, filename, execution side, and architectural responsibility,
+      * fix only the malformed or missing segment,
+      * keep already-correct identity segments unchanged.
+    
+    Do not broaden:
+      * do not invent placeholder segments,
+      * do not rename implementation artifacts solely to make a guessed URN fit,
+      * do not alter plan ownership while fixing URN grammar.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the URN has the canonical six-segment shape.
   exceptions:
   - A file with no `URN:` marker is skipped (owned by `green-urn-marker`).
   - Segment CONTENT is validated by the wagon-feature, name, side and layer rules; this rule checks shape only.

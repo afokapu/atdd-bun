@@ -34,12 +34,22 @@ content:
     diverge — someone runs `npm install` out of habit, the trees fork, and the divergence is discovered
     much later in a failing deploy.
   fix_hint: |
-    Delete the foreign lockfile and let Bun own resolution:
-
-      rm package-lock.json     # or yarn.lock / pnpm-lock.yaml
-      bun install              # regenerates bun.lock from package.json
-
-    Add the foreign names to `.gitignore` so a stray `npm install` cannot reintroduce one. `strict`.
+    Canonical path:
+      * keep Bun's lockfile as the single dependency-resolution source and remove npm, Yarn, or pnpm lockfiles.
+    
+    During GREEN:
+      * if the current change adds a dependency, install it with Bun,
+      * remove only foreign lockfiles and regenerate `bun.lock` when dependency state actually changed,
+      * keep package-manager behavior otherwise untouched.
+    
+    Do not broaden:
+      * do not switch package managers,
+      * do not update unrelated dependencies,
+      * do not keep a second lockfile as a temporary convenience.
+    
+    Prove:
+      * the current behavioral acceptance and install/check path pass,
+      * only Bun's lockfile governs dependency resolution.
   exceptions:
   - A vendored or fixture lockfile inside an excluded tree (`node_modules`, `dist`, `build`,
     `_generated`) is never scanned.

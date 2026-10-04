@@ -9,5 +9,7 @@ For governed work, first use ATDD Workflow to validate the available Desk and re
 
 The operator—or an assigned coordinator with delegated authority—selects and authorizes the applicable ATDD Bun profile. Until then, do not inspect, research, plan, or change the repository. Do not change profile configuration without that authorization.
 
+When the authorized work includes the `coder` profile, read `node_modules/@afokapu/atdd-bun/conventions/coder.bun/coder.bun.phase-discipline.convention.yaml` before reacting to coder findings (`conventions/coder.bun/coder.bun.phase-discipline.convention.yaml` when developing this package itself). The policy separates behavioral GREEN from REFACTOR; it does not suppress strict findings or change profile activation.
+
 A governed agent needs an assigned seat and role unless the operator explicitly requests general discussion. A coordinator assigns, coordinates, reviews, and checkpoints; a driver performs only assigned ready work, proves it, and submits review. Do not mutate coordination or repository state outside explicitly authorized scope. Never modify either toolkit or generated files.
 <!-- atdd-bun:end -->

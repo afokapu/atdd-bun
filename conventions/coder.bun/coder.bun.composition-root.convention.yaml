@@ -24,7 +24,23 @@ content:
     `server.ts` is a root in this stack specifically because `Bun.serve` IS the assembly point of a full-stack Bun app — the place routes and their dependencies are wired. The Convex sibling has no equivalent because its function tree has no single entry.
     Wiring scattered across a codebase is not a style problem: it is why a test cannot substitute anything, and why a second deployment shape becomes a rewrite.
   fix_hint: |
-    Construct the collaborator in the composition root and pass it to whatever needs it.
+    Canonical path:
+      * construct collaborators in `composition.ts`, `wagon.ts`, `server.ts`, or `index.ts`,
+      * pass the constructed collaborator to the consumer that needs it.
+    
+    During GREEN:
+      * add only the wiring required by the current behavior,
+      * reuse existing factories, instances, and composition patterns before creating new ones,
+      * keep construction separate from application or presentation behavior.
+    
+    Do not broaden:
+      * do not centralize unrelated wiring merely because the root is being edited,
+      * do not add speculative factories or service locators,
+      * do not instantiate the collaborator in the consumer as a shortcut.
+    
+    Prove:
+      * the current behavioral acceptance passes through the real wiring,
+      * collaborator construction remains confined to a composition root.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

@@ -18,8 +18,24 @@ content:
   summary: Scans token/foundation code files for renderer imports, rendered markup, and control flow.
   normative_text: Tokens are what every other layer depends on. Once they render or decide, the bottom of the hierarchy
     has behaviour, and every primitive inherits it.
-  fix_hint: Keep the value in the token file and move the markup to `primitives/` or the logic to the component
-    that needs it.
+  fix_hint: |
+    Canonical path:
+      * keep tokens and foundations as values only,
+      * move markup to primitives/components and behavior to the layer that owns it.
+    
+    During GREEN:
+      * leave the value in the token or foundation file,
+      * move only the markup or logic required by the current behavior to the nearest existing owning layer,
+      * reuse an existing primitive or component before creating a new one.
+    
+    Do not broaden:
+      * do not reorganize unrelated tokens,
+      * do not move behavior into a different layer merely to silence the rule,
+      * do not create a generalized component unrelated to the current acceptance.
+    
+    Prove:
+      * the current behavioral or rendering acceptance passes,
+      * token and foundation files remain value-only.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - '`.css` token files are values by construction and are not scanned by this rule.'
