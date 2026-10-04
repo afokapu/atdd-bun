@@ -2,6 +2,18 @@ schema_version: "1.0.0"
 profile: "workflow"
 implementations: []
 conventions:
+  - rule_id: "atdd-bun.review.behavioral-reconciliation"
+    path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml"
   - rule_id: "atdd-workflow.workflow.lifecycle"
     path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml"
-relationships: []
+relationships:
+  - confidence: 1
+    constraint: "mandatory"
+    control: "internal"
+    foundation: "finish_to_start"
+    origin: "@afokapu/atdd-bun"
+    reason: "final behavioral reconciliation follows review-ready RED, GREEN, REFACTOR, and full-profile proof"
+    source_ref: "atdd-bun.review.behavioral-reconciliation"
+    strength: "critical"
+    target_ref: "coder.bun.phase-discipline"
+    type: "follows"

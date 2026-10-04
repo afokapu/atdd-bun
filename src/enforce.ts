@@ -38,7 +38,7 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
   interlocking: ["bun_interlocking_binding", "bun_interlocking_coverage", "bun_interlocking_infrastructure"],
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector", "htmx_e2e_detector"],
   design: ["bun_design_system_detector", "bun_responsive_detector"],
-  // Operational policy only: its convention lives in the optional @afokapu/atdd-workflow package.
+  // Operational policies only: Workflow supplies lifecycle orchestration; ATDD Bun supplies delivery review semantics.
   workflow: [],
 };
 
@@ -46,7 +46,10 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
 export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string; path: string }>> = {
   traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [{ rule_id: "coder.bun.phase-discipline", path: "conventions/coder.bun/coder.bun.phase-discipline.convention.yaml" }], tester: [], security: [],
   architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
-  workflow: [{ rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" }],
+  workflow: [
+    { rule_id: "atdd-bun.review.behavioral-reconciliation", path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml" },
+    { rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" },
+  ],
 };
 
 /** Every profile but `all`. */
