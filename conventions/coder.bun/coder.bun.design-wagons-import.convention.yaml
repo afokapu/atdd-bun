@@ -17,8 +17,24 @@ content:
   summary: Flags relative imports from a design-system file that leave the design root.
   normative_text: 'A design system that reaches into a wagon has become part of that wagon: it cannot be reused
     by the next one, and a change to the wagon breaks the system.'
-  fix_hint: Pass the value in as a prop, or move the shared type or constant into the design system (or a shared
-    commons module) so the dependency points inward.
+  fix_hint: |
+    Canonical path:
+      * keep the design system independent of application and wagon code,
+      * pass app-specific values into design components or move genuinely shared, design-owned types/constants inward.
+    
+    During GREEN:
+      * prefer props or existing design-system contracts for the current value,
+      * add only the smallest input surface required by the acceptance,
+      * move a type or constant only when it is truly owned by the design system.
+    
+    Do not broaden:
+      * do not import a wagon through a barrel or alias,
+      * do not relocate app-specific concepts into design code just to make the import legal,
+      * do not generalize unrelated design APIs.
+    
+    Prove:
+      * the current behavioral or rendering acceptance passes,
+      * design-system files import nothing from app or wagon code.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - Bare package specifiers (`hono/jsx`) are outside the project graph and are not judged.

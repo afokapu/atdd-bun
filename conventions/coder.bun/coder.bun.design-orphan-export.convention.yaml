@@ -18,8 +18,23 @@ content:
   summary: Collects capitalized exports of primitives/components/templates and flags those no other file imports.
   normative_text: Unused components still have to be maintained, themed, and migrated. A design system grows by
     adjudication, not by accretion of pieces nobody uses.
-  fix_hint: 'Use the component where it was meant to be used, or delete it. Unused chains surface one layer at a
-    time: remove the unused template and its component is reported next.'
+  fix_hint: |
+    Canonical path:
+      * export a design-system component only when a real consumer uses it; otherwise remove the unused export.
+    
+    During GREEN:
+      * if the current acceptance needs the component, wire that actual consumer to it,
+      * if the export was introduced speculatively and has no required consumer, delete it,
+      * keep only the smallest export surface the current behavior needs.
+    
+    Do not broaden:
+      * do not add a dummy consumer or synthetic import,
+      * do not keep speculative components "for later",
+      * do not expose unrelated internals from a barrel to make the graph look connected.
+    
+    Prove:
+      * the current behavioral or rendering acceptance passes,
+      * every affected export has a genuine consumer.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - Token/foundation values and `index.*` barrels are not judged.

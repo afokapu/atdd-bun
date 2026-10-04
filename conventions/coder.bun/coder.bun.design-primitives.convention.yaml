@@ -17,8 +17,23 @@ content:
   summary: Flags raw interactive platform elements in component source outside the design root.
   normative_text: Controls are where focus, disabled, error, and loading states live. Each raw control re-implements
     them, and each re-implementation diverges.
-  fix_hint: 'Render the primitive and pass htmx attributes through it: `<Button hx-post="/orders">Place</Button>`.
-    Add the primitive to `design/primitives/` if it does not exist yet.'
+  fix_hint: |
+    Canonical path:
+      * render interactive controls through the existing design-system primitive and pass required htmx or DOM attributes through it.
+    
+    During GREEN:
+      * reuse the primitive that already represents the control,
+      * extend only the smallest prop or attribute surface required by the current interaction,
+      * create a new primitive only when no existing primitive represents the control correctly.
+    
+    Do not broaden:
+      * do not restyle or migrate unrelated controls,
+      * do not bypass the primitive with raw interactive markup just to pass the acceptance,
+      * do not add generic props that the current behavior does not need.
+    
+    Prove:
+      * the interaction acceptance passes,
+      * the rendered interactive control comes through the design-system primitive.
   exceptions:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - The design system's own primitives render the raw elements and are not scanned.
