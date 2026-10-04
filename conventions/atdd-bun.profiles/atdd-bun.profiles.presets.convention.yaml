@@ -8,12 +8,11 @@ statement: >-
 terms:
 - term_id: presets
   text: >-
-    Planning: planner (plus docs when the repository keeps documentation under docs/). Building, once RED starts: add coder, tester, traceability, security; add htmx and design for a web UI, and interlocking once trains have a runtime. Instrumenting: add telemetry. Delivering through reviewed tranches: add delivery.
+    Planning: planner (plus docs when the repository keeps documentation under docs/). Building, once RED starts: add coder, tester, traceability, security; add htmx and design for a web UI, and interlocking once trains have a runtime. Instrumenting: add telemetry.
   values:
     planning: [planner]
     building: [coder, tester, traceability, security]
     instrumenting: [telemetry]
-    delivering: [delivery]
 content:
   summary: >-
     A goal is easier to name than a profile. The presets map what the user is doing to the profiles that judge it, in the order the work creates what they check.
@@ -22,7 +21,7 @@ content:
     security joins with the first code, not at release: a secret committed during GREEN stays in history.
     coder already bundles the architecture, metrics, runtime, design and responsive detectors, so those need no later preset.
   fix_hint: |
-    At a stage whose preset is missing, ask what the user wants to do (planning, building, instrumenting, delivering), recommend that preset and say it can be adopted step by step, then write the chosen list to profiles: in atdd-bun.yaml.
+    At a stage whose preset is missing, ask what the user wants to do (planning, building, or instrumenting), recommend that preset and say it can be adopted step by step, then write the chosen list to profiles: in atdd-bun.yaml.
   exceptions:
   - >-
     A profile can always be run by name to see what it would report (atdd-bun coder); only profiles: decides what the repository is governed by.

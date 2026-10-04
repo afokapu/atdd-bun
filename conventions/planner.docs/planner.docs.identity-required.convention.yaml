@@ -39,7 +39,7 @@ content:
       :doc-id: architecture.shared-control-root
       :status: current
 
-    Choose the id from the area the document lives in (`architecture.`, `purpose.`, `delivery.`,
+    Choose the id from the area the document lives in (`architecture.`, `purpose.`,
     `archive.`) so that the id and the tree agree. Nothing enforces that agreement today; it is a
     convention that keeps ids readable, not a checked rule.
   exceptions:

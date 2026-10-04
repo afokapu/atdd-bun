@@ -21,7 +21,7 @@ Each `dirty_*` tree is `clean/` plus exactly one defect, so that
 | `dirty_identity` | a document with no attributes | `planner.docs.identity-required` |
 | `dirty_duplicate_id` | two documents claiming `purpose.worktrees` | `planner.docs.doc-id-unique` |
 | `dirty_unresolved_edge` | `:implements: purpose.wortrees` (a typo) | `planner.docs.graph-target-resolves` |
-| `dirty_missing_index` | `docs/delivery/` with its index removed | `planner.docs.area-index-required` |
+| `dirty_missing_index` | `docs/purpose/` with its index removed | `planner.docs.area-index-required` |
 | `dirty_adr_registry` | ADR-20260906-002 absent from the registry | `planner.docs.adr-registry-derived` |
 
 `dirty_unresolved_edge` carries the **#1758 regression**: the test asserts the graph's

@@ -1,5 +1,0 @@
-# The toolkit repository's own atdd-bun configuration. It only switches the local agent board on, so the maintainer
-# (maintainer@atdd-bun) runs `atdd-bun chat` from here rather than from a consumer repository. This repository's CI
-# runs its tests and the release check, not the profiles, so nothing here starts judging the toolkit itself.
-delivery:
-  board: {}

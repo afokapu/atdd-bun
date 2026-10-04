@@ -95,8 +95,7 @@ test("init declares every profile explicitly in a new atdd-bun.yaml, so a greenf
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.7.0" } }));
     expect((await initializeRepository(root)).ok).toBeTrue();
     const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[] };
-    // Every profile but the opt-in delivery profile, which gates every change on a reviewed tranche record.
-    const governed = every.filter(p => p !== "delivery");
+    const governed = every;
     expect(written.profiles).toEqual(governed);
     expect(drops(written.profiles, ["docs"])).toEqual([`profiles drops ${governed.filter(p => p !== "docs").join(", ")}`]);
     // An existing atdd-bun.yaml is never touched.

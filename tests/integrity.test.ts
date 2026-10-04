@@ -112,27 +112,6 @@ test("the CLI exits non-zero with the loud message, and the generated workflow r
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("the delivery skill is installed and protected only where the delivery profile is adopted", async () => {
-  const { agentInit, agentStatus } = await import("../src/agent");
-  const root = await consumer();
-  try {
-    const skill = join(root, ".agents/skills/delivery/SKILL.md"), claude = join(root, ".claude/skills/delivery/SKILL.md");
-    expect(await Bun.file(skill).exists()).toBeFalse();
-    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, delivery]\n");
-    expect((await agentStatus(root)).ok).toBeFalse();
-    // A review contract an earlier version installed is removed: the skill's Reviewer section replaces it.
-    const retired = join(root, ".claude/skills/delivery/review.md");
-    await mkdir(dirname(retired), { recursive: true }); await writeFile(retired, "old contract\n");
-    expect((await agentInit(root)).ok).toBeTrue();
-    expect(await Bun.file(retired).exists()).toBeFalse();
-    expect(await readFile(skill, "utf8")).toStartWith("---\nname: delivery\n");
-    expect(await readFile(claude, "utf8")).toContain("delivery.review.convention.yaml");
-    expect((await agentStatus(root)).ok).toBeTrue();
-    expect(await checkIntegrity({ root })).toEqual([]);
-    await writeFile(claude, (await readFile(claude, "utf8")).replace("delivery.review.convention.yaml", "anything"));
-    expect(files(await checkIntegrity({ root }))).toEqual([".claude/skills/delivery/SKILL.md"]);
-  } finally { await rm(root, { recursive: true, force: true }); }
-});
 
 test("R5: the generated workflow runs on pushes to the repository's protected branches, and integrity compares that rendering", async () => {
   const { ciInit } = await import("../src/ci");
@@ -166,7 +145,7 @@ test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci ini
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [trunk]\n");
     expect((await ciInit(root, true)).ok).toBeTrue();
     const workflow = join(root, ".github/workflows/atdd-bun.yml"), before = await readFile(workflow, "utf8");
-    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [unclosed\n");
     // GLM round 9 (Z2): the restore command must not rewrite the push branches to a guess.
     const refused = await ciInit(root, true);
     expect(refused.ok).toBeFalse();
@@ -183,7 +162,7 @@ test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci ini
 test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, and is never read as the defaults", async () => {
   const root = await consumer();
   try {
-    await writeFile(join(root, "atdd-bun.yaml"), "delivery: [unclosed\n");
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [unclosed\n");
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "broken base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
     const findings = (await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml");
@@ -252,12 +231,6 @@ test("a key with no value is absent, as the hooks read it: a null baseline field
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nworktrees: { enabled: true }\n");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
-    // Only hook keys: `delivery:` with no value adopts delivery, so removing it is still reported.
-    await git(root, "checkout", "-q", "-b", "delivery-null", "base");
-    await writeFile(join(root, "atdd-bun.yaml"), "delivery:\n  # stages: {}\n"); await git(root, "commit", "-qam", "adopt delivery", "--no-verify"); await git(root, "branch", "-f", "dbase");
-    await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
-    expect((await checkIntegrity({ root, base: "dbase", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("delivery is no longer adopted")]);
-    await git(root, "checkout", "-q", "-f", "base");
     // And a null in the working tree compares as the default, not as 0.
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\nmax_staged_files:\n");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml")).toEqual([]);
