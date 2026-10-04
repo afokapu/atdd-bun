@@ -22,7 +22,23 @@ content:
   normative_text: |
     The application layer orchestrates through ports it defines. Reaching into integration inverts the dependency and welds orchestration to a specific transport, so changing the transport changes the orchestration.
   fix_hint: |
-    Define the port in `application/` and let `integration/` implement it; the composition root supplies the implementation.
+    Canonical path:
+      * keep commons application code dependent on an application-facing port,
+      * let integration implement that port and let the composition root supply it.
+    
+    During GREEN:
+      * first reuse an existing port that already represents the required capability,
+      * add the smallest missing port only when the current behavior genuinely needs an outer capability,
+      * pass only the data or collaborator required by the acceptance.
+    
+    Do not broaden:
+      * do not reorganize unrelated commons modules,
+      * do not introduce a generalized service layer for future callers,
+      * do not import integration directly as a shortcut to GREEN.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * commons application has no integration dependency.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

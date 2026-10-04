@@ -22,7 +22,22 @@ content:
     The sibling of `composition-root`, and the half that makes the discipline pay. That rule says where wiring MAY happen; this one says consumers must accept what they are given.
     A consumer that builds its own collaborators cannot be tested without them — which is exactly how a unit test acquires a database.
   fix_hint: |
-    Take the collaborator as a parameter, and let the composition root supply it.
+    Canonical path:
+      * receive collaborators through parameters or already-wired construction,
+      * let the composition root decide which concrete collaborator is supplied.
+    
+    During GREEN:
+      * reuse the consumer's existing injection shape when one exists,
+      * add only the collaborator required by the current behavior,
+      * prefer the narrowest existing contract over a new generalized interface.
+    
+    Do not broaden:
+      * do not instantiate a repository, client, service, adapter, gateway, store, provider, or factory inside the consumer,
+      * do not redesign unrelated constructor or function signatures.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the consumer can be exercised with its collaborator supplied from outside.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

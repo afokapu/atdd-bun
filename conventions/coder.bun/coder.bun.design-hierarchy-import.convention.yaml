@@ -24,7 +24,23 @@ content:
     This is the general rule the commons rules apply to one tree. It is stated separately because it governs FEATURE code as well, where most layering damage actually happens.
     The assembly exemption is what makes the rest workable: something must be allowed to know about everything, and confining that to the composition root is the whole point of having one.
   fix_hint: |
-    Depend inward, or invert the dependency with a port. If neither is possible the two modules probably belong in one layer.
+    Canonical path:
+      * depend inward through presentation -> application -> domain, with integration depending on application/domain and assembly allowed to wire all layers,
+      * when an inner layer needs an outer capability, use an existing inward-facing port.
+    
+    During GREEN:
+      * reuse the nearest existing compliant dependency path,
+      * introduce the smallest missing port only when the current behavior cannot otherwise be implemented correctly,
+      * keep the new contract limited to what the acceptance requires.
+    
+    Do not broaden:
+      * do not reclassify or merge layers merely to make one import legal,
+      * do not redesign adjacent modules,
+      * do not add a dependency that points outward as a temporary step.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * every affected import still points in an allowed direction.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

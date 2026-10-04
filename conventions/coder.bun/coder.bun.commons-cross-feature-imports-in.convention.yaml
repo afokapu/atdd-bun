@@ -21,7 +21,22 @@ content:
   normative_text: |
     A feature's internals are its own. The layer root is the surface it deliberately exposes, and reaching past it couples two features through a path that neither of them chose to publish — which is how a shared module quietly becomes unsplittable.
   fix_hint: |
-    Import from the layer root, and if the thing you need is not exported there, that is the decision to make explicit — export it, or move it.
+    Canonical path:
+      * consume another commons feature through the layer root, never through that sibling's internals.
+    
+    During GREEN:
+      * reuse an export that already represents the required capability,
+      * if the capability is intentionally shared, expose the smallest stable surface from the layer root,
+      * if it is not a shared responsibility, keep the implementation local instead of reaching across.
+    
+    Do not broaden:
+      * do not export a sibling's internals wholesale,
+      * do not create a generic shared module merely to make the import legal,
+      * do not move unrelated code between features.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the cross-feature dependency goes through the intended public boundary.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.

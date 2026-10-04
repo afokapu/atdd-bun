@@ -25,7 +25,23 @@ content:
     A centralized client is where retries, timeouts, auth headers, tracing and error translation live. Every bare `fetch` is a call site that has none of them and will not acquire them, because nobody remembers it exists.
     In an htmx app this matters on the SERVER side particularly: the fragments a handler renders often depend on an upstream call, and a bare fetch there fails in a way the user sees as a blank swap.
   fix_hint: |
-    Call the client in `integration/` and let it own the cross-cutting concerns.
+    Canonical path:
+      * use the existing integration-layer HTTP client or adapter,
+      * let that boundary own transport concerns such as headers, retries, decoding, and error translation.
+    
+    During GREEN:
+      * make only the outbound call and mapping required by the current acceptance,
+      * reuse an existing client or port before introducing another abstraction,
+      * if no compliant boundary exists, add the smallest integration adapter the behavior requires.
+    
+    Do not broaden:
+      * do not migrate unrelated callers,
+      * do not create a generalized HTTP framework for hypothetical endpoints,
+      * do not call `fetch()` or `axios` directly just to make the test pass.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the affected source satisfies this boundary rule.
   exceptions:
   - Test files and vendored/build directories are never scanned.
   - Bare npm specifiers resolve outside the project graph and are not layer-checked.
