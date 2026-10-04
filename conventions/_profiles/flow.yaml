@@ -1,5 +1,5 @@
 schema_version: "1.0.0"
-profile: "workflow"
+profile: "flow"
 implementations: []
 conventions:
   - rule_id: "atdd-bun.review.behavioral-reconciliation"
