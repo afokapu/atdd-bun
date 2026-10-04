@@ -35,7 +35,7 @@
     "bun": ">=1.3.0"
   },
   "dependencies": {
-    "@afokapu/atdd-workflow": "^0.1.13",
+    "@afokapu/atdd-flow": "^0.2.1",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
   },
