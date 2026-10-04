@@ -1,13 +1,13 @@
 import { chmod, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { enabledProfiles, enforce } from "./enforce";
 import { topologyFor } from "./topology";
 import { JOURNEY_DOCS_DIR } from "./journey-docs";
 
 export type WorktreePolicy = { enabled: boolean; root: string; primary_directory: string; primary_branch: string; require_linked_worktree: boolean };
 export type HookPolicy = { max_staged_files: number; max_staged_changed_lines: number; max_commits_per_push: number; max_registry_removed_lines: number; registry_paths: string[]; protected_branches: string[]; require_plan_reference: boolean; require_traceability: boolean; worktrees: WorktreePolicy };
-export const defaultWorktreePolicy: WorktreePolicy = { enabled: false, root: "../worktrees", primary_directory: "main", primary_branch: "main", require_linked_worktree: true };
+export const defaultWorktreePolicy: WorktreePolicy = { enabled: false, root: "../worktrees/{repo}", primary_directory: ".", primary_branch: "main", require_linked_worktree: true };
 export const defaultHookPolicy: HookPolicy = { max_staged_files: 20, max_staged_changed_lines: 350, max_commits_per_push: 10, max_registry_removed_lines: 350, registry_paths: ["plan/_*.yaml", "plan/_*.yml", "contracts/_*.yaml", "contracts/_*.yml"], protected_branches: ["main", "master"], require_plan_reference: true, require_traceability: true, worktrees: defaultWorktreePolicy };
 export const hookEvents = ["pre-commit", "commit-msg", "pre-push", "pre-merge-commit", "post-commit", "post-merge"] as const;
 export type HookEvent = typeof hookEvents[number];
@@ -33,7 +33,7 @@ async function validation(root: string, changed: string[], full: boolean, regist
 const inside = (parent: string, child: string) => { const path = relative(parent, child); return path === "" || (path !== ".." && !path.startsWith("../") && !path.startsWith("..\\")); };
 async function primaryRoot(root: string): Promise<string | null> { const result = await git(root, ["rev-parse", "--git-common-dir"]); if (result.code) return null; return dirname(resolve(root, result.out)); }
 export type WorktreeLayout = { primary: string; worktreeRoot: string; current: string; branch: string };
-async function layout(root: string, cfg: WorktreePolicy): Promise<WorktreeLayout | { error: string }> { const current = await realpath(resolve(root)), commonRoot = await primaryRoot(current); if (!commonRoot) return { error: "not inside a Git worktree" }; const primary = await realpath(commonRoot), expectedPrimary = join(dirname(primary), cfg.primary_directory); if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` }; const branch = (await git(primary, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out; if (branch !== cfg.primary_branch) return { error: `primary checkout ${primary} must be on ${cfg.primary_branch}, not ${branch || "a detached HEAD"}` }; return { primary, worktreeRoot: resolve(primary, cfg.root), current, branch: (await git(current, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out }; }
+async function layout(root: string, cfg: WorktreePolicy): Promise<WorktreeLayout | { error: string }> { const current = await realpath(resolve(root)), commonRoot = await primaryRoot(current); if (!commonRoot) return { error: "not inside a Git worktree" }; const primary = await realpath(commonRoot), expectedPrimary = cfg.primary_directory === "." ? primary : join(dirname(primary), cfg.primary_directory); if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` }; const branch = (await git(primary, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out; if (branch !== cfg.primary_branch) return { error: `primary checkout ${primary} must be on ${cfg.primary_branch}, not ${branch || "a detached HEAD"}` }; return { primary, worktreeRoot: resolve(primary, cfg.root.replaceAll("{repo}", basename(primary))), current, branch: (await git(current, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out }; }
 async function worktreeCommitPolicy(root: string, cfg: WorktreePolicy): Promise<string | null> { if (!cfg.enabled || !cfg.require_linked_worktree) return null; const state = await layout(root, cfg); if ("error" in state) return state.error; if (state.current === state.primary) return `commits must use a linked worktree beneath ${state.worktreeRoot}; run: atdd-bun worktree start <branch>`; if (!inside(state.worktreeRoot, state.current)) return `linked worktree ${state.current} is outside required root ${state.worktreeRoot}`; if (!state.branch) return "commits require a named branch, not a detached HEAD"; return null; }
 
 export async function runHook(event: HookEvent, root = process.cwd(), args: string[] = [], stdin = "") {

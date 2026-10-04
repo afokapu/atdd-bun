@@ -104,9 +104,11 @@ frontend:
   breakpoints: [480, 768, 1024, 1280]
 registry_paths: ["plan/_*.yaml", "contracts/_*.yaml"]   # exempt from micro-commit size caps only
 max_registry_removed_lines: 350                        # larger removals need [mass-delete-approved]
-worktrees: { enabled: false }
+worktrees: { enabled: false }                 # enabled defaults to ~/Github/worktrees/<repo>/...
 release: { enabled: false }
 ```
+
+When enabled without overrides, a primary checkout at `~/Github/<repo>` uses linked worktrees at `~/Github/worktrees/<repo>/<branch>`. The defaults use `primary_directory: .` (the current primary checkout) and `root: ../worktrees/{repo}`; `{repo}` expands to the primary checkout's directory name. Repositories that need another layout can set either field explicitly.
 
 ## Docs-site theme
 
