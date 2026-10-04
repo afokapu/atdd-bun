@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
-import { concreteProfiles, declaredRuleIds, profileImplementations } from "./enforce";
+import { concreteProfiles, declaredRuleIds, profileConventions, profileImplementations } from "./enforce";
 
 export const PROFILE_REGISTRY_DIR = "conventions/_profiles";
 type Convention = { rule_id: string; path: string };
@@ -36,9 +36,9 @@ const scalar = (value: unknown) => value === null ? "null" : typeof value === "s
 const fields = (value: Record<string, unknown>, indent: string) => sorted(Object.entries(value), ([left], [right]) => left.localeCompare(right)).map(([key, entry]) => `${indent}${key}: ${scalar(entry)}`);
 const render = (profile: string, implementations: string[], conventions: Convention[], relationships: Relationship[]) => [
   'schema_version: "1.0.0"', `profile: ${scalar(profile)}`,
-  "implementations:", ...implementations.map(implementation => `  - ${scalar(implementation)}`),
-  "conventions:", ...conventions.flatMap(convention => [`  - rule_id: ${scalar(convention.rule_id)}`, `    path: ${scalar(convention.path)}`]),
-  "relationships:", ...relationships.flatMap(edge => { const entries = fields(edge, "    "); return [`  - ${entries[0]!.slice(4)}`, ...entries.slice(1)]; }), "",
+  implementations.length ? "implementations:" : "implementations: []", ...implementations.map(implementation => `  - ${scalar(implementation)}`),
+  conventions.length ? "conventions:" : "conventions: []", ...conventions.flatMap(convention => [`  - rule_id: ${scalar(convention.rule_id)}`, `    path: ${scalar(convention.path)}`]),
+  relationships.length ? "relationships:" : "relationships: []", ...relationships.flatMap(edge => { const entries = fields(edge, "    "); return [`  - ${entries[0]!.slice(4)}`, ...entries.slice(1)]; }), "",
 ].join("\n");
 
 /** Deterministically project profiles, detector manifests, conventions, and direct graph edges into small registries. */
@@ -53,9 +53,13 @@ export async function renderProfileRegistries(root = resolve(import.meta.dir, ".
     const ruleIds = sorted(new Set(declared.flatMap(ids => [...ids])));
     const missing = ruleIds.filter(id => !conventions.has(id));
     if (missing.length) throw new Error(`${profile} declares rule IDs without exactly one convention: ${missing.join(", ")}`);
-    const rules = new Set(ruleIds);
+    const supplementary = profileConventions[profile];
+    const duplicate = supplementary.find(convention => conventions.has(convention.rule_id) || ruleIds.includes(convention.rule_id));
+    if (duplicate) throw new Error(`${profile} duplicates convention ${duplicate.rule_id}`);
+    const selectedConventions = [...ruleIds.map(id => conventions.get(id)!), ...supplementary];
+    const rules = new Set(selectedConventions.map(convention => convention.rule_id));
     const relationships = sorted(graph.edges.filter(edge => rules.has(edge.source_ref) || rules.has(edge.target_ref)), (left, right) => relationshipKey(left).localeCompare(relationshipKey(right)));
-    rendered.set(`${PROFILE_REGISTRY_DIR}/${profile}.yaml`, render(profile, implementations, ruleIds.map(id => conventions.get(id)!), relationships));
+    rendered.set(`${PROFILE_REGISTRY_DIR}/${profile}.yaml`, render(profile, implementations, selectedConventions, relationships));
   }
   return rendered;
 }

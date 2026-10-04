@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { enabledProfiles, enforce, profileNames } from "../src/enforce";
+import { defaultProfiles, enabledProfiles, enforce, profileNames } from "../src/enforce";
 import { runHook } from "../src/hooks";
 import { loosenedPolicy } from "../src/integrity";
 
@@ -18,11 +18,18 @@ const TRACE = { "plan/orders/E001.yaml": "urn: wmbt:orders:E001\nacceptances:\n 
 const CODER = { "src/wagons/orders/features/a/domain/thing.ts": "export const thing = 1;\n" };
 const rules = async (root: string, profiles?: Parameters<typeof enforce>[0]["profiles"]) => [...new Set((await enforce({ root, profiles })).map(v => v.rule_id.split(".")[0]))].sort();
 
-test("by default every profile is activated", async () => {
+test("by default every built-in profile is activated", async () => {
   const root = await repo({ ...TRACE, ...CODER });
-  expect(await enabledProfiles(root)).toEqual(profileNames.filter(p => p !== "all") as never);
+  expect(await enabledProfiles(root)).toEqual(defaultProfiles);
+  expect(await enabledProfiles(root)).not.toContain("workflow");
   expect(await rules(root)).toEqual(expect.arrayContaining(["coder", "traceability"]));
 }, 30_000);
+
+test("the optional workflow profile is available only by explicit adoption", async () => {
+  const root = await repo({ "atdd-bun.yaml": "profiles: [workflow]\n" });
+  expect(await enabledProfiles(root)).toEqual(["workflow"]);
+  expect(await enforce({ root, profiles: ["workflow"] })).toEqual([]);
+});
 
 test("all runs only the profiles the operator lists; a named profile still runs on request", async () => {
   const root = await repo({ ...TRACE, ...CODER, "atdd-bun.yaml": "profiles: [traceability]\n" });

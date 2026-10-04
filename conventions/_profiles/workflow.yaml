@@ -1,0 +1,7 @@
+schema_version: "1.0.0"
+profile: "workflow"
+implementations: []
+conventions:
+  - rule_id: "atdd-workflow.workflow.lifecycle"
+    path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml"
+relationships: []

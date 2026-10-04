@@ -8,11 +8,12 @@ statement: >-
 terms:
 - term_id: presets
   text: >-
-    Planning: planner (plus docs when the repository keeps documentation under docs/). Building, once RED starts: add coder, tester, traceability, security; add htmx and design for a web UI, and interlocking once trains have a runtime. Instrumenting: add telemetry.
+    Planning: planner (plus docs when the repository keeps documentation under docs/). Building, once RED starts: add coder, tester, traceability, security; add htmx and design for a web UI, and interlocking once trains have a runtime. Instrumenting: add telemetry. Coordinating durable multi-agent work: after @afokapu/atdd-workflow is installed locally, add workflow.
   values:
     planning: [planner]
     building: [coder, tester, traceability, security]
     instrumenting: [telemetry]
+    coordinating: [workflow]
 - term_id: profile_registries
   text: >-
     A deterministic, profile-scoped projection of the detector manifests, convention paths, and
@@ -32,6 +33,7 @@ terms:
     tester: conventions/_profiles/tester.yaml
     topology: conventions/_profiles/topology.yaml
     traceability: conventions/_profiles/traceability.yaml
+    workflow: conventions/_profiles/workflow.yaml
 content:
   summary: >-
     A goal is easier to name than a profile. The presets map what the user is doing to the profiles that judge it, in the order the work creates what they check.
@@ -39,8 +41,9 @@ content:
     planner alone keeps the plan consistent: it parses, validates and resolves the plan with nothing else present. traceability judges the links from the plan to tests and source, so before tests exist it can only report that every acceptance is untested; it joins with building, and from then on it also catches a plan change that orphans a test.
     security joins with the first code, not at release: a secret committed during GREEN stays in history.
     coder already bundles the architecture, metrics, runtime, design and responsive detectors, so those need no later preset.
+    workflow is optional: it governs durable seats, tasks and threads only when the repository has the locally installed @afokapu/atdd-workflow companion. It is deliberately not selected by a default profile list.
   fix_hint: |
-    At a stage whose preset is missing, ask what the user wants to do (planning, building, or instrumenting), recommend that preset and say it can be adopted step by step, then write the chosen list to profiles: in atdd-bun.yaml.
+    At a stage whose preset is missing, ask what the user wants to do (planning, building, instrumenting, or coordinating), recommend that preset and say it can be adopted step by step, then write the chosen list to profiles: in atdd-bun.yaml.
   exceptions:
   - >-
     A profile can always be run by name to see what it would report (atdd-bun coder); only profiles: decides what the repository is governed by.

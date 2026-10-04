@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { concreteProfiles, declaredRuleIds, profileImplementations } from "../src/enforce";
+import { concreteProfiles, declaredRuleIds, profileConventions, profileImplementations } from "../src/enforce";
 import { PROFILE_REGISTRY_DIR, profileRegistries } from "../src/profile-registry";
 
 const root = resolve(import.meta.dir, "..");
@@ -15,12 +15,13 @@ test("profile registries are a current deterministic projection of profile manif
     const registry = Bun.YAML.parse(await readFile(join(root, PROFILE_REGISTRY_DIR, `${profile}.yaml`), "utf8")) as Registry;
     const implementations = [...profileImplementations[profile]].sort();
     const ids = [...new Set((await Promise.all(implementations.map(implementation => declaredRuleIds(implementation)))).flatMap(set => [...set]))].sort();
+    const conventions = [...ids, ...profileConventions[profile].map(convention => convention.rule_id)].sort();
     expect(registry.profile).toBe(profile);
     expect(registryPaths[profile]).toBe(`${PROFILE_REGISTRY_DIR}/${profile}.yaml`);
     expect(registry.implementations).toEqual(implementations);
-    expect(registry.conventions.map(convention => convention.rule_id)).toEqual(ids);
+    expect(registry.conventions.map(convention => convention.rule_id)).toEqual(conventions);
     expect(registry.conventions.every(convention => convention.path.endsWith(".convention.yaml"))).toBeTrue();
-    const rules = new Set(ids);
+    const rules = new Set(conventions);
     expect(registry.relationships.every(edge => rules.has(edge.source_ref) || rules.has(edge.target_ref))).toBeTrue();
   }
 });

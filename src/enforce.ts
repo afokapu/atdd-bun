@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
 
-export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
+export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "workflow" | "all";
 export type ConcreteProfile = Exclude<Profile, "all">;
 
 export type Violation = {
@@ -38,15 +38,28 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
   interlocking: ["bun_interlocking_binding", "bun_interlocking_coverage", "bun_interlocking_infrastructure"],
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector", "htmx_e2e_detector"],
   design: ["bun_design_system_detector", "bun_responsive_detector"],
+  // Operational policy only: its convention lives in the optional @afokapu/atdd-workflow package.
+  workflow: [],
+};
+
+/** Conventions which an installed companion package contributes to an otherwise policy-only profile. */
+export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string; path: string }>> = {
+  traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [], tester: [], security: [],
+  architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
+  workflow: [{ rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" }],
 };
 
 /** Every profile but `all`. */
 export const concreteProfiles = Object.keys(profileImplementations) as ConcreteProfile[];
+/** Profiles a repository adopts only when it explicitly uses the optional companion package. */
+export const optionalProfiles: ConcreteProfile[] = ["workflow"];
+/** The safe default set for repositories that have not opted into an optional companion profile. */
+export const defaultProfiles = concreteProfiles.filter(profile => !optionalProfiles.includes(profile));
 /** Profile names accepted by the CLI and public integrations. */
 export const profileNames = [...concreteProfiles, "all"] as Profile[];
 
 /**
- * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every profile when absent. A legacy
+ * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every built-in profile when absent. A legacy
  * repository can adopt enforcement gradually by listing only what it is ready for. `all`, the hooks and the
  * generated CI run exactly these; naming a profile explicitly still runs it. An unknown name or an empty list is
  * a configuration error, never a silent "run nothing".
@@ -54,7 +67,7 @@ export const profileNames = [...concreteProfiles, "all"] as Profile[];
 export async function enabledProfiles(root = process.cwd()): Promise<ConcreteProfile[]> {
   const file = join(resolve(root), "atdd-bun.yaml");
   const listed = existsSync(file) ? (Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null)?.profiles : undefined;
-  if (listed === undefined) return concreteProfiles;
+  if (listed === undefined) return defaultProfiles;
   if (!Array.isArray(listed) || !listed.length) throw new Error("atdd-bun.yaml profiles must be a non-empty list of profile names");
   const unknown = listed.filter(name => !concreteProfiles.includes(name));
   if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${concreteProfiles.join(", ")}`);
