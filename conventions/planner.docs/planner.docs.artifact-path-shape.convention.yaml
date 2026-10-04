@@ -47,7 +47,7 @@ content:
             path: docs/archive/old-spec.adoc                     # ✓ archive lands in archive/
 
     An archived document keeps its content and gains `:status:`. It does not gain a place in
-    `purpose/`, `architecture/` or `delivery/` — those are for documents that are accepted truth today.
+    `purpose/` or `architecture/` — those are for documents that are accepted truth today.
   exceptions:
   - >-
     `impact: none` declares no artifacts and is not checked by this rule. Core enforces that a

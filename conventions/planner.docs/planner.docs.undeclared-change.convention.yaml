@@ -42,7 +42,7 @@ content:
         impact: change
         artifacts:
           - action: modify
-            path: docs/delivery/release.adoc
+            path: docs/purpose/release.adoc
 
     If the change is genuinely not a documentation change — a typo fix in a rendered artefact, a
     path you did not mean to touch — the fix is to not touch `docs/`, not to widen the declaration.
@@ -50,7 +50,6 @@ content:
     the honest correction.
   exceptions:
   - '`docs/dist/**` is generated output and is never required to be declared.'
-  - Where the delivery profile is adopted, its records folder (delivery.root, by default `docs/delivery/tranches/`) changes with every tranche; its record and data files are governed by that profile's merge gate, not by a documentation declaration (AsciiDoc there is still documentation and still declared).
   - A repository with no documentation declaration recorded at all is core's concern (companion §4,
     check 1), not this rule's. This rule fires when a declaration exists and does not cover the diff.
   - >-

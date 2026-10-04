@@ -1,5 +1,0 @@
-= Purpose
-:doc-id: purpose.index
-:status: current
-
-WHY and WHAT.

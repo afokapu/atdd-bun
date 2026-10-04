@@ -1,9 +1,8 @@
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { deliveryInstalled, deliverySkillFiles, instructionPaths } from "./agent";
+import { instructionPaths } from "./agent";
 import { renderWorkflow } from "./ci";
-import { loosenedDelivery } from "./delivery";
 import { defaultHookPolicy, type HookPolicy } from "./hooks";
 
 /**
@@ -101,9 +100,6 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
   else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
   else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
   for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
-  // Required while delivery is adopted; protected whenever present, so turning delivery off and on cannot launder an edit.
-  const adopted = await deliveryInstalled(root);
-  for (const [path, template] of deliverySkillFiles) if (adopted || existsSync(join(root, path))) await same(path, `templates/agents/${template}`, "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
@@ -119,8 +115,7 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
 const explicitProfiles = (config: { profiles?: unknown }): string[] | null => Array.isArray(config.profiles) ? config.profiles.map(String) : null;
 
 /** A policy with null-valued hook keys (and worktrees children) removed: YAML gives null for a key with no value, and the
- * hooks read null as absent, so the comparison must too. Other keys keep their null: delivery and profiles are read by
- * readers that tell null apart from absent (`delivery:` with no value adopts delivery). */
+ * hooks read null as absent, so the comparison must too. Other keys, including profiles, keep their null. */
 function withoutNulls(config: Record<string, unknown>): Record<string, unknown> {
   const out = Object.fromEntries(Object.entries(config).filter(([key, value]) => value !== null || !(key in defaultHookPolicy)));
   const worktrees = out.worktrees;
@@ -149,7 +144,7 @@ export function policyShapeErrors(config: Record<string, unknown>): string[] {
 }
 
 /** Names of the policy fields in `current` that are looser than in `base`. */
-export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown; delivery?: unknown }): string[] {
+export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown }, current: Partial<HookPolicy> & { profiles?: unknown }): string[] {
   const b = { ...defaultHookPolicy, ...base, worktrees: { ...defaultHookPolicy.worktrees, ...base.worktrees } }, c = { ...defaultHookPolicy, ...current, worktrees: { ...defaultHookPolicy.worktrees, ...current.worktrees } };
   const out: string[] = [];
   for (const key of ["max_staged_files", "max_staged_changed_lines", "max_commits_per_push", "max_registry_removed_lines"] as const) if (Number(c[key]) > Number(b[key])) out.push(`${key} ${b[key]} → ${c[key]}`);
@@ -165,7 +160,6 @@ export function loosenedPolicy(base: Partial<HookPolicy> & { profiles?: unknown;
   if (before && !after) out.push(`profiles becomes implicit: the explicit list [${before.join(", ")}] was removed`);
   const dropped = before && after ? before.filter(name => !after.includes(name)) : [];
   if (dropped.length) out.push(`profiles drops ${dropped.join(", ")}`);
-  out.push(...loosenedDelivery(base, current));
   return out;
 }
 

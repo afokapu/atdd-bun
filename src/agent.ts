@@ -1,22 +1,12 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { deliveryAdopted } from "./delivery";
 
 const root = resolve(import.meta.dir, "..");
 const version = (await Bun.file(join(root, "package.json")).json() as { version: string }).version;
 const render = async (path: string) => (await readFile(join(root, "templates/agents", path), "utf8")).replace("{{VERSION}}", version);
 // .agents/skills is the vendor-neutral Agent Skills path (Codex, Copilot, Cursor, Gemini CLI, …); .claude/skills is Claude Code's.
 const skillPaths = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"];
-/** The delivery skill, installed only where the delivery profile is adopted: generated path → template. */
-export const deliverySkillFiles = [".agents/skills", ".claude/skills"].map(base => [`${base}/delivery/SKILL.md`, "delivery/SKILL.md"] as const);
-/** Generated files an earlier version installed and this one no longer ships: the review contract, now the skill's Reviewer section. */
-const retiredFiles = [".agents/skills/delivery/review.md", ".claude/skills/delivery/review.md"];
-/** Whether the repository's atdd-bun.yaml adopts the delivery profile. */
-export async function deliveryInstalled(repo: string): Promise<boolean> {
-  const file = join(repo, "atdd-bun.yaml");
-  try { return existsSync(file) && deliveryAdopted(Bun.YAML.parse(await readFile(file, "utf8"))); } catch { return false; }
-}
 // AGENTS.md is read by Codex, Cursor and most agents; CLAUDE.md by Claude Code. Both carry the same block.
 export const instructionPaths = ["AGENTS.md", "CLAUDE.md"];
 const block = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->\n?/;
@@ -32,12 +22,6 @@ export async function agentInit(repo = process.cwd(), replace = false) {
     if (existsSync(output) && !replace) { kept.push(output); continue; }
     await mkdir(dirname(output), { recursive: true }); await writeFile(output, await render("atdd/SKILL.md")); written.push(output);
   }
-  if (await deliveryInstalled(repo)) for (const [path, template] of deliverySkillFiles) {
-    const output = join(repo, path);
-    if (existsSync(output) && !replace) { kept.push(output); continue; }
-    await mkdir(dirname(output), { recursive: true }); await writeFile(output, await render(template)); written.push(output);
-  }
-  for (const path of retiredFiles) if (existsSync(join(repo, path))) { await rm(join(repo, path)); written.push(`${join(repo, path)} (removed)`); }
   const managed = await render("AGENTS.block.md");
   for (const path of instructionPaths) {
     const file = join(repo, path), current = existsSync(file) ? await readFile(file, "utf8") : "";
@@ -48,7 +32,7 @@ export async function agentInit(repo = process.cwd(), replace = false) {
   return { ok: true, message: written.join("\n") };
 }
 export async function agentStatus(repo = process.cwd()) {
-  const expected = [...skillPaths, ...(await deliveryInstalled(repo) ? deliverySkillFiles.map(([path]) => path) : [])];
+  const expected = skillPaths;
   const missing = expected.map(path => join(repo, path)).filter(path => !existsSync(path));
   for (const path of instructionPaths) { const agents = join(repo, path); if (!existsSync(agents) || !block.test(await readFile(agents, "utf8"))) missing.push(`${agents} (atdd-bun block)`); }
   return { ok: !missing.length, message: missing.length ? `missing: ${missing.join(", ")}` : [...expected, ...instructionPaths].map(path => join(repo, path)).join("\n") };

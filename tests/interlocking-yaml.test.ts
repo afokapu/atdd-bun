@@ -86,6 +86,14 @@ test("a wagon whose produced artifact Cargo-moving code names is built wherever 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("a train-sequence finding points at the train's own document, not at an unrelated test", async () => {
+  // FWS #fqUGvWHn25mq: the finding was anchored at the first e2e file scanned, which exercises none of the trains named.
+  const sequence = (await runImplementation("bun_interlocking_coverage", { scanRoots: [join(detectors, "bun_interlocking_coverage", "fixtures", "dirty")], excludes: ["node_modules", ".git", ".atdd"] }))
+    .filter(v => v.rule_id === "tester.bun.interlocking-train-sequence-is-exercised");
+  expect(sequence.length).toBeGreaterThan(0);
+  for (const v of sequence) expect(v.file).toMatch(/^plan\/_trains\/train:match:match-resolution-\w+\.yaml$/);
+});
+
 test("a route id covers its route only in a test of its own interlocking", async () => {
   // FWS #liu3vKZYAPXD: `refuse` is a route of two interlockings; a test of one used to cover the other with no test.
   const root = await mkdtemp(join(tmpdir(), "atdd-route-scope-"));

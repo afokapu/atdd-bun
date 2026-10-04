@@ -5,7 +5,7 @@ status: active
 name: Each authored area carries an index.adoc
 statement: >-
   Each authored area of the canonical tree — `docs/`, `docs/purpose/`, `docs/architecture/`,
-  `docs/architecture/decisions/`, `docs/delivery/`, `docs/archive/` — MUST contain an `index.adoc`.
+  `docs/architecture/decisions/`, `docs/archive/` — MUST contain an `index.adoc`.
   Other canonical filenames are defined when useful and are NOT instantiated merely to satisfy an
   empty taxonomy (spec 2 §4).
 terms:
@@ -21,7 +21,7 @@ terms:
 content:
   summary: >-
     An area without an index is an area the rendered site cannot navigate into and a reader cannot
-    enter. The rule checks the six canonical areas only; it does not require an index in every
+    enter. The rule checks the five canonical areas only; it does not require an index in every
     subdirectory an author happens to create.
   normative_text: |
     The rule is scoped to the canonical areas DELIBERATELY, and the restraint is the point. Spec 2 §4
