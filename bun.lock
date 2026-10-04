@@ -9,18 +9,20 @@
         "ajv-formats": "^3.0.1",
       },
       "devDependencies": {
-        "@afokapu/atdd-workflow": "^0.1.7",
+        "@afokapu/atdd-workflow": "^0.1.13",
         "@axe-core/playwright": "^4.13.0",
         "@playwright/test": "^1.63.0",
       },
     },
   },
   "packages": {
-    "@afokapu/atdd-workflow": ["@afokapu/atdd-workflow@0.1.7", "", { "bin": { "atdd-workflow": "bin/atdd-workflow" } }, "sha512-pVZHVlyAUvRJyD6K0PUF16CGvdO+qdUu0Nh0DJIjCPLscVRTC1XueZp1oSEKLPPnVEunZm+bTCHATkLIyoGbuA=="],
+    "@afokapu/atdd-workflow": ["@afokapu/atdd-workflow@0.1.13", "", { "dependencies": { "@typesafe-ai/sdk": "^0.6.0" }, "bin": { "atdd-workflow": "bin/atdd-workflow" } }, "sha512-G1uzBkWiWuu/YYpT39lhaEufLguahExIIxrQoVg9zpEy5O3wPLeCPWZI4Rwjy9zFmlvEoGKoZRtQcnFgW0dZAQ=="],
 
     "@axe-core/playwright": ["@axe-core/playwright@4.13.0", "", { "dependencies": { "axe-core": "~4.13.0" }, "peerDependencies": { "playwright-core": ">= 1.0.0" } }, "sha512-6YLx+kxXu5GJceG4ozFg+33a2EMTdjYwWGloJ3sb9Kta5pp+ZNS53uxGVog5JetIY8s++P5UrtX+cri+u0VAVg=="],
 
     "@playwright/test": ["@playwright/test@1.63.0", "", { "dependencies": { "playwright": "1.63.0" }, "bin": { "playwright": "cli.js" } }, "sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ=="],
+
+    "@typesafe-ai/sdk": ["@typesafe-ai/sdk@0.6.0", "", {}, "sha512-IddX+Q0XM+VagOUZFeP7wZjaO4SHMdvnh2zEBdrZZnXedWI3BNK1lKhMx3ayrkFWvVLbVcUHJy6AVZlY+e6Jaw=="],
 
     "ajv": ["ajv@8.20.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA=="],
 
