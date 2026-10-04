@@ -2,14 +2,14 @@ import { expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { enabledProfiles, profileNames } from "../src/enforce";
+import { defaultProfiles, enabledProfiles } from "../src/enforce";
 import { loosenedPolicy } from "../src/integrity";
 import { initializeRepository, policyInit } from "../src/setup";
 
 // Brownfield profile adoption. An absent `profiles:` runs every profile (execution) but governs none (policy): the
 // first explicit list establishes the governed set; after it, dropping a profile or removing the list is loosening.
 // Numbers refer to the required cases in the consumer's change request.
-const every = profileNames.filter(p => p !== "all");
+const every = defaultProfiles;
 const drops = (base: string[] | undefined, current: string[] | undefined) =>
   loosenedPolicy(base ? { profiles: base } : {}, current ? { profiles: current } : {}).filter(line => line.startsWith("profiles"));
 
