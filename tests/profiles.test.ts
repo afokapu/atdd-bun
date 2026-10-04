@@ -21,19 +21,20 @@ const rules = async (root: string, profiles?: Parameters<typeof enforce>[0]["pro
 test("by default every built-in profile is activated", async () => {
   const root = await repo({ ...TRACE, ...CODER });
   expect(await enabledProfiles(root)).toEqual(defaultProfiles);
-  expect(await enabledProfiles(root)).not.toContain("workflow");
+  expect(await enabledProfiles(root)).not.toContain("flow");
   expect(await rules(root)).toEqual(expect.arrayContaining(["coder", "traceability"]));
 }, 30_000);
 
-test("the optional workflow profile is available only by explicit adoption", async () => {
-  const root = await repo({ "atdd-bun.yaml": "profiles: [workflow]\n" });
-  expect(await enabledProfiles(root)).toEqual(["workflow"]);
-  expect(await enforce({ root, profiles: ["workflow"] })).toEqual([]);
+test("the optional flow profile is available only by explicit adoption", async () => {
+  const root = await repo({ "atdd-bun.yaml": "profiles: [flow]\n" });
+  expect(await enabledProfiles(root)).toEqual(["flow"]);
+  expect(await enforce({ root, profiles: ["flow"] })).toEqual([]);
 });
 
-test("the retired delivery profile may migrate only to workflow", () => {
-  expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["workflow"] })).toEqual([]);
-  expect(loosenedPolicy({ profiles: ["delivery", "security"] }, { profiles: ["workflow"] })).toEqual(["profiles drops security"]);
+test("retired delivery and workflow profiles may migrate only to flow", () => {
+  expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["flow"] })).toEqual([]);
+  expect(loosenedPolicy({ profiles: ["workflow"] }, { profiles: ["flow"] })).toEqual([]);
+  expect(loosenedPolicy({ profiles: ["delivery", "security"] }, { profiles: ["flow"] })).toEqual(["profiles drops security"]);
   expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["docs"] })).toEqual(["profiles drops delivery"]);
   expect(loosenedPolicy({ profiles: ["delivery"] }, {})).toEqual(["profiles becomes implicit: the explicit list [delivery] was removed"]);
 });

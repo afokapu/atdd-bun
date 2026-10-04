@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
 
-export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "workflow" | "all";
+export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "flow" | "all";
 export type ConcreteProfile = Exclude<Profile, "all">;
 
 export type Violation = {
@@ -38,15 +38,15 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
   interlocking: ["bun_interlocking_binding", "bun_interlocking_coverage", "bun_interlocking_infrastructure"],
   htmx: ["htmx_hypermedia_detector", "htmx_tester_detector", "htmx_e2e_detector"],
   design: ["bun_design_system_detector", "bun_responsive_detector"],
-  // Operational policies only: Workflow supplies lifecycle orchestration; ATDD Bun supplies delivery review semantics.
-  workflow: [],
+  // Operational policies only: the Flow companion supplies lifecycle orchestration; ATDD Bun supplies delivery review semantics.
+  flow: [],
 };
 
 /** Additional policy conventions a profile loads, whether local or contributed by an installed companion package. */
 export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string; path: string }>> = {
   traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [{ rule_id: "coder.bun.phase-discipline", path: "conventions/coder.bun/coder.bun.phase-discipline.convention.yaml" }], tester: [], security: [],
   architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
-  workflow: [
+  flow: [
     { rule_id: "atdd-bun.review.behavioral-reconciliation", path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml" },
     { rule_id: "atdd-workflow.workflow.lifecycle", path: "../atdd-workflow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml" },
   ],
@@ -55,7 +55,7 @@ export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string
 /** Every profile but `all`. */
 export const concreteProfiles = Object.keys(profileImplementations) as ConcreteProfile[];
 /** Profiles a repository adopts only when it explicitly uses the optional companion package. */
-export const optionalProfiles: ConcreteProfile[] = ["workflow"];
+export const optionalProfiles: ConcreteProfile[] = ["flow"];
 /** The safe default set for repositories that have not opted into an optional companion profile. */
 export const defaultProfiles = concreteProfiles.filter(profile => !optionalProfiles.includes(profile));
 /** Profile names accepted by the CLI and public integrations. */
