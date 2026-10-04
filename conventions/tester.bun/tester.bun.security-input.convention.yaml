@@ -21,13 +21,31 @@ content:
     Identifies input-validation tests from the URN and flags those with no rejection assertion.
   normative_text: |
     A test that submits a well-formed payload and checks it succeeds proves the parser works on good input. The obligation an input-validation acceptance carries is about BAD input — malformed, missing, adversarial — and that is precisely what a happy-path test does not touch.
+    The rejection assertion should witness the specific invalid condition declared by the acceptance, not merely any error. Construct the malformed input named by the claim, drive it through the intended boundary, and assert the refusal. When accepting the bad input could create or mutate state, also verify that the rejected request left that protected effect absent.
     Same silent-green-gap shape as `security-auth`, and it is grouped with the security family for the same reason: unvalidated input is the entry point for most of what the security rules defend against.
   fix_hint: |
-    Assert the rejection:
+    Prove rejection of the invalid input the acceptance actually names.
+
+    Stimulus:
+      * construct the malformed, missing, boundary, or adversarial value from the acceptance,
+      * send it through the same boundary production receives.
+
+    Witness:
+      * assert the acceptance-specific rejection — exact error, 400/422 response, rejection, or throw,
+      * when invalid input could mutate state, assert that the invalid operation produced no protected side effect.
 
       expect(() => parseOrder({ sku: null })).toThrow("INVALID_SKU");
       // or over HTTP
       expect(res.status).toBe(422);
+
+    Avoid:
+      * testing only a well-formed payload,
+      * triggering some unrelated error and treating any rejection as proof,
+      * bypassing the production validation boundary with a direct fixture assertion.
+
+    Verify:
+      * the case would turn red if validation for the declared bad input were removed,
+      * the observed failure is caused by the intended validation rule, not by test setup.
   exceptions:
   - Only tests whose URN carries an INPUT / VALIDATION / VALIDATE kind segment are scanned.
   - Any of the listed rejection signals satisfies the rule.

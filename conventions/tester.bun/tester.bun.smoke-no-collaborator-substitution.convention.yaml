@@ -21,9 +21,29 @@ content:
     Flags any substitution call in a SMOKE-phase file, reporting the exact line.
   normative_text: |
     Substituting a collaborator turns a SMOKE test into a unit test wearing a SMOKE label. The damage is not that the test is bad — it may be an excellent unit test — but that the gate counts it as evidence the real path works, when the real path is precisely the part that was replaced.
+    In a SMOKE proof the boundary is part of the claim. The test must enter through the real assembled path and preserve the collaborators whose behavior constitutes that path. Replacing one because it is expensive, inconvenient, or difficult to arrange changes the question the test answers rather than making the same proof cheaper.
     This is the failure that makes a green suite compatible with a broken deployment, which is the specific outcome ATDD's phase separation exists to prevent.
   fix_hint: |
-    Let the SMOKE test exercise the real collaborator against real infrastructure, and move the substituted version into a UNIT-phase test where the substitution is honest and expected.
+    Preserve the real proof boundary.
+
+    Boundary:
+      * exercise the production collaborator through the assembled path required by the SMOKE acceptance,
+      * use the real infrastructure or environment that the declared smoke proof is meant to verify.
+
+    Prefer:
+      * arrange only the minimum preconditions needed for the declared stimulus,
+      * observe the acceptance-specific external result after the real collaborator runs.
+
+    Avoid:
+      * replacing the collaborator whose behavior the SMOKE claim depends on,
+      * moving the test inward to a unit seam merely because that path is easier to control,
+      * relabeling the case as SMOKE after using mocks or spies that bypass production behavior.
+
+    Verify:
+      * the case would fail if the real collaborator or production wiring were broken,
+      * the observable assertion proves the bound acceptance rather than the test fixture.
+
+    If substitution is the intended proof technique, move that case into a UNIT-phase test where the substitution is honest and expected.
   exceptions:
   - Only SMOKE-phase files are scanned; UNIT tests may substitute freely.
 metadata:

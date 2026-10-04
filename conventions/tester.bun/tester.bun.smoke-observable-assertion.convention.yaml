@@ -21,17 +21,34 @@ content:
   summary: >-
     Reports a SMOKE case that makes assertions but touches none of the observable channels.
   normative_text: |
-    A SMOKE test exists to prove the system does something a person could witness. A case that builds an object and asserts on its fields has proven that the constructor works — which is a unit test's job — while carrying the label that tells the gate real behaviour was exercised.
-    The observable vocabulary is stack-specific and that is the whole reason this rule is re-realized rather than shared: for this stack the canonical observation is an HTTP response and the markup inside it, because that markup is what htmx puts in front of the user.
+    A SMOKE test exists to prove the system does something a person or operator could witness. A case that builds an object and asserts on its fields has proven that the constructor works — which is a unit test's job — while carrying the label that tells the gate real behaviour was exercised.
+    Merely touching an observable channel is not enough semantically. The witness must correspond to the bound acceptance's promised outcome. A generic `200` can prove that a server answered while leaving the actual acceptance — for example that the newly created order is visible — completely unproven.
+    The observable vocabulary is stack-specific and that is the whole reason this rule is re-realized rather than shared: for this stack the canonical observation is often an HTTP response and the markup inside it, because that markup is what htmx puts in front of the user. The detector recognizes the channel; the convention tells the agent to choose the acceptance-specific evidence on that channel.
   fix_hint: |
-    Assert what an operator would see:
+    Assert what an operator would observe about the bound acceptance.
+
+    Claim:
+      * read the acceptance's Then and identify the externally visible consequence that discharges it.
+
+    Witness:
+      * assert on the real HTTP response, rendered markup, stdout/stderr, exit code, persisted state, or other observable channel,
+      * make the assertion specific enough that the acceptance behavior disappearing would turn the case red.
 
       const order = buildOrder({ sku: "x" });
-      expect(order.sku).toBe("x");       // internal
+      expect(order.sku).toBe("x");                     // internal; not SMOKE evidence
 
       const res = await fetch("/orders");
-      expect(res.status).toBe(200);
-      expect(await res.text()).toContain("order-1");   // observable
+      expect(res.status).toBe(200);                    // useful transport evidence
+      expect(await res.text()).toContain("order-1");   // acceptance-specific observable witness
+
+    Avoid:
+      * treating any observable assertion as sufficient when it does not prove the declared outcome,
+      * asserting only on objects the test constructed itself,
+      * checking internal calls or mocks instead of the resulting system behavior.
+
+    Verify:
+      * the real path was exercised,
+      * the witness would fail if the bound acceptance behavior regressed.
   exceptions:
   - Only SMOKE-phase files are scanned.
   - Cases with no assertions are skipped — other rules own that.

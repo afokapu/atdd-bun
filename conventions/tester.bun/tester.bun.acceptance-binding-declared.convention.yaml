@@ -21,12 +21,28 @@ content:
     finding belongs to `test-carries-urn-identity`.
   normative_text: |
     A URN says which test this is; the acceptance binding says which OBLIGATION it discharges. Only the second one closes the loop the gate reads.
-    Two binding kinds are accepted because a journey test legitimately proves a train rather than a single acceptance. Forcing every test to name an acceptance would push authors to invent one, which pollutes the plan graph with acceptances that exist only to satisfy a linter.
+    The binding is a claim, not bookkeeping. A syntactically valid Acceptance or Train header is truthful only when the test actually exercises that declared subject and asserts the outcome it requires. Binding a convenient existing acceptance to an unrelated case creates false coverage while satisfying the structural detector.
+    Two binding kinds are accepted because a journey test legitimately proves a train rather than a single acceptance. Forcing every test to name an acceptance would push authors to invent one, which pollutes the plan graph with acceptances that exist only to satisfy a linter. The same principle applies in reverse: never select or invent a binding merely to make the test attributable.
   fix_hint: |
-    Name the acceptance the test discharges, or the train it walks:
+    Derive the binding from the plan artifact the test actually proves.
 
-      // Acceptance: acc:orders:E001-SMOKE-001-renders-row
-      // Train: train:orders:checkout-journey
+    Claim:
+      * identify the declared acceptance whose behavior this file exercises and asserts, or the declared train the journey actually walks.
+
+    Bind:
+      * use that exact plan identity in the header:
+
+        // Acceptance: acc:orders:E001-SMOKE-001-renders-row
+        // Train: train:orders:checkout-journey
+
+    Avoid:
+      * picking any resolvable acceptance merely to satisfy coverage,
+      * changing the claimed binding to match a test that proves different behavior,
+      * inventing a new acceptance or train solely so an otherwise orphaned test can bind.
+
+    Verify:
+      * the test stimulus exercises the bound subject,
+      * its behavioral witness proves the bound obligation rather than an adjacent implementation detail.
   exceptions:
   - A `Train:` binding satisfies the rule for journey and E2E tests.
   - Files with no URN are owned by `test-carries-urn-identity`.

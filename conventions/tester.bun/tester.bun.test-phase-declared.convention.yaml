@@ -19,11 +19,17 @@ content:
     Requires a `Phase:` field from the closed vocabulary.
   normative_text: |
     The phase is not documentation — it is what selects which other rules apply. A RED test must fail first and must assert behaviour; a SMOKE test must assert something operator-observable and must not substitute collaborators. Without a declared phase none of those obligations can be evaluated, so an undeclared test is exempt from the entire quality surface by omission.
-    That is why this rule exists separately from the URN rule: a test can be perfectly identified and still be ungoverned.
+    Phase selection is part of the proof contract, not a way to choose the easiest rule set. Declare the phase that matches what the test is actually doing and the proof boundary it exercises. In particular, do not relabel a real-path SMOKE or assembled E2E proof as UNIT merely to permit substitution, and do not label a passing or vacuous case RED merely because a RED marker is easy to add.
+    That is why this rule exists separately from the URN rule: a test can be perfectly identified and still be ungoverned or governed by the wrong obligations.
   fix_hint: |
-    Declare the phase the test belongs to:
+    Derive the phase from the test's actual role; do not choose a weaker label to silence a phase-gated rule.
 
-      // Phase: SMOKE
+      // Phase: RED     // the current acceptance proof is intentionally failing first
+      // Phase: UNIT    // isolated local behavior
+      // Phase: SMOKE   // real assembled path / infrastructure with operator-observable evidence
+      // Phase: E2E     // end-to-end journey through the assembled system
+
+    Verify that the declared phase matches the boundary the case really exercises and that the corresponding phase-specific conventions now apply.
   exceptions:
   - Files with no URN are skipped.
   - The vocabulary is fixed by core; a new phase is a core change, not an extension one.

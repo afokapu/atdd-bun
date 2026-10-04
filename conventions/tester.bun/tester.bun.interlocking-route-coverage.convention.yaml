@@ -28,17 +28,42 @@ content:
     The interlocking YAML is authoritative for the guarded route space (afokapu/atdd#1248): every entry
     under `routes:` is an admissible route the InterlockingRunner can resolve to exactly one `trainId`
     (afokapu/atdd#1251). Coverage of that route space is a tester obligation — an unexercised route is a
-    branch of production route control that no test ever drives. A route is COVERED when at least one
-    `e2e/**/*.ts` test references it by its `routeId` or by the `trainId` it resolves to. WHICH per-stack
-    discovery applies (here: Bun `e2e/**/*.ts` scanned for the route/train tokens) is delegated to
-    this realization; other stacks render the same obligation in their own e2e layout.
+    branch of production route control that no test ever drives. A route is COVERED to the detector when at
+    least one `e2e/**/*.ts` test references it by its `routeId` or by the `trainId` it resolves to.
+    That token is a discovery proxy, not the testing objective. A meaningful route proof must construct the
+    route's guard-relevant inputs, drive production resolution, and assert that the declared route selects
+    the expected train before that train is executed. Merely mentioning the route or train in executable
+    test text can satisfy lexical discovery while proving no route behavior.
+    WHICH per-stack discovery applies (here: Bun `e2e/**/*.ts` scanned for the route/train tokens) is
+    delegated to this realization; other stacks render the same obligation in their own e2e layout.
   fix_hint: |
-    Add an end-to-end test that exercises the flagged route through the production runners. Place it
-    under `e2e/interlockings/<interlocking_slug>/<slug>.routes.test.ts` and drive
-    `new InterlockingRunner(...).resolveTrain(...)` so the route's guard-true case resolves to its
-    expected `trainId`, then have `TrainRunner` execute it. Reference the route by its `routeId` or
-    `trainId` so coverage is machine-discoverable. Do NOT satisfy this with a mock resolver or a
-    descriptive assertion. This rule is `strict`: an admissible route with no covering e2e test blocks.
+    Add an end-to-end proof of the flagged route rather than merely adding a discoverable token.
+
+    Claim:
+      * read the declared route, its guard, and its resolved `trainId`,
+      * identify the guard-true inputs that distinguish this route from its alternatives.
+
+    Stimulus:
+      * place the test under `e2e/interlockings/<interlocking_slug>/<slug>.routes.test.ts`,
+      * drive `new InterlockingRunner(...).resolveTrain(action, inputs)` with those inputs,
+      * pass the selected train into `TrainRunner` and execute it.
+
+    Witness:
+      * assert that production resolution selected the route's declared `trainId`,
+      * assert the route- or acceptance-specific execution outcome when one is declared.
+
+    Avoid:
+      * inserting a `routeId` / `trainId` literal solely so lexical coverage sees it,
+      * a mock resolver or hand-built substitute for production route control,
+      * a descriptive assertion that restates the plan without exercising resolution,
+      * bypassing TrainRunner after proving only selection.
+
+    Verify:
+      * the case would fail if the route guard or route-to-train mapping regressed,
+      * the production runners actually execute the selected path,
+      * the discoverable route/train token corresponds to behavior the case genuinely proves.
+
+    This rule is `strict`: an admissible route with no covering e2e test blocks.
   exceptions:
     - YAML under the interlocking scope that declares no `routes:` (the `_interlockings.yaml` registry
       index and generated projections) carries no admissible route space and is out of scope.
