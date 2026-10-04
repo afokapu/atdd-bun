@@ -18,11 +18,11 @@ test("agent init writes one managed instruction block, preserving existing conte
     expect((await agentInit(root)).ok).toBeTrue();
     const agents = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(agents.startsWith("# Team rules\n\n<!-- atdd-bun:start")).toBeTrue();
-    for (const text of ["propose the governing", "ask them to choose", "do not assume a linear lifecycle", "Never modify the toolkit"]) expect(agents).toContain(text);
+    for (const text of ["two local toolkits", "ATDD_WORKFLOW_ROOT", "operator's assistant", "coordinator seat", "driver seat", "Workflow seed", "ask before changing profiles", "Never modify either toolkit"]) expect(agents).toContain(text);
     // Claude Code reads CLAUDE.md: the same block, saying what an agent may change.
     const claude = await readFile(join(root, "CLAUDE.md"), "utf8"), managed = /<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/;
     expect(claude.match(managed)?.[0]).toBe(agents.match(managed)?.[0]);
-    for (const text of ["Never modify the toolkit itself", "Change only its configuration", "propose the governing", "only when the user asks"]) expect(claude).toContain(text);
+    for (const text of ["ATDD_WORKFLOW_ROOT", "operator's assistant", "Workflow seed", "Never modify either toolkit"]) expect(claude).toContain(text);
     expect((await agentInit(root)).ok).toBeFalse();
     const skill = join(root, ".claude/skills/atdd/SKILL.md");
     await mkdir(join(root, ".claude/skills/atdd"), { recursive: true }); await writeFile(skill, "retired\n");
