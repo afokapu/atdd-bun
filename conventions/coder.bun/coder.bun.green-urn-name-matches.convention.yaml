@@ -23,11 +23,22 @@ content:
     A URN naming a different component than the file it sits in is worse than a missing one: it binds the file's evidence to somebody else's component, so both are wrong and neither is obviously wrong. This is the failure a copy-pasted header produces, which is how it usually arises.
     The exempt set is the Vite set plus this stack's idioms — `server`, `routes`, `layout`, `partial`, `fragment`, `middleware` — because a full-stack Bun app's entrypoint is `server.ts` and its htmx fragments are named for their role, not for a component.
   fix_hint: |
-    Make the name segment agree with the filename, or use a structural role name:
-
-      // in OrderRow.ts
-      // URN: component:orders:checkout:SomethingElse:backend:presentation  // ✗
-      // URN: component:orders:checkout:OrderRow:backend:presentation       // ✓
+    Canonical path:
+      * make the URN `{Name}` identify the component implemented by the file and match its basename under the rule's normalization, unless the file has an exempt structural role.
+    
+    During GREEN:
+      * derive the name from the actual file/component being implemented,
+      * correct a copied or stale header before considering a file rename,
+      * keep structural-role filenames as structural roles when that is their real responsibility.
+    
+    Do not broaden:
+      * do not rename a correctly named component merely to preserve a wrong URN,
+      * do not use an exempt structural name to evade component identity,
+      * do not change unrelated identity segments.
+    
+    Prove:
+      * the current behavioral acceptance passes,
+      * the URN name and implementation identity agree.
   exceptions:
   - 'Structural names are exempt: composition, wagon, entrypoint, http, index, schema, router, routes, server, layout, partial, fragment, middleware.'
   - Comparison ignores case and non-alphanumerics, so `order-row.ts` matches `OrderRow`.

@@ -16,8 +16,23 @@ content:
   normative_text: CSS custom properties cannot be used in media queries, so breakpoints cannot be tokens. Declaring
     them once and requiring every query to use them keeps layouts switching at the same widths everywhere instead
     of at a new one per component.
-  fix_hint: 'Use `@media (min-width: 768px)`, or add the width to `frontend.breakpoints` if the design system really
-    needs it.'
+  fix_hint: |
+    Canonical path:
+      * use only widths declared in `frontend.breakpoints` for media-query conditions.
+    
+    During GREEN:
+      * reuse an existing breakpoint that expresses the required layout transition,
+      * add one breakpoint only when the current design genuinely requires a distinct transition width,
+      * change only the affected media query or configuration entry.
+    
+    Do not broaden:
+      * do not add speculative breakpoints for future devices,
+      * do not normalize unrelated responsive rules,
+      * do not use an undeclared one-off width as a shortcut.
+    
+    Prove:
+      * the current responsive acceptance passes at the relevant viewports,
+      * every affected media-query width is declared.
   exceptions:
   - Vendored and generated trees (`node_modules`, `dist`, `build`, `_generated`) are never scanned.
 metadata:

@@ -35,19 +35,22 @@ content:
     HTML transformer available only through the Bun server, and it is the natural place to assemble and
     post-process fragments.
   fix_hint: |
-    Replace the framework server with the native one:
-
-      const app = express();                       // ✗ node-compat path
-      app.get("/orders", (req, res) => …);
-      app.listen(3000);
-
-      Bun.serve({                                   // ✓ native
-        port: 3000,
-        routes: { "/orders": (req) => new Response(renderOrders(), htmlHeaders) },
-      });
-
-    Middleware becomes plain function composition around the handler. `strict` — the rule exists to
-    hold the stack decision, so it is not suppressible.
+    Canonical path:
+      * serve HTTP with `Bun.serve` and express middleware behavior as ordinary function composition around handlers.
+    
+    During GREEN:
+      * add only the route, handler, or middleware composition required by the current acceptance,
+      * reuse the existing `Bun.serve` instance and routing pattern,
+      * when replacing a forbidden framework in new work, migrate only the path required to make the behavior correct.
+    
+    Do not broaden:
+      * do not introduce Express, Fastify, Koa, or `node:http` for convenience,
+      * do not rewrite unrelated routes,
+      * do not build a compatibility abstraction over a forbidden server.
+    
+    Prove:
+      * the current behavioral acceptance passes through the real Bun server,
+      * the application server remains `Bun.serve`.
   exceptions:
   - A `createServer(` call that is not an HTTP server (a test double, an unrelated factory) is a known
     imprecision of the name-based match; rename it (atdd-bun has no per-rule scope).
