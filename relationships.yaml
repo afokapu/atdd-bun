@@ -17,6 +17,7 @@ nodes:
   - atdd-bun.planner.schema
   - atdd-bun.planner.train-wagon-resolves
   - atdd-bun.profiles.presets
+  - atdd-bun.review.behavioral-reconciliation
   - atdd-bun.topology.e2e-location
   - atdd-bun.topology.feature-source-coverage
   - atdd-bun.topology.feature-test-coverage
@@ -5267,4 +5268,14 @@ edges:
     strength: important
     target_ref: planner.telemetry.tracking-plan-schema
     type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: final behavioral reconciliation follows review-ready RED, GREEN, REFACTOR, and full-profile proof
+    source_ref: atdd-bun.review.behavioral-reconciliation
+    strength: critical
+    target_ref: coder.bun.phase-discipline
+    type: follows
     origin: "@afokapu/atdd-bun"

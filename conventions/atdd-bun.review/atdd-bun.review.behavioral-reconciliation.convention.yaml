@@ -1,0 +1,188 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.review.behavioral-reconciliation
+kind: policy
+status: active
+name: Final review reconciles delivered behavior with declared intent
+statement: >-
+  Before a delivery may be accepted after its deterministic CI and convention gates pass, a final reviewer
+  MUST reconcile the observable behavior of the assembled system with the declared intent that motivated the
+  work. Passing tests, a clean diff, and green convention checks are supporting evidence; none is a substitute
+  for observing that the delivered behavior matches the plan. The review MUST establish expected behavior
+  from the relevant acceptance, wagon, train, interlocking, journey, and delivery criteria before relying on
+  implementation details; exercise the highest meaningful assembled boundary; compare the observed result
+  with that intent and its executable proofs; and return APPROVE, RETURN, or ESCALATE. A material mismatch
+  blocks delivery.
+terms:
+- term_id: final_behavioral_review
+  text: >-
+    the post-CI review performed after implementation and guided refactoring are complete. Its purpose is to
+    determine whether the assembled running system exhibits the behavior the delivery originally intended,
+    rather than to repeat RED, GREEN, REFACTOR, or static code-quality review.
+- term_id: declared_intent
+  text: >-
+    the behavior the delivery is expected to produce, reconstructed from the authoritative planning and
+    delivery artifacts in scope: acceptance criteria, wagon responsibilities, train sequence, interlocking
+    routes, journey behavior, and task or delivery criteria when available.
+- term_id: assembled_boundary
+  text: >-
+    the highest meaningful real boundary through which the intended behavior can be exercised: for example a
+    browser journey, exposed HTTP or runtime boundary, production interlocking and train path, or another
+    assembled product-facing interface. It is not an internal function selected merely because it is easier
+    to invoke.
+- term_id: behavioral_reconciliation
+  text: >-
+    the comparison between declared intent, executable proof, and observed runtime behavior. Reconciliation
+    succeeds only when those three describe the same material behavior and no required outcome is missing or
+    materially contradicted.
+- term_id: review_evidence
+  text: >-
+    durable evidence recording the intent sources considered, boundary exercised, observations obtained,
+    discrepancies found, and final review decision. CI status, tests, screenshots, traces, runtime output, or
+    other artifacts may support the judgment but do not replace it.
+- term_id: review_decision
+  text: >-
+    APPROVE when declared intent, executable proof, and observed behavior materially agree; RETURN when
+    required behavior is missing, wrong, unreachable, unexpectedly changed, or proved by tests that no longer
+    correspond to the plan; ESCALATE when the authoritative intent is ambiguous, contradictory, or must itself
+    change before correctness can be judged.
+content:
+  summary: >-
+    Close the ATDD delivery loop by independently reconciling original intent with the observable behavior of
+    the assembled system after all deterministic gates are green.
+  normative_text: |
+    Final review is a semantic delivery gate, not another implementation phase.
+
+    RED constructed executable proof of the intended behavior. GREEN implemented the smallest compliant
+    behavior. REFACTOR improved the implementation while preserving that behavior. Deterministic CI and ATDD
+    Bun profiles establish that the resulting delivery satisfies the machine-checkable obligations. Final
+    review answers the remaining question: does the assembled system actually behave as the delivery intended?
+
+    Deterministic gates are prerequisites. Do not begin final behavioral review while required CI, tests, type
+    checks, security checks, or active strict convention checks are failing. A failing deterministic gate is
+    returned to the responsible implementation phase before semantic review consumes additional reasoning
+    capacity.
+
+    Establish the behavioral oracle from intent before studying implementation details deeply. Read the
+    authoritative artifacts relevant to the delivery: its acceptance criteria, wagon responsibilities, train
+    sequence, interlocking route decisions, exposed journey, and delivery criteria when available. State the
+    behavior that should be observable if the delivery is correct.
+
+    Do not derive expected behavior from the PR diff, implementation, or test body. Those are evidence of what
+    was built, not authority for what was supposed to be built. This ordering protects the review from
+    accepting plan/test/implementation drift merely because implementation and tests agree with each other.
+
+    Choose the highest meaningful assembled boundary that can demonstrate the declared behavior. For a
+    human-facing journey, exercise the real user-facing journey. For an API or runtime behavior, enter through
+    the exposed assembled boundary. For routed behavior, exercise the production interlocking and train path
+    when that routing is material to the claim. Do not move inward to an internal function merely because it is
+    easier to invoke.
+
+    Exercise the behavior with the minimum inputs necessary to establish the claim, then observe externally
+    meaningful consequences. Prefer user-visible outcomes, API responses, persisted effects, emitted events,
+    route selection followed by its business outcome, or other effects named by the plan. Internal calls,
+    implementation objects, mocks, or descriptive tokens are not substitutes for the declared observable
+    result.
+
+    Reconcile three sources independently:
+
+      1. DECLARED INTENT
+         What behavior do the authoritative plan and delivery criteria require?
+
+      2. EXECUTABLE PROOF
+         What behavior do the acceptance, smoke, route, train, and journey tests actually prove?
+
+      3. OBSERVED RUNTIME
+         What does the assembled system actually do when exercised through the appropriate real boundary?
+
+    All three must materially agree. Passing tests alone are insufficient because a test may have drifted with
+    the implementation. Runtime behavior alone is insufficient if it no longer satisfies the declared intent.
+    A correct plan with an unexercised or unreachable implementation is also incomplete.
+
+    Look specifically for:
+      * required behavior that is missing,
+      * intended behavior that cannot be reached through the assembled application,
+      * materially unexpected behavior introduced by the delivery,
+      * an interlocking condition selecting the wrong train,
+      * a train whose sequence produces a different business outcome than declared,
+      * a journey whose final user-visible result differs from its intended outcome,
+      * tests that pass while proving a behavior different from the plan,
+      * acceptance or planning artifacts silently changed to match the implementation rather than an explicitly
+        authorized change in intent.
+
+    Inspect the PR diff and implementation after the expected behavior has been established. Use them to
+    explain discrepancies, understand risk, or determine whether an observed result is trustworthy. Do not
+    reopen naming, decomposition, abstraction, complexity, formatting, or other design questions that already
+    passed their governing phase unless they provide concrete evidence of a behavioral defect or delivery risk.
+
+    The reviewer MUST produce a durable decision:
+
+      APPROVE
+        Declared intent, executable proof, and observed behavior materially agree. Required behavior is
+        reachable through the assembled system and no material unintended behavior was found within the
+        reviewed scope.
+
+      RETURN
+        Required behavior is missing, wrong, unreachable, materially contradicted, or the executable proof
+        does not correspond to the declared intent. Return the delivery with the concrete behavioral
+        discrepancy and evidence.
+
+      ESCALATE
+        The authoritative intent is ambiguous, contradictory, or fulfilling the observed need requires
+        changing agreed product behavior. Do not silently redefine the plan during final review.
+
+    Final review is not permission to expand scope or redesign the implementation. Its job is to decide whether
+    the delivered behavior is the intended behavior.
+  fix_hint: |
+    Re-run final review outside-in.
+
+    Intent:
+      * read the relevant acceptance, wagon, train, interlocking, journey, and delivery criteria,
+      * state the externally meaningful behavior expected from this delivery before relying on the PR diff or
+        implementation as an oracle.
+
+    Exercise:
+      * wait until deterministic CI and active strict ATDD Bun gates are green,
+      * choose the highest meaningful assembled boundary for the declared behavior,
+      * exercise the real production path with the minimum inputs necessary to demonstrate it.
+
+    Observe:
+      * record the externally meaningful result,
+      * include supporting runtime evidence such as a browser result, response, persisted effect, emitted
+        event, trace, route/train result plus business outcome, or equivalent proof.
+
+    Reconcile:
+      * compare declared intent with the executable tests,
+      * compare both with the behavior actually observed,
+      * look for missing behavior, unexpected behavior, unreachable paths, or semantic drift between plan,
+        tests, and implementation.
+
+    Decide:
+      * APPROVE only when intent, proof, and runtime materially agree,
+      * RETURN with the concrete discrepancy when they do not,
+      * ESCALATE when the intent itself is ambiguous or requires an authorized change.
+
+    Avoid:
+      * treating green CI as the final behavioral judgment,
+      * treating a passing E2E test as proof without checking what it actually proves,
+      * deriving expected behavior from the implementation,
+      * reviewing only the lines changed in the PR,
+      * redoing style or refactoring review without behavioral evidence,
+      * changing the plan merely to make the delivered implementation appear correct.
+  exceptions:
+  - >-
+    A delivery that intentionally changes no externally observable behavior still requires reconciliation. The
+    reviewer may establish that the intended invariant is "no behavioral change" and use the relevant assembled
+    proofs to verify that invariant rather than inventing a new user journey.
+  - >-
+    When the intended behavior cannot be exercised safely against production dependencies, use the highest
+    faithful environment and boundary authorized by the plan. Do not approve solely from static inspection
+    when the claimed behavior requires runtime observation.
+  - >-
+    Ambiguous or contradictory declared intent is not a reviewer failure and MUST NOT be resolved by inference.
+    Return ESCALATE so the responsible planning authority can settle it.
+metadata:
+  aliases:
+  - ATDD-BUN-REVIEW-BEHAVIORAL-RECONCILIATION-001
+  severity: 4
+implementation:
+  type: none
