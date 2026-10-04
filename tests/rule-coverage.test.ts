@@ -34,6 +34,19 @@ async function conventionIds(dir: string): Promise<Set<string>> {
   return ids;
 }
 
+async function policyConventionIds(dir: string): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) for (const id of await policyConventionIds(path)) ids.add(id);
+    else if (entry.name.endsWith(".convention.yaml")) {
+      const convention = Bun.YAML.parse(await readFile(path, "utf8")) as { rule_id?: string; kind?: string; implementation?: { type?: string } };
+      if (convention.kind === "policy" && convention.implementation?.type === "none" && convention.rule_id) ids.add(convention.rule_id);
+    }
+  }
+  return ids;
+}
+
 test("every rule any detector declares, guards included, is covered by a convention or a strict canonical node", async () => {
   const packageConventions = await conventionIds(join(root, "conventions")), canonicalNodes = await conventionIds(join(root, "planner-nodes/nodes"));
   const scope = Bun.YAML.parse(await readFile(join(root, "planner-nodes/ENFORCEMENT_SCOPE.yaml"), "utf8")) as { canonical_bun_enforcement: Array<{ rule_id: string; disposition?: string }> };
@@ -57,13 +70,13 @@ async function sourceFiles(dir: string): Promise<string[]> {
 const RULE_LITERAL = /["'`]((?:planner|coder|tester|traceability|atdd-bun)\.[a-z0-9-]+(?:\.[a-z0-9-]+)+)["'`]/g;
 const withoutComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
 
-test("every rule id written in detector or package source is declared, so no emission path escapes", async () => {
-  const declared = await declaredRules(), undeclared = new Set<string>();
-  for (const file of [...await sourceFiles(join(root, "detectors")), ...await sourceFiles(join(root, "src"))])
+test("every enforceable rule id written in detector or package source is declared, so no emission path escapes", async () => {
+  const [declared, policies] = await Promise.all([declaredRules(), policyConventionIds(join(root, "conventions"))]), undeclared = new Set<string>();
+  for (const [directory, allowPolicy] of [["detectors", false], ["src", true]] as const) for (const file of await sourceFiles(join(root, directory)))
     for (const match of withoutComments(await readFile(file, "utf8")).matchAll(RULE_LITERAL)) {
       const id = match[1];
       if (/\.(ts|js|mjs|json|ya?ml|md|adoc)$/.test(id) || id.startsWith("planner.kernel.")) continue; // a file name, or an internal kernel id
-      if (!declared.has(id)) undeclared.add(`${id} (${file.slice(root.length + 1)})`);
+      if (!declared.has(id) && !(allowPolicy && policies.has(id))) undeclared.add(`${id} (${file.slice(root.length + 1)})`);
     }
   expect([...undeclared].sort()).toEqual([]);
 });
