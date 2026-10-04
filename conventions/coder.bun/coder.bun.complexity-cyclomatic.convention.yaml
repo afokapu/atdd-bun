@@ -26,12 +26,33 @@ content:
   normative_text: |
     The obligation and its arithmetic are unchanged from the Python realization — deliberately, because a repo that switches providers must not see its numbers move. What changes is only WHO runs the count.
     Cyclomatic complexity is a proxy for how many test cases a function needs before its behaviour is pinned. Above roughly ten paths, complete coverage stops being written, and the untested paths are where defects settle.
+    Treat the score as a sensor for too many independent decisions inside one responsibility, not as an invitation to disguise branching. A useful refactor makes the decision structure easier to name, test, and reason about; moving the same decision tree behind another call or encoding it opaquely only hides the signal.
   fix_hint: |
-    Reduce the branching of the flagged function:
+    Diagnose which decisions belong together before reducing the score.
 
-      * extract nested decision blocks into named helpers,
-      * replace long if / else-if ladders or switch arms with a dispatch map,
-      * collapse compound &&/||/?? conditions into well-named predicates.
+    Diagnose:
+      * group branches by the policy or responsibility they implement,
+      * distinguish validation and guard conditions from the core operation,
+      * identify repeated compound conditions that represent a domain predicate.
+
+    Prefer:
+      * extract a coherent decision or policy into an intention-revealing function,
+      * replace repeated compound conditions with well-named predicates,
+      * use a dispatch table or strategy only when the domain genuinely represents a stable mapping from a key to behavior,
+      * keep the caller's control flow readable enough to reveal the important choices.
+
+    Avoid:
+      * moving the same branch tree unchanged into a generically named helper,
+      * replacing readable control flow with indirect data structures solely to lower the measured score,
+      * scattering one policy across many tiny functions whose interaction is harder to follow than the original,
+      * changing boolean semantics, branch order, or fallback behavior while refactoring.
+
+    Verify:
+      * existing behavior and path-focused tests remain green,
+      * the triggering complexity violation is gone,
+      * extracted code does not create a new nesting, duplication, or length violation,
+      * the resulting decision boundaries correspond to meaningful responsibilities,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - Functions with fewer than 3 code lines are not scored.
   - Test files and vendored/build directories are outside the scan.

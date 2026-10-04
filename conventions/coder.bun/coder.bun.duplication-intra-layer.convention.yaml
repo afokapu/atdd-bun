@@ -26,8 +26,32 @@ content:
   normative_text: |
     Normalization is what makes the rule useful: because identifiers are folded, renaming a variable does not hide a duplicate, so the fingerprint tracks STRUCTURE rather than text.
     The intra-layer restriction is equally deliberate. The same shape appearing in `domain/` and in `presentation/` is usually two different obligations that happen to look alike, and merging them couples layers that should move independently. Twice inside one layer is the shape that genuinely wanted extracting.
+    Treat a duplicate fingerprint as a sensor that two sites may share one responsibility or change reason. The goal is not to make the fingerprints differ; it is to decide whether the two fragments represent one concept that should be owned once or two concepts whose real semantic differences should remain independent.
   fix_hint: |
-    Extract the duplicated fragment into a shared function within that layer and call it from both sites. If the two copies are drifting apart on purpose, they are not duplicates — make the difference explicit so the normalized fingerprints stop matching.
+    Compare the duplicated sites semantically before extracting anything.
+
+    Diagnose:
+      * determine whether both fragments implement the same responsibility and should change for the same reason,
+      * identify the smallest stable behavior they genuinely share,
+      * check that the shared behavior belongs inside the same architectural layer.
+
+    Prefer:
+      * extract a focused function or module within that layer when both sites represent one concept,
+      * give the shared behavior a domain- or responsibility-revealing name,
+      * when the sites represent different responsibilities, preserve their independence and express any real semantic differences directly.
+
+    Avoid:
+      * renaming identifiers, changing literals, reordering harmless statements, or making other cosmetic edits solely to defeat normalization,
+      * creating a cross-layer abstraction just because two layers contain similar-shaped code,
+      * extracting a highly parameterized generic helper that obscures the two callers' intent,
+      * forcing distinct responsibilities into one abstraction merely to remove the finding.
+
+    Verify:
+      * existing behavior and tests remain green,
+      * the duplicate is removed because ownership became clearer or because genuine semantic differences are now explicit,
+      * dependency direction and layer boundaries remain valid,
+      * the extracted abstraction has one coherent reason to change,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - Test, spec, and `.d.ts` files are excluded, as are `index.ts` barrels and `__tests__` directories.
   - Trivial lines (bare braces, closing punctuation) are not counted toward the 7.

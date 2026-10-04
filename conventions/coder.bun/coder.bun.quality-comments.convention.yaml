@@ -23,8 +23,32 @@ content:
   normative_text: |
     A ratio is a blunt instrument for a quality that is not quantitative, and it is used here for one narrow reason: a file with NO comments at all is common and is almost always a file whose non-obvious decisions were never written down. Ten percent is low enough that any file with a real header and a few explanatory lines clears it.
     The rule cannot tell a good comment from a bad one. It is a floor against absence, not a measure of quality, and it should not be read as encouragement to restate code in prose.
+    Treat the ratio as a sensor for missing design context, not as a prose quota. A successful repair leaves future readers with information the code itself cannot communicate; filler text that merely increases the numerator satisfies the arithmetic while making the source worse.
   fix_hint: |
-    Explain the decisions the code cannot state: why this approach over the obvious one, what invariant the block maintains, which upstream constraint forces the shape. In a Bun + htmx file the GREEN header already contributes several lines toward the ratio.
+    Find the decisions and constraints that are currently invisible to a reader.
+
+    Diagnose:
+      * identify why the module exists and which responsibility it owns,
+      * identify non-obvious invariants, upstream constraints, compatibility choices, or failure semantics,
+      * identify places where the obvious implementation was intentionally not chosen.
+
+    Prefer:
+      * document why a design choice exists, what invariant a block preserves, or which external constraint forces the shape,
+      * use a concise module or GREEN header when it communicates real purpose and runtime context,
+      * place explanation next to the decision it clarifies.
+
+    Avoid:
+      * comments that simply restate the next line of code,
+      * filler, generated prose, repeated headings, or artificially split comment lines added to raise the ratio,
+      * commenting out dead code instead of deleting it,
+      * changing otherwise cohesive code solely to manipulate the denominator.
+
+    Verify:
+      * every added comment conveys information not already obvious from the code,
+      * stale or misleading comments are not introduced,
+      * the comment-ratio finding is gone,
+      * behavior remains unchanged and tests stay green,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - Blank lines are excluded from both numerator and denominator.
   - Continuation lines beginning `*` inside a block comment count as comment lines.

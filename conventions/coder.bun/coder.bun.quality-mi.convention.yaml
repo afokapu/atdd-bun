@@ -26,8 +26,32 @@ content:
   normative_text: |
     MI is a composite, and that is the point: a file can pass every per-function threshold and still be unmaintainable through sheer accumulated size and operator density. MI is the only rule here that judges the FILE rather than its parts.
     It is an approximation and is treated as one — the threshold of 20 is set low enough that a score below it indicates a file nobody should be asked to modify, not a file that is merely imperfect.
+    Treat a low score as a sensor for accumulated responsibilities and information density at file scope. Because MI combines size, branching, operator density, and comments, optimizing one term mechanically can improve the number without making the module easier to change; the repair should improve cohesion and ownership first.
   fix_hint: |
-    Split the file. MI falls fastest with the log of line count, so extracting a cohesive half into its own module raises both halves at once. Adding comments also raises the score, but comment density is a weaker term than size and should not be used as the remedy.
+    Diagnose why the file has accumulated too much responsibility before optimizing the score.
+
+    Diagnose:
+      * identify cohesive responsibilities that change for different reasons,
+      * identify large decision-heavy regions and repeated logic that dominate the file,
+      * identify whether missing design context contributes to the file being hard to modify.
+
+    Prefer:
+      * extract a cohesive responsibility into its own module with a clear ownership boundary,
+      * simplify genuinely complex or duplicated logic as part of that extraction,
+      * add comments only where they explain real decisions or invariants.
+
+    Avoid:
+      * adding filler comments merely to improve the formula's comment term,
+      * splitting a file at an arbitrary line boundary or into tiny fragments solely to reduce LOC,
+      * moving complexity unchanged into a sibling module,
+      * introducing a generalized abstraction unrelated to the responsibilities already present.
+
+    Verify:
+      * existing behavior and tests remain green,
+      * the resulting modules each have a coherent reason to change,
+      * the triggering MI finding is gone without creating length, complexity, duplication, or dependency-flow violations,
+      * dependency direction remains consistent with the existing architecture,
+      * the refactor introduces no new ATDD Bun violations.
   exceptions:
   - Files that produce zero code lines after comment stripping score 100 and never fail.
   - The score is clamped to the 0..100 range.
