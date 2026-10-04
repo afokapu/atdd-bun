@@ -33,10 +33,10 @@ export async function initializeRepository(root = process.cwd(), replace = false
 
   const existingAgent = await agentStatus(root);
   const agent = replace || !existingAgent.ok ? await agentInit(root, replace) : existingAgent;
-  if (!agent.ok) return { ok: false, message: `agent skill: ${agent.message}` };
+  if (!agent.ok) return { ok: false, message: `agent instructions: ${agent.message}` };
 
   const existingIntegrity = await integrityStatus(root);
   const integrity = replace || !existingIntegrity.ok ? await integrityInit(root, replace) : existingIntegrity;
   if (!integrity.ok) return { ok: false, message: `integrity test: ${integrity.message}` };
-  return { ok: true, message: `hooks: ${hooks.message}\nCI workflow: ${ci.message}\nagent skill: ${agent.message}\nintegrity test: ${integrity.message}\npolicy: ${policy.message}` };
+  return { ok: true, message: `hooks: ${hooks.message}\nCI workflow: ${ci.message}\nagent instructions: ${agent.message}\nintegrity test: ${integrity.message}\npolicy: ${policy.message}` };
 }

@@ -10,11 +10,11 @@ async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
 
 async function worktreeLayout() {
-  const container = await mkdtemp(join(tmpdir(), "atdd-bun-layout-")), main = join(container, "main");
+  const container = await mkdtemp(join(tmpdir(), "atdd-bun-layout-")), main = join(container, "repository");
   await mkdir(main); for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "worktree@test"], ["config", "user.name", "Worktree"]]) await git(main, args);
-  await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n  root: ../worktrees\n  primary_directory: main\n  primary_branch: main\n  require_linked_worktree: true\n");
+  await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n");
   await writeFile(join(main, "readme.md"), "init\n"); await git(main, ["add", "."]); await git(main, ["commit", "-qm", "init"]);
-  return { container, main, worktrees: join(container, "worktrees") };
+  return { container, main, worktrees: join(container, "worktrees", "repository") };
 }
 
 test("real Git installation is idempotent, worktree-local, and removable", async () => {

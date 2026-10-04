@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
 
 export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "all";
+export type ConcreteProfile = Exclude<Profile, "all">;
 
 export type Violation = {
   rule_id: string;
@@ -22,7 +23,7 @@ export type EnforcementConfig = {
   profiles?: Profile[];
 };
 
-const profiles: Record<Exclude<Profile, "all">, string[]> = {
+export const profileImplementations: Record<ConcreteProfile, string[]> = {
   traceability: ["atdd_traceability_closure"],
   topology: ["atdd_topology"],
   docs: ["planner_docs_capability"],
@@ -39,9 +40,8 @@ const profiles: Record<Exclude<Profile, "all">, string[]> = {
   design: ["bun_design_system_detector", "bun_responsive_detector"],
 };
 
-type ConcreteProfile = Exclude<Profile, "all">;
 /** Every profile but `all`. */
-export const concreteProfiles = Object.keys(profiles) as ConcreteProfile[];
+export const concreteProfiles = Object.keys(profileImplementations) as ConcreteProfile[];
 /** Profile names accepted by the CLI and public integrations. */
 export const profileNames = [...concreteProfiles, "all"] as Profile[];
 
@@ -68,10 +68,10 @@ export function implementationsFor(requested: Profile[] = ["all"]): string[] {
   const selected = new Set<string>();
   for (const profile of requested) {
     if (profile === "all") {
-      for (const ids of Object.values(profiles)) ids.forEach((id) => selected.add(id));
+      for (const ids of Object.values(profileImplementations)) ids.forEach((id) => selected.add(id));
       continue;
     }
-    const ids = profiles[profile];
+    const ids = profileImplementations[profile];
     if (!ids) throw new Error(`unknown enforcement profile: ${profile}`);
     ids.forEach((id) => selected.add(id));
   }
@@ -79,10 +79,10 @@ export function implementationsFor(requested: Profile[] = ["all"]): string[] {
 }
 
 /** The rule ids a detector's manifest declares it emits (emits_rule_ids and api_emits_rule_ids). */
-export async function declaredRuleIds(implementation: string): Promise<Set<string>> {
+export async function declaredRuleIds(implementation: string, detectors = detectorRoot): Promise<Set<string>> {
   const ids = new Set<string>();
   let inList = false;
-  for (const line of (await readFile(join(detectorRoot, implementation, "atdd.implementation.yaml"), "utf8")).split("\n")) {
+  for (const line of (await readFile(join(detectors, implementation, "atdd.implementation.yaml"), "utf8")).split("\n")) {
     if (line === "emits_rule_ids:" || line === "api_emits_rule_ids:") { inList = true; continue; }
     if (/^[A-Za-z_][\w-]*:/.test(line)) { inList = false; continue; }
     const match = inList && line.match(/^\s*-\s+([^#\s]+)/);

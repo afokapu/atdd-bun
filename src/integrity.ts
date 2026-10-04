@@ -18,7 +18,6 @@ const PACKAGE = "@afokapu/atdd-bun";
 const ownRoot = resolve(import.meta.dir, "..");
 export const MANIFEST = "integrity.json";
 export const TEST_FILE = "atdd-bun.integrity.test.ts";
-const SKILLS = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"];
 const WORKFLOW = ".github/workflows/atdd-bun.yml";
 const BLOCK = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->/;
 // Generated files carry the version that wrote them; an upgrade must not read as tampering.
@@ -99,7 +98,6 @@ async function checkGenerated(root: string, packageRoot: string, skipWorkflow = 
   if (skipWorkflow) { /* rendered from atdd-bun.yaml, which does not parse: reported by the caller */ }
   else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
   else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
-  for (const skill of SKILLS) await same(skill, "templates/agents/atdd/SKILL.md", "bun run atdd-bun agent init --replace");
   await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
   const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {

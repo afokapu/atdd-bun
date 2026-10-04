@@ -17,5 +17,6 @@ export type { Gap, Journey, JourneyModel, JourneyPath } from "./journey-docs";
 export { checkIntegrity, checkInstalledPackage, formatIntegrity, integrityInit, loosenedPolicy, writeManifest } from "./integrity";
 export type { IntegrityFinding, IntegrityOptions } from "./integrity";
 export { releaseCheck } from "./release";
+export { profileRegistries, renderProfileRegistries, PROFILE_REGISTRY_DIR } from "./profile-registry";
 export { defaultTopology, topologyFor } from "./topology";
 export type { Topology } from "./topology";

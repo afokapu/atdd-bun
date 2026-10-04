@@ -23,3 +23,9 @@ test("help exposes the command inventory and failures route users to it", async 
   expect(unknown.exitCode).toBe(1);
   expect(unknown.stderr).toContain("atdd-bun help");
 });
+
+test("profile registry generation can be checked through the CLI", async () => {
+  const result = await run("profiles", "registry", "--check");
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout).toContain("profile registries are current");
+});

@@ -19,8 +19,8 @@ bun run atdd-bun init
 ```
 
 `init` installs the Git hooks (`.githooks/`), the CI workflow (`.github/workflows/atdd-bun.yml`),
-the agent skill (`.agents/skills/atdd/`, `.claude/skills/atdd/`), a managed block in `AGENTS.md`
-and `CLAUDE.md`, and `atdd-bun.integrity.test.ts`. Commit all of them. Nothing is overwritten
+a managed block in `AGENTS.md` and `CLAUDE.md`, and `atdd-bun.integrity.test.ts`. Commit all of
+them. Nothing is overwritten
 without `--replace`, and adding the dependency changes nothing until you run `init`.
 
 Then require the workflow's job in the GitHub branch ruleset, so it gates merges.
@@ -33,7 +33,8 @@ Then require the workflow's job in the GitHub branch ruleset, so it gates merges
 | `atdd-bun init [--replace]` | Install hooks, CI, agent files and the integrity test |
 | `atdd-bun hooks <install\|uninstall\|status>` | Manage only the Git hooks |
 | `atdd-bun ci <init\|status>` | Manage only the CI workflow |
-| `atdd-bun agent <init\|status>` | Manage only the skills and the `AGENTS.md`/`CLAUDE.md` block |
+| `atdd-bun agent <init\|status>` | Manage the `AGENTS.md`/`CLAUDE.md` instruction block |
+| `atdd-bun profiles registry [--check]` | Generate (or verify) deterministic profile-scoped convention registries |
 | `atdd-bun integrity [init\|status]` | Check that the toolkit and its generated files are unmodified |
 | `atdd-bun docs journeys [--check]` | Generate (or verify) the journey, interlocking and train views |
 | `atdd-bun worktree <start\|finish\|status>` | Optional linked-worktree policy for agent work |
@@ -104,9 +105,11 @@ frontend:
   breakpoints: [480, 768, 1024, 1280]
 registry_paths: ["plan/_*.yaml", "contracts/_*.yaml"]   # exempt from micro-commit size caps only
 max_registry_removed_lines: 350                        # larger removals need [mass-delete-approved]
-worktrees: { enabled: false }
+worktrees: { enabled: false }                 # enabled defaults to ~/Github/worktrees/<repo>/...
 release: { enabled: false }
 ```
+
+When enabled without overrides, a primary checkout at `~/Github/<repo>` uses linked worktrees at `~/Github/worktrees/<repo>/<branch>`. The defaults use `primary_directory: .` (the current primary checkout) and `root: ../worktrees/{repo}`; `{repo}` expands to the primary checkout's directory name. Repositories that need another layout can set either field explicitly.
 
 ## Docs-site theme
 
@@ -125,16 +128,17 @@ To re-theme it, override its custom properties (`--paper`, `--ink`, `--accent`, 
 
 ## Agents and integrity
 
-The skill gives every coding agent the lifecycle PLAN → RED → GREEN → SMOKE → REFACTOR → TRACE and
-the profile that gates each stage. The block in `AGENTS.md` and `CLAUDE.md` adds the rules: never
-modify the toolkit itself, only the configuration it offers; turn profiles on or off in
-`profiles:` only when the user asks.
+The managed block directs an agent to the profile-preset convention, then to the selected profile's
+generated registry under `conventions/_profiles/`. Each registry is a deterministic projection of
+the profile's detector manifests, convention paths, and direct relationship edges, so the agent
+opens only the conventions relevant to its task. It also prevents the agent from modifying the
+toolkit or changing profile activation without the user's choice.
 
 `atdd-bun integrity`, run by the generated test and first in CI on a clean install, fails when:
 
 - the installed package differs from its published hashes;
 - the dependency is not an npm registry version;
-- a generated file (workflow, skills, instruction block, integrity test) was edited;
+- a generated file (workflow, instruction block, integrity test) was edited;
 - `atdd-bun.yaml` is looser than on the base branch (after the first explicit `profiles:` list,
   dropping a profile or the list counts).
 
@@ -144,7 +148,7 @@ Each finding names its restore command.
 
 Every merge to this package's `main` is published to npm with provenance as the next patch and
 tagged `vX.Y.Z`. Rules and hooks change as soon as a repository upgrades the dependency. To refresh
-the skills and instruction blocks on every install, add this to the repository's own
+the managed instruction blocks on every install, add this to the repository's own
 `package.json`:
 
 ```json
