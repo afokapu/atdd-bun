@@ -134,6 +134,12 @@ the profile's detector manifests, convention paths, and direct relationship edge
 opens only the conventions relevant to its task. It also prevents the agent from modifying the
 toolkit or changing profile activation without the user's choice.
 
+For a live ATDD Flow Desk, that managed block additionally requires the provisioned `atdd-flow`
+command: an agent must not use `bunx` to fetch another Flow version, initialize an existing Desk,
+or rewrite a Desk/project/seat/runtime record to work around a missing command or a pane mismatch.
+It reports the prerequisite or binding problem to the operator/coordinator instead. Refresh an
+existing consumer's managed block with `bun run atdd-bun agent init --replace` after upgrading.
+
 `atdd-bun integrity`, run by the generated test and first in CI on a clean install, fails when:
 
 - the installed package differs from its published hashes;
