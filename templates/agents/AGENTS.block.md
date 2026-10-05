@@ -5,7 +5,9 @@ This project uses two mandatory toolkits for governed work: `@afokapu/atdd-flow`
 
 General discussion may proceed without either toolkit. Project status, analysis, research, planning, task work, or repository changes are governed work.
 
-For governed work, first use ATDD Flow to validate the available Desk and read its status. If no valid Desk is available, stop governed work: propose `atdd-flow init <desk-directory> --git`, ask the operator to choose and authorize the Desk directory, then have its path supplied through `ATDD_WORKFLOW_ROOT` or `--root`. Do not create, choose, or reconfigure a Desk yourself. A specific operator authorization may waive a named gate, never all gates.
+For governed work, first use the installed `atdd-flow` command to validate the available Desk and read its status. Treat the Desk path and host/session binding already supplied by the operator as authoritative. If the command or a valid Desk is unavailable, stop governed work and report the missing prerequisite; do not use `bunx` or any other package runner to fetch a replacement Flow CLI in a live Desk. A runner can select an older package version and bypass the operator's configured runtime binding.
+
+`atdd-flow init` is only for an operator-authorized, new empty Desk directory. Never run it against an existing Desk, and never rewrite `desk.yaml`, a project record, seat record, or runtime binding merely to make a command work. Do not create, choose, or reconfigure a Desk yourself. If the current seat, role, or native pane binding does not match the Desk record, report the mismatch to the operator or coordinator and use durable threads after they repair the binding. A specific operator authorization may waive a named gate, never all gates.
 
 The operator—or an assigned coordinator with delegated authority—selects and authorizes the applicable ATDD Bun profile. Until then, do not inspect, research, plan, or change the repository. Do not change profile configuration without that authorization.
 

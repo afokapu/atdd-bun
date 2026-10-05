@@ -18,11 +18,11 @@ test("agent init writes one managed instruction block, preserving existing conte
     expect((await agentInit(root)).ok).toBeTrue();
     const agents = await readFile(join(root, "AGENTS.md"), "utf8");
     expect(agents.startsWith("# Team rules\n\n<!-- atdd-bun:start")).toBeTrue();
-    for (const text of ["two mandatory toolkits", "@afokapu/atdd-flow", "General discussion", "governed work", "ATDD_WORKFLOW_ROOT", "atdd-flow init <desk-directory> --git", "Do not create, choose, or reconfigure a Desk yourself", "assigned coordinator with delegated authority", "explicitly authorized scope"]) expect(agents).toContain(text);
+    for (const text of ["two mandatory toolkits", "@afokapu/atdd-flow", "General discussion", "governed work", "installed `atdd-flow` command", "do not use `bunx`", "older package version", "`atdd-flow init` is only", "Never run it against an existing Desk", "native pane binding", "Do not create, choose, or reconfigure a Desk yourself", "assigned coordinator with delegated authority", "explicitly authorized scope"]) expect(agents).toContain(text);
     // Claude Code reads CLAUDE.md: the same block, saying what an agent may change.
     const claude = await readFile(join(root, "CLAUDE.md"), "utf8"), managed = /<!-- atdd-bun:start[\s\S]*<!-- atdd-bun:end -->/;
     expect(claude.match(managed)?.[0]).toBe(agents.match(managed)?.[0]);
-    for (const text of ["two mandatory toolkits", "@afokapu/atdd-flow", "governed work", "ATDD_WORKFLOW_ROOT", "atdd-flow init <desk-directory> --git", "Do not create, choose, or reconfigure a Desk yourself", "explicitly authorized scope"]) expect(claude).toContain(text);
+    for (const text of ["two mandatory toolkits", "@afokapu/atdd-flow", "governed work", "installed `atdd-flow` command", "do not use `bunx`", "Never run it against an existing Desk", "native pane binding", "Do not create, choose, or reconfigure a Desk yourself", "explicitly authorized scope"]) expect(claude).toContain(text);
     expect((await agentInit(root)).ok).toBeFalse();
     const skill = join(root, ".claude/skills/atdd/SKILL.md");
     await mkdir(join(root, ".claude/skills/atdd"), { recursive: true }); await writeFile(skill, "retired\n");
