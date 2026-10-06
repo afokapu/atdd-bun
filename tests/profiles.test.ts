@@ -31,6 +31,14 @@ test("the optional flow profile is available only by explicit adoption", async (
   expect(await enforce({ root, profiles: ["flow"] })).toEqual([]);
 });
 
+test("legacy workflow configuration normalizes to canonical flow without weakening unknown-profile validation", async () => {
+  const root = await repo({ "atdd-bun.yaml": "profiles: [workflow]\n" });
+  expect(await enabledProfiles(root)).toEqual(["flow"]);
+  expect(await enforce({ root, profiles: ["all"] })).toEqual(await enforce({ root, profiles: ["flow"] }));
+  await writeFile(join(root, "atdd-bun.yaml"), "profiles: [workflow, not-a-profile]\n");
+  await expect(enforce({ root })).rejects.toThrow("unknown profile(s): not-a-profile");
+});
+
 test("retired delivery and workflow profiles may migrate only to flow", () => {
   expect(loosenedPolicy({ profiles: ["delivery"] }, { profiles: ["flow"] })).toEqual([]);
   expect(loosenedPolicy({ profiles: ["workflow"] }, { profiles: ["flow"] })).toEqual([]);

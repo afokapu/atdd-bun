@@ -15,6 +15,16 @@ test("profiles are direct CLI selectors and the compatibility flag still works",
   expect((await run("--profile", "planner", "--root", fixture)).exitCode).toBe(0);
 });
 
+test("legacy workflow CLI selection normalizes to flow and gives local-upgrade guidance", async () => {
+  const canonical = await run("flow", "--root", fixture);
+  const legacy = await run("workflow", "--root", fixture);
+  expect(legacy.exitCode).toBe(canonical.exitCode);
+  expect(legacy.stdout).toBe(canonical.stdout);
+  expect(legacy.stderr).toContain("canonical flow");
+  expect(legacy.stderr).toContain("older than 0.10.45");
+  expect(legacy.stderr).toContain("bun run atdd-bun flow --root .");
+});
+
 test("help exposes the command inventory and failures route users to it", async () => {
   const help = await run("help", "--json");
   expect(help.exitCode).toBe(0);

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { enforce, profileNames, type Profile } from "./enforce";
+import { enforce, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
@@ -118,9 +118,11 @@ for (let index = 0; index < args.length; index += 1) {
 const profileValue = args.includes("--profile") ? valueAfter("--profile") : undefined;
 if (args.includes("--profile") && !profileValue) fail("--profile requires one or more comma-separated profiles");
 const requested = profileValue ? profileValue.split(",").filter(Boolean) : positional.length ? positional : ["all"];
-const invalid = requested.find(profile => !profileNames.includes(profile as Profile));
+const normalizedRequested = requested.map(normalizeProfileName);
+const invalid = normalizedRequested.find(profile => !profileNames.includes(profile as Profile));
 if (invalid) fail("unknown command or profile: " + invalid);
-const violations = await enforce({ root, profiles: requested as Profile[] });
+if (requested.includes("workflow")) console.error(flowCompatibilityDiagnostic);
+const violations = await enforce({ root, profiles: normalizedRequested as Profile[] });
 for (const violation of violations) {
   console.error([violation.file, violation.line, violation.col].join(":") + " " + violation.rule_id + " — " + violation.evidence);
 }
