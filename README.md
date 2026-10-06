@@ -61,6 +61,7 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 | `interlocking` | train/interlocking binding, infrastructure and route coverage |
 | `htmx` | htmx source/test conventions and Playwright browser specs (`*.e2e.ts`) |
 | `design` | design-system layering, token-only styling and responsiveness |
+| `flow` | optional ATDD Flow companion conventions for durable seats, tasks and threads |
 | `all` | every activated profile; what the hooks and CI run |
 
 `planner-nodes/ENFORCEMENT_SCOPE.yaml` says which canonical planner rules have a Bun realization.
@@ -79,6 +80,16 @@ profiles: [traceability, planner]
 `all`, the hooks and the generated CI then run only those profiles. Any profile can still be run
 by name (`bun run atdd-bun coder`) to see what remains. An unknown name or an empty list is an
 error, never a silent run of nothing.
+
+### Flow profile compatibility
+
+`flow` is the canonical optional profile name. For a compatible upgrade, a legacy explicit
+`workflow` entry in `atdd-bun.yaml`, or a direct `bun run atdd-bun workflow`, normalizes to
+`flow`; it does not make unrelated names valid. `flow` requires `@afokapu/atdd-bun` **0.10.45 or
+newer**. If a checkout reports that `flow` is unknown, it is running a stale toolkit: run
+`bun update @afokapu/atdd-bun`, then use the repository-local command
+`bun run atdd-bun flow --root .` (never a PATH-global `atdd-bun`). Keep `flow` in newly edited
+configuration.
 
 With no `profiles:` field, every profile runs, but none is governed yet. The first explicit list is
 the adoption that establishes the governed set, so a brownfield repository can declare

@@ -60,6 +60,16 @@ export const optionalProfiles: ConcreteProfile[] = ["flow"];
 export const defaultProfiles = concreteProfiles.filter(profile => !optionalProfiles.includes(profile));
 /** Profile names accepted by the CLI and public integrations. */
 export const profileNames = [...concreteProfiles, "all"] as Profile[];
+/** Retired spellings accepted only to migrate old configuration and invocations to their canonical profile. */
+export const legacyProfileAliases = { workflow: "flow" } as const;
+
+/** Normalize a supported retired spelling without making it part of the canonical profile registry. */
+export function normalizeProfileName(name: string): string {
+  return legacyProfileAliases[name as keyof typeof legacyProfileAliases] ?? name;
+}
+
+/** Guidance for a repository that was configured during the workflow → flow rename. */
+export const flowCompatibilityDiagnostic = "Legacy profile workflow is normalized to canonical flow. If this checkout reports flow as unknown, it is using @afokapu/atdd-bun older than 0.10.45; run bun update @afokapu/atdd-bun, then invoke the project-local CLI with bun run atdd-bun flow --root . (not a PATH-global atdd-bun).";
 
 /**
  * The profiles the operator has activated: `profiles:` in atdd-bun.yaml, or every built-in profile when absent. A legacy
@@ -72,9 +82,10 @@ export async function enabledProfiles(root = process.cwd()): Promise<ConcretePro
   const listed = existsSync(file) ? (Bun.YAML.parse(await readFile(file, "utf8")) as { profiles?: unknown } | null)?.profiles : undefined;
   if (listed === undefined) return defaultProfiles;
   if (!Array.isArray(listed) || !listed.length) throw new Error("atdd-bun.yaml profiles must be a non-empty list of profile names");
-  const unknown = listed.filter(name => !concreteProfiles.includes(name));
+  const normalized = listed.map(name => typeof name === "string" ? normalizeProfileName(name) : name);
+  const unknown = normalized.filter(name => typeof name !== "string" || !concreteProfiles.includes(name as ConcreteProfile));
   if (unknown.length) throw new Error(`atdd-bun.yaml profiles lists unknown profile(s): ${unknown.join(", ")}; known: ${concreteProfiles.join(", ")}`);
-  return [...new Set(listed as ConcreteProfile[])];
+  return [...new Set(normalized as ConcreteProfile[])];
 }
 
 const packageRoot = resolve(import.meta.dir, "..");
