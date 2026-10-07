@@ -1,5 +1,10 @@
 #!/usr/bin/env bun
-import { enforce, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
+import { enforce, enabledProfiles, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
+import { compareFindings, contextDigest, parseRatchetPolicy } from "./ratchet";
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, relative, resolve } from "node:path";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
@@ -14,7 +19,7 @@ const args = process.argv.slice(2);
 const usage = {
   command: "atdd-bun",
   usage: [
-    "atdd-bun [profile ...] [--root <path>]",
+    "atdd-bun [profile ...] [--root <path>] [--ratchet --base <full-sha>]", 
     "atdd-bun init [--replace]",
     "atdd-bun hooks <install|uninstall|status> [--replace]",
     "atdd-bun worktree <start|finish|status>",
@@ -109,10 +114,11 @@ if (args[0] === "release") {
 const valueAfter = (flag: string) => args[args.indexOf(flag) + 1];
 const root = args.includes("--root") ? valueAfter("--root") : process.cwd();
 if (args.includes("--root") && !root) fail("--root requires a path");
+if (args.includes("--base") && !valueAfter("--base")) fail("--base requires a full commit SHA");
 const positional: string[] = [];
 for (let index = 0; index < args.length; index += 1) {
   const arg = args[index];
-  if (arg === "--root" || arg === "--profile") { index += 1; continue; }
+  if (arg === "--root" || arg === "--profile" || arg === "--base") { index += 1; continue; }
   if (!arg.startsWith("-")) positional.push(arg);
 }
 const profileValue = args.includes("--profile") ? valueAfter("--profile") : undefined;
@@ -122,9 +128,48 @@ const normalizedRequested = requested.map(normalizeProfileName);
 const invalid = normalizedRequested.find(profile => !profileNames.includes(profile as Profile));
 if (invalid) fail("unknown command or profile: " + invalid);
 if (requested.includes("workflow")) console.error(flowCompatibilityDiagnostic);
-const violations = await enforce({ root, profiles: normalizedRequested as Profile[] });
-for (const violation of violations) {
-  console.error([violation.file, violation.line, violation.col].join(":") + " " + violation.rule_id + " — " + violation.evidence);
+const printViolations = (violations: Awaited<ReturnType<typeof enforce>>) => {
+  for (const violation of violations) console.error([violation.file, violation.line, violation.col].join(":") + " " + violation.rule_id + " — " + violation.evidence);
+};
+const configAt = async (directory: string) => {
+  const file = join(directory, "atdd-bun.yaml");
+  return existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown> : {};
+};
+const git = async (directory: string, gitArgs: string[]) => {
+  const child = Bun.spawn({ cmd: ["git", ...gitArgs], cwd: directory, stdout: "pipe", stderr: "pipe" });
+  return { code: await child.exited, out: (await new Response(child.stdout).text()).trim(), err: (await new Response(child.stderr).text()).trim() };
+};
+const stable = (items: string[]) => [...new Set(items)].sort();
+if (!args.includes("--ratchet")) {
+  const violations = await enforce({ root, profiles: normalizedRequested as Profile[] });
+  printViolations(violations);
+  if (violations.length) console.error("\nUse the rule ID and evidence above to correct the affected artifact. Run atdd-bun help for commands and profiles.");
+  process.exitCode = violations.length ? 1 : 0;
+} else {
+  const base = valueAfter("--base");
+  if (!base || !/^[0-9a-f]{40}$/i.test(base)) fail("--ratchet requires --base <full-40-character-sha>");
+  const candidateRoot = resolve(root), candidateConfig = await configAt(candidateRoot), policy = parseRatchetPolicy(candidateConfig);
+  if (!policy) fail("--ratchet requires an explicit atdd-bun.yaml ratchet policy");
+  const candidateProfiles = normalizedRequested.includes("all") ? await enabledProfiles(candidateRoot) : normalizedRequested;
+  if (stable(policy.profiles).join(",") !== stable(candidateProfiles).join(",")) fail("ratchet.profiles must exactly equal the selected profiles");
+  if ((await git(candidateRoot, ["diff", "--quiet"])).code !== 0) fail("--ratchet requires a clean candidate worktree");
+  const resolved = await git(candidateRoot, ["rev-parse", "--verify", `${base}^{commit}`]);
+  if (resolved.code || resolved.out.toLowerCase() !== base.toLowerCase()) fail(`ratchet base ${base} is unavailable or not a full exact commit`);
+  const scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-"));
+  try {
+    const added = await git(candidateRoot, ["worktree", "add", "--detach", "--no-checkout", scratch, base]);
+    if (added.code) fail(`could not materialize ratchet base: ${added.err || added.out}`);
+    const checkedOut = await git(scratch, ["checkout", "--detach", base]);
+    if (checkedOut.code) fail(`could not checkout ratchet base: ${checkedOut.err || checkedOut.out}`);
+    const baseConfig = await configAt(scratch), baseProfiles = normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
+    if (stable(baseProfiles).join(",") !== stable(candidateProfiles).join(",") || contextDigest(baseConfig, baseProfiles) !== contextDigest(candidateConfig, candidateProfiles)) fail("ratchet base and candidate profile/context differ; use a separately governed adoption path");
+    const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);
+    const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: relative(directory, finding.file).replaceAll("\\", "/") }));
+    const delta = compareFindings(normalize(baseFindings, scratch), normalize(candidateFindings, candidateRoot));
+    console.log(JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, candidate: (await git(candidateRoot, ["rev-parse", "HEAD"])).out, profiles: stable(candidateProfiles), context: contextDigest(candidateConfig, candidateProfiles), ...delta }, null, 2));
+    if (policy.mode === "reject-new" && delta.new.length) process.exitCode = 1;
+  } finally {
+    await git(candidateRoot, ["worktree", "remove", "--force", scratch]);
+    await rm(scratch, { recursive: true, force: true });
+  }
 }
-if (violations.length) console.error("\nUse the rule ID and evidence above to correct the affected artifact. Run atdd-bun help for commands and profiles.");
-process.exitCode = violations.length ? 1 : 0;
