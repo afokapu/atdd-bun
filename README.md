@@ -122,6 +122,27 @@ release: { enabled: false }
 
 When enabled without overrides, a primary checkout at `~/Github/<repo>` uses linked worktrees at `~/Github/worktrees/<repo>/<branch>`. The defaults use `primary_directory: .` (the current primary checkout) and `root: ../worktrees/{repo}`; `{repo}` expands to the primary checkout's directory name. Repositories that need another layout can set either field explicitly.
 
+## Exact-base finding ratchet (opt-in)
+
+Strict enforcement is the default: `bun run atdd-bun all` still fails for every finding. A consumer may opt into an exact-base comparison for one explicit profile set:
+
+```yaml
+# atdd-bun.yaml
+ratchet:
+  mode: report       # or reject-new
+  profiles: [coder, tester]
+```
+
+Run it only against a full reviewed base SHA:
+
+```sh
+bun run atdd-bun coder tester --ratchet --base <40-character-reviewed-main-sha>
+```
+
+The command runs the same installed detectors against an isolated exact base and the clean candidate, emits a redacted JSON `carried`/`new`/`resolved` fingerprint report, and never writes or accepts a baseline. `report` records debt without changing command success; `reject-new` exits non-zero only when the candidate adds a finding absent from the equivalent base. The declared `ratchet.profiles` must exactly match the command's effective profiles. Base and candidate profile/context digests must match or comparison fails closed; profile/config adoption is separately governed. Use debt-remediation branches to remove carried findings. Direct implementation profiles can opt in only through this explicit policy and do not alter configured merge profiles or `profiles:`.
+
+Fingerprints are SHA-256 of a versioned rule, normalized repository-relative path, and semantic subject where supplied; line/column, rendered evidence, source text, absolute paths, and runtime data are excluded. Ratchet findings are unrelated to Bun `test.failing()` or JUnit/behavioral-test baselines.
+
 ## Docs-site theme
 
 A repository that publishes its AsciiDoc docs as a site does not need its own theme.
