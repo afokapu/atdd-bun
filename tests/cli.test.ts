@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 import { join, resolve } from "node:path";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 const root = resolve(import.meta.dir, "..");
 const cli = join(root, "src/cli.ts");
@@ -38,4 +40,63 @@ test("profile registry generation can be checked through the CLI", async () => {
   const result = await run("profiles", "registry", "--check");
   expect(result.exitCode).toBe(0);
   expect(result.stdout).toContain("profile registries are current");
+});
+
+const git = async (cwd: string, ...args: string[]) => {
+  const child = Bun.spawn({ cmd: ["git", ...args], cwd, stdout: "pipe", stderr: "pipe" });
+  const out = await new Response(child.stdout).text();
+  await child.exited;
+  return out.trim();
+};
+
+test("ratchet refuses an exact base when finding-affecting context differs", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-cli-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\ntopology: { plan_root: plan }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\ntopology: { plan_root: contracts }\n");
+  await git(repo, "commit", "-am", "different context", "-q");
+  const result = await run("flow", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("profile/context differ");
+});
+
+test("ratchet reject-new fails only candidate findings and emits a delta report", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-delta-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [traceability]\nratchet: { mode: reject-new, profiles: [traceability] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await mkdir(join(repo, "plan"));
+  await Bun.write(join(repo, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate finding");
+  const result = await run("traceability", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", new: [expect.any(String)], carried: [], resolved: [] });
+});
+
+test("ratchet refuses staged or untracked candidate state", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-dirty-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "staged.txt"), "not committed\n"); await git(repo, "add", "staged.txt");
+  const result = await run("flow", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("porcelain-clean");
+});
+
+test("ratchet refuses a base outside candidate history", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-ancestry-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "root");
+  await git(repo, "checkout", "-qb", "side"); await writeFile(join(repo, "side.txt"), "side\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "side");
+  const unrelated = await git(repo, "rev-parse", "HEAD");
+  await git(repo, "checkout", "-q", "main"); await writeFile(join(repo, "candidate.txt"), "candidate\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate");
+  const result = await run("flow", "--root", repo, "--ratchet", "--base", unrelated);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("ancestor of candidate HEAD");
 });
