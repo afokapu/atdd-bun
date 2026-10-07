@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join, resolve } from "node:path";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 const root = resolve(import.meta.dir, "..");
@@ -60,4 +60,18 @@ test("ratchet refuses an exact base when finding-affecting context differs", asy
   const result = await run("flow", "--root", repo, "--ratchet", "--base", base);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("profile/context differ");
+});
+
+test("ratchet reject-new fails only candidate findings and emits a delta report", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-delta-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [traceability]\nratchet: { mode: reject-new, profiles: [traceability] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await mkdir(join(repo, "plan"));
+  await Bun.write(join(repo, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate finding");
+  const result = await run("traceability", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(1);
+  expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", new: [expect.any(String)], carried: [], resolved: [] });
 });
