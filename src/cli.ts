@@ -158,16 +158,22 @@ if (!args.includes("--ratchet")) {
   const scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-"));
   try {
     const added = await git(candidateRoot, ["worktree", "add", "--detach", "--no-checkout", scratch, base]);
-    if (added.code) fail(`could not materialize ratchet base: ${added.err || added.out}`);
-    const checkedOut = await git(scratch, ["checkout", "--detach", base]);
-    if (checkedOut.code) fail(`could not checkout ratchet base: ${checkedOut.err || checkedOut.out}`);
-    const baseConfig = await configAt(scratch), baseProfiles = normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
-    if (stable(baseProfiles).join(",") !== stable(candidateProfiles).join(",") || contextDigest(baseConfig, baseProfiles) !== contextDigest(candidateConfig, candidateProfiles)) fail("ratchet base and candidate profile/context differ; use a separately governed adoption path");
-    const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);
-    const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: relative(directory, finding.file).replaceAll("\\", "/") }));
-    const delta = compareFindings(normalize(baseFindings, scratch), normalize(candidateFindings, candidateRoot));
-    console.log(JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, candidate: (await git(candidateRoot, ["rev-parse", "HEAD"])).out, profiles: stable(candidateProfiles), context: contextDigest(candidateConfig, candidateProfiles), ...delta }, null, 2));
-    if (policy.mode === "reject-new" && delta.new.length) process.exitCode = 1;
+    if (added.code) { console.error(`could not materialize ratchet base: ${added.err || added.out}`); process.exitCode = 1; }
+    else {
+      const checkedOut = await git(scratch, ["checkout", "--detach", base]);
+      if (checkedOut.code) { console.error(`could not checkout ratchet base: ${checkedOut.err || checkedOut.out}`); process.exitCode = 1; }
+      else {
+        const baseConfig = await configAt(scratch), baseProfiles = normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
+        if (stable(baseProfiles).join(",") !== stable(candidateProfiles).join(",") || contextDigest(baseConfig, baseProfiles) !== contextDigest(candidateConfig, candidateProfiles)) { console.error("ratchet base and candidate profile/context differ; use a separately governed adoption path"); process.exitCode = 1; }
+        else {
+          const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);
+          const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: relative(directory, finding.file).replaceAll("\\", "/") }));
+          const delta = compareFindings(normalize(baseFindings, scratch), normalize(candidateFindings, candidateRoot));
+          console.log(JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, candidate: (await git(candidateRoot, ["rev-parse", "HEAD"])).out, profiles: stable(candidateProfiles), context: contextDigest(candidateConfig, candidateProfiles), ...delta }, null, 2));
+          if (policy.mode === "reject-new" && delta.new.length) process.exitCode = 1;
+        }
+      }
+    }
   } finally {
     await git(candidateRoot, ["worktree", "remove", "--force", scratch]);
     await rm(scratch, { recursive: true, force: true });
