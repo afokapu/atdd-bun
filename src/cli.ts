@@ -19,7 +19,7 @@ const args = process.argv.slice(2);
 const usage = {
   command: "atdd-bun",
   usage: [
-    "atdd-bun [profile ...] [--root <path>] [--ratchet --base <full-sha>]", 
+    "atdd-bun [profile ...] [--root <path>] [--ratchet --base <full-sha>]",
     "atdd-bun init [--replace]",
     "atdd-bun hooks <install|uninstall|status> [--replace]",
     "atdd-bun worktree <start|finish|status>",
@@ -152,9 +152,10 @@ if (!args.includes("--ratchet")) {
   if (!policy) fail("--ratchet requires an explicit atdd-bun.yaml ratchet policy");
   const candidateProfiles = normalizedRequested.includes("all") ? await enabledProfiles(candidateRoot) : normalizedRequested;
   if (stable(policy.profiles).join(",") !== stable(candidateProfiles).join(",")) fail("ratchet.profiles must exactly equal the selected profiles");
-  if ((await git(candidateRoot, ["diff", "--quiet"])).code !== 0) fail("--ratchet requires a clean candidate worktree");
+  if ((await git(candidateRoot, ["status", "--porcelain"])).out) fail("--ratchet requires a porcelain-clean candidate worktree");
   const resolved = await git(candidateRoot, ["rev-parse", "--verify", `${base}^{commit}`]);
   if (resolved.code || resolved.out.toLowerCase() !== base.toLowerCase()) fail(`ratchet base ${base} is unavailable or not a full exact commit`);
+  if ((await git(candidateRoot, ["merge-base", "--is-ancestor", base, "HEAD"])).code !== 0) fail("ratchet base must be an ancestor of candidate HEAD");
   const scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-"));
   try {
     const added = await git(candidateRoot, ["worktree", "add", "--detach", "--no-checkout", scratch, base]);

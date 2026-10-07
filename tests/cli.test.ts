@@ -75,3 +75,28 @@ test("ratchet reject-new fails only candidate findings and emits a delta report"
   expect(result.exitCode).toBe(1);
   expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", new: [expect.any(String)], carried: [], resolved: [] });
 });
+
+test("ratchet refuses staged or untracked candidate state", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-dirty-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "staged.txt"), "not committed\n"); await git(repo, "add", "staged.txt");
+  const result = await run("flow", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("porcelain-clean");
+});
+
+test("ratchet refuses a base outside candidate history", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-ancestry-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [flow] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "root");
+  await git(repo, "checkout", "-qb", "side"); await writeFile(join(repo, "side.txt"), "side\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "side");
+  const unrelated = await git(repo, "rev-parse", "HEAD");
+  await git(repo, "checkout", "-q", "main"); await writeFile(join(repo, "candidate.txt"), "candidate\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate");
+  const result = await run("flow", "--root", repo, "--ratchet", "--base", unrelated);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("ancestor of candidate HEAD");
+});
