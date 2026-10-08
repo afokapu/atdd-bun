@@ -62,6 +62,21 @@ test("ratchet refuses an exact base when finding-affecting context differs", asy
   expect(result.stderr).toContain("profile/context differ");
 });
 
+test("explicit profile activation carries legacy findings while judging both exact trees under the expanded profiles", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-activation-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\n");
+  await mkdir(join(repo, "plan"));
+  await Bun.write(join(repo, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "partial base with debt");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+  await git(repo, "commit", "-am", "explicit full profile activation", "-q");
+  const result = await run("--profile", "flow,traceability", "--root", repo, "--ratchet", "--ratchet-activate-profiles", "--base", base);
+  expect(result.exitCode).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+});
+
 test("ratchet reject-new fails only candidate findings and emits a delta report", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-delta-"));
   await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");

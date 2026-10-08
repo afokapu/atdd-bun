@@ -37,6 +37,17 @@ export function contextDigest(config: Record<string, unknown>, profiles: string[
   return sha256({ format: "atdd-bun.ratchet-context/v1", profiles: [...profiles].sort(), policy });
 }
 
+/** Activation is a one-time, explicitly requested profile-list expansion; every other policy input remains identical. */
+export function activationContextDigest(config: Record<string, unknown>): string {
+  const { ratchet: _ratchet, profiles: _profiles, ...policy } = config;
+  return sha256({ format: "atdd-bun.ratchet-activation-context/v1", policy });
+}
+
+export function isStrictProfileExpansion(base: string[], candidate: string[]): boolean {
+  const before = new Set(base), after = new Set(candidate);
+  return before.size < after.size && [...before].every(profile => after.has(profile));
+}
+
 export function parseRatchetPolicy(config: Record<string, unknown>): RatchetPolicy | null {
   if (config.ratchet === undefined) return null;
   const value = config.ratchet;
