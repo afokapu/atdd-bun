@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()), err: (await new Response(child.stderr).text()) }; };
@@ -21,6 +21,14 @@ test("real Git installation is idempotent, worktree-local, and removable", async
   const root = await repo(); try { expect((await installHooks(root)).ok).toBeTrue(); expect((await installHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeTrue(); expect((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); for (const event of hookEvents) expect((await readFile(join(root, ".githooks", event), "utf8")).includes("atdd ")).toBeFalse(); const wt = `${root}-wt`; expect((await git(root, ["worktree", "add", "-q", "-b", "linked", wt])).code).toBe(0); expect((await installHooks(wt)).ok).toBeTrue(); expect((await git(wt, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); expect((await uninstallHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeFalse(); }
   finally { await cleanup(root); await cleanup(`${root}-wt`); }
 }, 20_000);
+
+test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8");
+    expect(dispatcher).not.toContain(resolve(import.meta.dir, "../src/cli.ts"));
+  } finally { await cleanup(root); }
+});
 
 test("real Git policy rejects protected branches, each micro threshold, deletion without token, and bad traceability", async () => {
   const root = await repo("main"); try {
