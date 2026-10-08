@@ -6,6 +6,8 @@ const root = resolve(import.meta.dir, "..");
 const version = (await Bun.file(join(root, "package.json")).json() as { version: string }).version;
 const render = async (path: string) => (await readFile(join(root, "templates/agents", path), "utf8")).replace("{{VERSION}}", version);
 const legacySkillPaths = [".agents/skills/atdd/SKILL.md", ".claude/skills/atdd/SKILL.md"];
+/** Delivery orchestration was retired; only these formerly generator-owned paths are eligible for removal. */
+const legacyDeliverySkillPaths = [".agents/skills/delivery/SKILL.md", ".agents/skills/delivery/review.md", ".claude/skills/delivery/SKILL.md", ".claude/skills/delivery/review.md"];
 // AGENTS.md is read by Codex, Cursor and most agents; CLAUDE.md by Claude Code. Both carry the same block.
 export const instructionPaths = ["AGENTS.md", "CLAUDE.md"];
 const block = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->\n?/;
@@ -22,6 +24,13 @@ export async function agentInit(repo = process.cwd(), replace = false) {
     if (!existsSync(output) || (!replace && !generatedSkill.test(await readFile(output, "utf8")))) continue;
     await rm(output); retired.push(output);
   }
+  // Never remove a user-authored delivery skill, even with --replace: only the exact paths and
+  // generator marker from the retired delivery generator prove this artifact is ours to retire.
+  for (const path of legacyDeliverySkillPaths) {
+    const output = join(repo, path);
+    if (!existsSync(output) || !generatedSkill.test(await readFile(output, "utf8"))) continue;
+    await rm(output); retired.push(output);
+  }
   const managed = await render("AGENTS.block.md");
   for (const path of instructionPaths) {
     const file = join(repo, path), current = existsSync(file) ? await readFile(file, "utf8") : "";
@@ -35,5 +44,6 @@ export async function agentStatus(repo = process.cwd()) {
   const missing: string[] = [];
   for (const path of instructionPaths) { const agents = join(repo, path); if (!existsSync(agents) || !block.test(await readFile(agents, "utf8"))) missing.push(`${agents} (atdd-bun block)`); }
   for (const path of legacySkillPaths) { const skill = join(repo, path); if (existsSync(skill) && generatedSkill.test(await readFile(skill, "utf8"))) missing.push(`${skill} (retired generated skill)`); }
+  for (const path of legacyDeliverySkillPaths) { const skill = join(repo, path); if (existsSync(skill) && generatedSkill.test(await readFile(skill, "utf8"))) missing.push(`${skill} (retired generated delivery skill)`); }
   return { ok: !missing.length, message: missing.length ? `missing: ${missing.join(", ")}` : instructionPaths.map(path => join(repo, path)).join("\n") };
 }
