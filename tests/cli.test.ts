@@ -62,6 +62,18 @@ test("ratchet refuses an exact base when finding-affecting context differs", asy
   expect(result.stderr).toContain("profile/context differ");
 });
 
+test("ordinary direct-profile ratchet keeps comparing the explicitly selected profile despite configured profiles", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-direct-profile-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: report, profiles: [coder] }\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "candidate.ts"), "export const value = 1;\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate");
+  const result = await run("coder", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ mode: "report", profiles: ["coder"], resolved: [] });
+});
+
 test("explicit profile activation carries legacy findings while judging both exact trees under the expanded profiles", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-activation-"));
   await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");

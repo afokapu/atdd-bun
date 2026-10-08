@@ -167,7 +167,7 @@ if (!args.includes("--ratchet")) {
       const checkedOut = await git(scratch, ["checkout", "--detach", base]);
       if (checkedOut.code) { console.error(`could not checkout ratchet base: ${checkedOut.err || checkedOut.out}`); process.exitCode = 1; }
       else {
-        const baseConfig = await configAt(scratch), baseProfiles = await enabledProfiles(scratch);
+        const baseConfig = await configAt(scratch), baseProfiles = profileActivation ? await enabledProfiles(scratch) : normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
         const ordinaryContextMatches = stable(baseProfiles).join(",") === stable(candidateProfiles).join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
         const activationIsValid = Array.isArray(baseConfig.profiles) && isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
         if (!(profileActivation ? activationIsValid : ordinaryContextMatches)) { console.error(profileActivation ? "ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context" : "ratchet base and candidate profile/context differ; use a separately governed adoption path"); process.exitCode = 1; }
