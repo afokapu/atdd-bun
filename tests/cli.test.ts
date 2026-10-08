@@ -77,6 +77,26 @@ test("explicit profile activation carries legacy findings while judging both exa
   expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
 });
 
+test("profile activation rejects removal, unrelated policy edits, and an absent explicit activation flag", async () => {
+  const setup = async (baseConfig: string, candidateConfig: string) => {
+    const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-activation-invalid-"));
+    await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+    await writeFile(join(repo, "atdd-bun.yaml"), baseConfig); await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
+    const base = await git(repo, "rev-parse", "HEAD");
+    await writeFile(join(repo, "atdd-bun.yaml"), candidateConfig); await git(repo, "commit", "-am", "candidate", "-q");
+    return { repo, base };
+  };
+  const removal = await setup("profiles: [flow, traceability]\n", "profiles: [flow]\nratchet: { mode: reject-new, profiles: [flow] }\n");
+  const removed = await run("flow", "--root", removal.repo, "--ratchet", "--ratchet-activate-profiles", "--base", removal.base);
+  expect(removed.exitCode).toBe(1); expect(removed.stderr).toContain("explicit monotonic profile expansion");
+  const context = await setup("profiles: [flow]\ntopology: { plan_root: plan }\n", "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\ntopology: { plan_root: contracts }\n");
+  const changed = await run("--profile", "flow,traceability", "--root", context.repo, "--ratchet", "--ratchet-activate-profiles", "--base", context.base);
+  expect(changed.exitCode).toBe(1); expect(changed.stderr).toContain("identical non-profile context");
+  const implicit = await setup("profiles: [flow]\n", "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+  const absent = await run("--profile", "flow,traceability", "--root", implicit.repo, "--ratchet", "--base", implicit.base);
+  expect(absent.exitCode).toBe(1); expect(absent.stderr).toContain("profile/context differ");
+});
+
 test("ratchet reject-new fails only candidate findings and emits a delta report", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-delta-"));
   await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
@@ -98,7 +118,7 @@ test("ratchet refuses staged or untracked candidate state", async () => {
   await git(repo, "add", "."); await git(repo, "commit", "-qm", "base");
   const base = await git(repo, "rev-parse", "HEAD");
   await writeFile(join(repo, "staged.txt"), "not committed\n"); await git(repo, "add", "staged.txt");
-  const result = await run("flow", "--root", repo, "--ratchet", "--base", base);
+  const result = await run("flow", "--root", repo, "--ratchet", "--ratchet-activate-profiles", "--base", base);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("porcelain-clean");
 });
@@ -111,7 +131,7 @@ test("ratchet refuses a base outside candidate history", async () => {
   await git(repo, "checkout", "-qb", "side"); await writeFile(join(repo, "side.txt"), "side\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "side");
   const unrelated = await git(repo, "rev-parse", "HEAD");
   await git(repo, "checkout", "-q", "main"); await writeFile(join(repo, "candidate.txt"), "candidate\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate");
-  const result = await run("flow", "--root", repo, "--ratchet", "--base", unrelated);
+  const result = await run("flow", "--root", repo, "--ratchet", "--ratchet-activate-profiles", "--base", unrelated);
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("ancestor of candidate HEAD");
 });
