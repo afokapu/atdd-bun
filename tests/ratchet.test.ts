@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compareFindings, contextDigest, findingFingerprint, parseRatchetPolicy } from "../src/ratchet";
+import { activationContextDigest, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy } from "../src/ratchet";
 
 const finding = (overrides: Record<string, unknown> = {}) => ({
   rule_id: "coder.bun.layer-naming",
@@ -23,6 +23,15 @@ test("ratchet context binds exact effective profiles and normalized policy, excl
   const base = { profiles: ["flow", "traceability"], topology: { plan_root: "plan" }, ratchet: { mode: "report" } };
   expect(contextDigest(base, ["flow", "traceability"])).toBe(contextDigest({ ...base, ratchet: { mode: "reject-new" } }, ["flow", "traceability"]));
   expect(contextDigest(base, ["flow", "traceability"])).not.toBe(contextDigest({ ...base, topology: { plan_root: "contracts" } }, ["flow", "traceability"]));
+});
+
+test("activation permits only a strict profile expansion and keeps every non-profile policy input bound", () => {
+  const base = { profiles: ["flow"], topology: { plan_root: "plan" } };
+  expect(isStrictProfileExpansion(["flow"], ["flow", "traceability"])).toBeTrue();
+  expect(isStrictProfileExpansion(["flow", "traceability"], ["flow"])).toBeFalse();
+  expect(isStrictProfileExpansion(["flow"], ["flow"])).toBeFalse();
+  expect(activationContextDigest(base)).toBe(activationContextDigest({ ...base, profiles: ["flow", "traceability"], ratchet: { mode: "reject-new" } }));
+  expect(activationContextDigest(base)).not.toBe(activationContextDigest({ ...base, profiles: ["flow", "traceability"], topology: { plan_root: "contracts" } }));
 });
 
 test("explicit consumer policy distinguishes report-only from reject-new and never stores a baseline", () => {
