@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { checkInstalledPackage, checkIntegrity, formatIntegrity, loosenedPolicy, writeManifest } from "../src/integrity";
@@ -15,10 +15,18 @@ async function consumer() {
   await git(root, "init", "-q", "-b", "feature"); await git(root, "config", "user.email", "i@test"); await git(root, "config", "user.name", "I");
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.2.0" } }, null, 2));
   await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry}  }\n}\n`);
+  await mkdir(join(root, "node_modules/@afokapu"), { recursive: true });
+  await symlink(packageRoot, join(root, "node_modules/@afokapu/atdd-bun"), "dir");
   expect((await initializeRepository(root)).ok).toBeTrue();
   return root;
 }
 const files = (findings: { file: string }[]) => findings.map(f => f.file).sort();
+
+test("consumer fixture materializes the project-local CLI that generated hooks execute", async () => {
+  const root = await consumer();
+  try { expect(await Bun.file(join(root, "node_modules/@afokapu/atdd-bun/src/cli.ts")).exists()).toBeTrue(); }
+  finally { await rm(root, { recursive: true, force: true }); }
+});
 
 test("a freshly bootstrapped consumer is canonical", async () => {
   const root = await consumer();
