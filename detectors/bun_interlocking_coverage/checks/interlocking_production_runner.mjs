@@ -22,6 +22,9 @@ import {
   PROD_INTERLOCKING,
   PROD_TRAIN,
   FORBIDDEN_PATTERNS,
+  hasProductionExecutionProof,
+  stationMasterExecutionProof,
+  stationModuleExecutionProof,
   rel,
   mk,
   writeReport,
@@ -67,16 +70,18 @@ for (const scanRoot of roots) {
         }
       }
 
-      const missing = drivesStationMaster(text) ? [] : [PROD_INTERLOCKING, PROD_TRAIN].filter((sym) => !tokenCovered(sym, text));
-      if (missing.length) {
+      const semantic = hasProductionExecutionProof(text) ||
+        records.some((rec) => rec.actions.some((action) => stationMasterExecutionProof(text, action))) ||
+        (drivesStationMaster(text) && stationModuleExecutionProof(text, station));
+      if (!semantic) {
         violations.push(
           mk(
             RULE,
             r,
             1,
             0,
-            `interlocking test "${r}" does not reference the production runner(s) ${missing.join(", ")}; ` +
-              `it must exercise the real InterlockingRunner -> TrainRunner path (core afokapu/atdd#1251)`,
+            `interlocking test "${r}" has no asserted result flowing from production InterlockingRunner ` +
+              `resolution into TrainRunner execution; imports and route/train literals are discovery only`,
             "",
           ),
         );

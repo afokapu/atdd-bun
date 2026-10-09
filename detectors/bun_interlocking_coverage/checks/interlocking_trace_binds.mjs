@@ -20,6 +20,8 @@ import {
   lineAt,
   TRACE_OBJECT,
   REQUIRED_TRACE_FIELDS,
+  assertedTraceFields,
+  traceHasProductionProvenance,
   rel,
   mk,
   writeReport,
@@ -42,8 +44,9 @@ for (const scanRoot of roots) {
       if (!isInterlockingTest(text, tokens)) continue;
       const m = TRACE_OBJECT.exec(text);
       if (!m) continue; // not a trace-binding test.
-      const missing = REQUIRED_TRACE_FIELDS.filter(([, pat]) => !pat.test(text)).map(([label]) => label);
-      if (!missing.length) continue;
+      const missing = assertedTraceFields(text);
+      const provenance = traceHasProductionProvenance(text);
+      if (!missing.length && provenance) continue;
       const line = lineOfIndex(text, m.index);
       violations.push(
         mk(
@@ -51,9 +54,8 @@ for (const scanRoot of roots) {
           rel(file, croot),
           line,
           0,
-          `interlocking trace test "${rel(file, croot)}" does not bind the declared route: missing required ` +
-            `trace field(s) ${missing.join(", ")} (core afokapu/atdd#1251 trace must record interlockingId/` +
-            `routeId/selectedTrainId/routeCategory/routeCategoryDigit/guardId/resolutionStrategy/resolutionReason)`,
+          `interlocking trace test "${rel(file, croot)}" does not bind a production TrainRunner result to the ` +
+            `declared route${missing.length ? `: missing asserted trace field(s) ${missing.join(", ")}` : ""}${!provenance ? "; trace is not derived from InterlockingRunner -> TrainRunner execution" : ""}`,
           lineAt(raw, line),
         ),
       );

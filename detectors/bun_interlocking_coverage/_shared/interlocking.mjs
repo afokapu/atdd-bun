@@ -315,6 +315,120 @@ export function isInterlockingTest(text, tokens) {
   return tokens.some((t) => tokenCovered(t, text));
 }
 
+// Semantic witnesses for the production call model.  Tokens get us to a candidate test; these
+// small, deliberately conservative recognisers decide whether the candidate actually connects
+// `InterlockingRunner.resolveTrain()` to `TrainRunner.execute()` and asserts evidence from that
+// chain.  We keep this in the shared layer so route, runner, trace, smoke, and sequence checks
+// cannot quietly drift back to accepting a different descriptive proxy.
+const ident = "[A-Za-z_$][\\w$]*";
+
+function escaped(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function productionReceivers(text) {
+  const out = new Set();
+  const allocated = new RegExp(`\\b(?:const|let|var)\\s+(${ident})\\s*=\\s*new\\s+${PROD_INTERLOCKING}\\b`, "g");
+  for (const m of text.matchAll(allocated)) out.add(m[1]);
+  const factories = new RegExp(`\\bfunction\\s+(${ident})\\s*\\([^)]*\\)\\s*\\{[\\s\\S]{0,600}?\\breturn\\s+new\\s+${PROD_INTERLOCKING}\\b`, "g");
+  for (const m of text.matchAll(factories)) out.add(`${m[1]}()`);
+  return out;
+}
+
+// [{ resolution, execution }] means an actual resolution value feeds actual train execution.
+// `execution` is null for an unassigned execute result; route/runner proof may assert resolution,
+// while trace and sequence proof require the named execution result.
+export function productionExecutionProofs(text) {
+  const receivers = productionReceivers(text);
+  const proofs = [];
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  for (const m of text.matchAll(resolutions)) {
+    const [whole, resolution, receiver] = m;
+    const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
+    const named = [...receivers].some((name) => receiver.trim().endsWith(name));
+    if (!direct && !named) continue;
+    const after = text.slice((m.index ?? 0) + whole.length);
+    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
+    const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
+    if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
+  }
+  return proofs;
+}
+
+export function assertsExpression(text, expression, expected = null) {
+  const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match))\\b([\\s\\S]{0,220})`);
+  const m = pat.exec(text);
+  return Boolean(m && (!expected || tokenCovered(expected, m[0])));
+}
+
+export function hasProductionExecutionProof(text) {
+  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+    if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
+      (execution && assertsExpression(text, escaped(execution)))) return true;
+    if (!execution) return false;
+    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
+    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}\\.${field}`)));
+  });
+}
+
+export function routeHasProductionProof(route, text, interlockingId = null) {
+  const slug = interlockingId?.replace(/^interlocking:/, "");
+  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+    const assertedRoute = assertsExpression(text, `${escaped(resolution)}\\.routeId`, route.routeId);
+    const assertedTrain = assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, route.trainId);
+    const scoped = !interlockingId || tokenCovered(interlockingId, text) || tokenCovered(slug, text);
+    return (assertedRoute && scoped) || assertedTrain || Boolean(scoped && execution && assertsExpression(text, escaped(execution)) && (tokenCovered(route.routeId, text) || tokenCovered(route.trainId, text)));
+  });
+}
+
+export function traceHasProductionProvenance(text) {
+  return productionExecutionProofs(text).some(({ execution }) => {
+    if (!execution) return false;
+    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
+    return Boolean(trace);
+  });
+}
+
+export function assertedTraceFields(text, traceName = "trace") {
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}\\.${field}`)).map(([field]) => field);
+}
+
+// A smoke path has a real Station Master call and observes that call's returned value; separately
+// requiring both production runner instances rules out imports used only as lexical decoration.
+export function stationMasterExecutionProof(text, action) {
+  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${ident}\\.(?:handleAction|dispatch|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
+  if (!call) return false;
+  const result = call[1];
+  const instanceProof = new RegExp(`\\bexpect\\s*\\(\\s*${ident}\\.(?:interlockingRunner|trainRunner)\\s*\\)\\s*\\.toBeInstanceOf\\s*\\(\\s*(?:${PROD_INTERLOCKING}|${PROD_TRAIN})\\s*\\)`, "g");
+  const seen = new Set([...text.matchAll(instanceProof)].map((m) => m[0].includes(PROD_INTERLOCKING) ? PROD_INTERLOCKING : PROD_TRAIN));
+  return seen.has(PROD_INTERLOCKING) && seen.has(PROD_TRAIN) && assertsExpression(text, `${escaped(result)}(?:\\.[A-Za-z_$][\\w$]*)?`);
+}
+
+// HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
+// witness is an asserted dispatch result plus a module body that resolves and executes the selected
+// train; this keeps an end-to-end smoke from having to pierce the public boundary for private fields.
+export function stationModuleExecutionProof(text, stationText) {
+  if (!stationText || !new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(stationText) ||
+    !/\.resolveTrain\s*\(/.test(stationText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(stationText) ||
+    !/\.execute\s*\(/.test(stationText)) return false;
+  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(?:dispatch|handleAction|executeAction)\\s*\\(`).exec(text);
+  return Boolean(call && assertsExpression(text, escaped(call[1])));
+}
+
+// Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality
+// kills reorder/removal mutants, objectContaining records a handoff edge, and at(-1) observes the
+// final wagon.  All three must be about the TrainRunner result, never a hand-built literal.
+export function hasSequenceMutationProof(text, trainId) {
+  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+    if (!execution || !assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, trainId)) return false;
+    const result = escaped(execution);
+    const ordered = new RegExp(`expect\\s*\\(\\s*${result}\\.(?:steps|sequence|wagons)\\s*\\)\\s*\\.to(?:Equal|StrictEqual)\\s*\\(\\s*\\[`, "s").test(text);
+    const handoff = new RegExp(`expect\\s*\\(\\s*${result}\\.(?:steps|sequence|wagons)\\s*\\)\\s*\\.toContainEqual\\s*\\(\\s*expect\\.objectContaining\\s*\\(\\s*\\{[\\s\\S]{0,240}?(?:from|to)\\s*:`, "s").test(text);
+    const finalWagon = new RegExp(`expect\\s*\\(\\s*${result}\\.(?:steps|sequence|wagons)\\s*\\.at\\(\\s*-1\\s*\\)\\s*\\)\\s*\\.to(?:Be|Equal|StrictEqual|Match)`, "s").test(text);
+    return ordered && handoff && finalWagon;
+  });
+}
+
 export function writeReport(violations) {
   const rp = process.env.ATDD_VIOLATIONS_REPORT;
   if (!rp) {

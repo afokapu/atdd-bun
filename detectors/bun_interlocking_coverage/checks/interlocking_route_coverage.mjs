@@ -13,7 +13,7 @@ import {
   interlockingFiles,
   e2eFiles,
   parseInterlocking,
-  isRouteCovered,
+  routeHasProductionProof,
   maskComments,
   rel,
   mk,
@@ -34,7 +34,7 @@ for (const scanRoot of roots) {
 
     for (const { file, rec } of records) {
       for (const route of rec.routes) {
-        if (isRouteCovered(route, e2eTexts, rec.interlockingId)) continue;
+        if (e2eTexts.some((text) => routeHasProductionProof(route, text, rec.interlockingId))) continue;
         if (unbuiltWagons(croot, route.trainId).length) continue;   // pending: a wagon on its train has no source yet
         const cat =
           route.category !== null
@@ -48,7 +48,7 @@ for (const scanRoot of roots) {
             0,
             `admissible route "${route.routeId}" of interlocking "${rec.interlockingId}" (${cat}, ` +
               `resolves to train "${route.trainId}") has no e2e test exercising it; add an e2e/**/*.ts ` +
-              `test that references the routeId or trainId and drives it through InterlockingRunner -> TrainRunner`,
+              `test whose asserted resolution selects this route/train and flows through InterlockingRunner -> TrainRunner`,
             route.sourceLine.trim(),
           ),
         );

@@ -103,7 +103,7 @@ test("a route id covers its route only in a test of its own interlocking", async
     await writeFile(join(root, "plan", "_trains", "_interlockings", "alpha.yaml"), doc("alpha"));
     await writeFile(join(root, "plan", "_trains", "_interlockings", "beta.yaml"), doc("beta"));
     await mkdir(join(root, "e2e", "interlockings", "alpha"), { recursive: true });
-    await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { test } from "bun:test";\ntest("interlocking:alpha refuse", () => {});\n');
+    await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { expect, test } from "bun:test";\nimport { InterlockingRunner } from "../../../src/interlocking";\nimport { TrainRunner } from "../../../src/runner";\ntest("interlocking:alpha refuse", () => { const resolution = new InterlockingRunner().resolveTrain("refuse", {}); const result = new TrainRunner(resolution.trainId).execute({}); expect(resolution.routeId).toBe("refuse"); expect(result).toBeDefined(); });\n');
     const coverage = (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-route-coverage");
     expect(coverage.map(v => v.file)).toEqual([expect.stringContaining("beta.yaml")]);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -128,12 +128,12 @@ test("an E2E that drives the production Station Master uses the runners it compo
   try {
     await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "clean", "interlocking_production_runner"), root, { recursive: true });
     const test_ = join(root, "e2e", "interlockings", "match-resolution", "via-station.test.ts");
-    await writeFile(test_, 'import { expect, test } from "bun:test";\nimport { dispatch } from "../../../src/server";\ntest("nominal-all-voted", async () => expect(await dispatch("resolve_match", {})).toBeDefined());\n');
+    await writeFile(test_, 'import { expect, test } from "bun:test";\nimport { dispatch } from "../../../src/server";\ntest("nominal-all-voted", async () => { const result = await dispatch("resolve_match", {}); expect(result).toBeDefined(); });\n');
     const flagged = async () => (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-production-runner-used" && v.file.endsWith("via-station.test.ts"));
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "server.ts"), "export const dispatch = async (_action: string, _inputs: object) => ({});\n");
     expect((await flagged()).length).toBe(1);   // a Station Master that composes no runners proves nothing
-    await writeFile(join(root, "src", "server.ts"), 'import { InterlockingRunner } from "./trains/interlocking";\nimport { TrainRunner } from "./trains/runner";\nconst runner = new InterlockingRunner(new TrainRunner());\nexport const dispatch = (action: string, inputs: object) => runner.resolveTrain(action, inputs, {});\n');
+    await writeFile(join(root, "src", "server.ts"), 'import { InterlockingRunner } from "./trains/interlocking";\nimport { TrainRunner } from "./trains/runner";\nconst runner = new InterlockingRunner();\nexport const dispatch = (action: string, inputs: object) => { const resolution = runner.resolveTrain(action, inputs, {}); return new TrainRunner(resolution.trainId).execute({}); };\n');
     expect(await flagged()).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
