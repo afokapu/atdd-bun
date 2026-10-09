@@ -86,3 +86,29 @@ test("literal sequence", () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("semantic proof accepts Bun mutation witnesses from the selected TrainRunner result", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-sequence-mutation-proof-"));
+  try {
+    await mkdir(join(root, "plan", "_trains", "_interlockings"), { recursive: true });
+    await mkdir(join(root, "e2e", "interlockings"), { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "_interlockings", "route.yaml"), `interlocking_id: interlocking:proof\nroutes:\n  - route_id: nominal\n    train_id: train:proof:nominal\n`);
+    await writeFile(join(root, "plan", "_trains", "nominal.yaml"), `train_id: train:proof:nominal\nsequence:\n  - from: user:actor\n    to: wagon:first\n  - from: wagon:first\n    to: wagon:last\n`);
+    await writeFile(join(root, "e2e", "interlockings", "sequence.test.ts"), `import { expect, test } from "bun:test";
+import { InterlockingRunner } from "../../src/interlocking";
+import { TrainRunner } from "../../src/runner";
+test("selected train proves order, handoff, and final wagon", () => {
+  const resolution = new InterlockingRunner("plan/_trains/_interlockings/route.yaml").resolveTrain("nominal", {});
+  const result = new TrainRunner(resolution.trainId).execute({});
+  expect(resolution.trainId).toBe("train:proof:nominal");
+  expect(result.steps).toEqual([{ from: "user:actor", to: "wagon:first" }, { from: "wagon:first", to: "wagon:last" }]);
+  expect(result.steps).toContainEqual(expect.objectContaining({ from: "wagon:first", to: "wagon:last" }));
+  expect(result.steps.at(-1)).toEqual(expect.objectContaining({ to: "wagon:last" }));
+});
+`);
+    const findings = await run(root);
+    expect(rule("tester.bun.interlocking-train-sequence-is-exercised", findings)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

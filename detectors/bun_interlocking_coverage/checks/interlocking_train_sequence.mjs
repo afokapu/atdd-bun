@@ -16,22 +16,17 @@
 // suite green. The runtime obeyed the new plan; no test looked.
 import {
   parseJsonEnv, readText, findConsumerRoots, interlockingFiles, e2eFiles,
-  parseInterlocking, tokenCovered, rel, mk, PLAN_ROOT, unbuiltWagons,
+  parseInterlocking, rel, mk, PLAN_ROOT, unbuiltWagons, hasSequenceMutationProof,
 } from "../_shared/interlocking.mjs";
 import { writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export const RULE_SEQUENCE = "tester.bun.interlocking-train-sequence-is-exercised";
 
-// A line that ASSERTS AN ORDER: names the executed sequence AND compares it.
-// Merely touching the word is not asserting the order — `expect(trace.steps)` alone
-// says nothing about what ran, and counting it would repeat the over-broad trigger
-// that has now been fixed three times in this family.
-const SEQUENCE_ASSERTION =
-  /^[^\n]*\b(?:expect|assert)\b[^\n]*\b(?:steps|sequence|wagons)\b[^\n]*(?:==|toEqual|toStrictEqual|deepEqual)/m;
-
 export function assertsASequence(text) {
-  return SEQUENCE_ASSERTION.test(text);
+  // Retained as a narrow API for consumers of this module. The train id is intentionally
+  // unavailable here, so it cannot certify coverage; `trainSequenceCovered` below does.
+  return /\bexpect\s*\(\s*[A-Za-z_$][\w$]*\.(?:steps|sequence|wagons)\s*\)\s*\.to(?:Equal|StrictEqual)\s*\(/.test(text);
 }
 
 export function trainsReachableFromRoutes(records) {
@@ -46,7 +41,7 @@ export function trainsReachableFromRoutes(records) {
 }
 
 export function trainSequenceCovered(trainId, texts) {
-  return texts.some((t) => tokenCovered(trainId, t) && assertsASequence(t));
+  return texts.some((t) => hasSequenceMutationProof(t, trainId));
 }
 
 // Does the plan actually DECLARE a wagon sequence for this train?
