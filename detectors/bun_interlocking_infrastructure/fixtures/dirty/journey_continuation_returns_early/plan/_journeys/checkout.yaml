@@ -1,0 +1,19 @@
+schema_version: 1.0.0
+journey_id: journey:checkout
+title: Checkout
+status: checked
+entrypoint:
+  interlocking_id: interlocking:cart
+  exposed: false
+  actions: []
+  reason: internal-transition-only
+  surfaces: [backend]
+continuations:
+  - from: { interlocking_id: interlocking:cart, route_id: ready }
+    artifact: order:prepared
+    to: { interlocking_id: interlocking:payment }
+terminals:
+  - from: { interlocking_id: interlocking:cart, route_id: empty }
+    outcome: empty-cart
+  - from: { interlocking_id: interlocking:payment, route_id: paid }
+    outcome: completed
