@@ -29,6 +29,7 @@ export const RULE_EXECUTES = "coder.bun.runtime-executes-the-declaration";
 const LOADS_DECLARATION =
   /\breadFileSync\s*\(|\breadFile\s*\(|\bBun\s*\.\s*file\s*\(|\bcreateReadStream\s*\(|\bfs\s*\.\s*promises\s*\.\s*readFile\b/;
 const RESOLVES = /\bInterlockingResolution\b|\bresolveTrain\s*\(/;
+const TRAIN_RUNNER = /\bclass\s+TrainRunner\b/;
 const EXCLUDES = ["node_modules", "dist", "build", ".next", "_generated"];
 const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
 
@@ -159,10 +160,54 @@ export function scanExecution(scanRoot) {
   return violations;
 }
 
+// TrainRunner is the other half of declaration execution. A correctly data-driven
+// InterlockingRunner can select a train while its executor silently ignores that
+// train and returns a hand-written trace. Require the executor itself to read a
+// supplied train declaration, iterate its declared sequence, and feed each wagon's
+// production result into the next call. These deliberately structural checks admit
+// ordinary direct functions (executeWagon/runWagon/runTrain) without prescribing a
+// framework, while rejecting the no-op and literal-trace shapes they replace.
+export function scanTrainRunnerExecution(scanRoot) {
+  const violations = [];
+  for (const croot of findConsumerRoots(scanRoot)) {
+    const trainDeclarations = walk(join(croot, PLAN_ROOT, "_trains"), (f) => /train:.*\.ya?ml$/.test(f));
+    if (!trainDeclarations.length) continue;
+    const rtFiles = walk(join(croot, "src/trains"), (f) => /\.(ts|tsx|mjs|js)$/.test(f))
+      .map((f) => ({ file: f, text: readText(f) }));
+    for (const runner of rtFiles.filter((x) => TRAIN_RUNNER.test(x.text))) {
+      const readsDeclaration = LOADS_DECLARATION.test(runner.text);
+      const usesSuppliedDeclaration = /\b(?:parse|load)(?:Train|Declaration)\s*\(\s*this\.\w*(?:train|declaration|path)\w*\s*\)/i.test(runner.text) ||
+        /\b(?:readFileSync|readFile|Bun\s*\.\s*file)\s*\(\s*this\.\w*(?:train|declaration|path)\w*/i.test(runner.text);
+      const parsesSequence = /\bsequence\b/.test(runner.text);
+      const derivesOrder = /for\s*\(\s*const\s+\w+\s+of\s+\w+\.sequence\s*\)/.test(runner.text);
+      // The reassignment is the key data-flow proof: a production execution call
+      // receives the prior result and its output becomes the next result.
+      const carriesResults = /\b(\w+)\s*=\s*(?:await\s+)?(?:execute|run)\w*\s*\(\s*\w+\s*,\s*\1\s*\)/.test(runner.text);
+      const fabricatesTrace = /\b(?:trace|steps?|sequence)\s*:\s*\[\s*["'`]/.test(maskComments(runner.text));
+      if (readsDeclaration && usesSuppliedDeclaration && parsesSequence && derivesOrder && carriesResults && !fabricatesTrace) continue;
+      const missing = [
+        !readsDeclaration && "read the supplied train declaration",
+        !usesSuppliedDeclaration && "pass its supplied declaration into that parser or reader",
+        !parsesSequence && "parse its sequence",
+        !derivesOrder && "derive ordered iteration from train.sequence",
+        !carriesResults && "carry each production execution result into the next wagon",
+        fabricatesTrace && "avoid fabricating literal trace or step data",
+      ].filter(Boolean).join("; ");
+      const rel = runner.file.startsWith(croot + sep) ? runner.file.slice(croot.length + 1) : runner.file;
+      violations.push({
+        rule_id: RULE_EXECUTES, file: rel, line: 1, col: 0,
+        evidence: `TrainRunner must ${missing}; declaration-selected wagon execution cannot be satisfied by a no-op or transcribed trace`,
+        source_line: "",
+      });
+    }
+  }
+  return violations;
+}
+
 if (import.meta.main ?? process.argv[1]?.endsWith("interlocking_runtime_executes.mjs")) {
   let roots = [];
   try { roots = JSON.parse(process.env.ATDD_SCAN_ROOTS || "[]"); } catch {}
-  const out = roots.flatMap((r) => scanExecution(r));
+  const out = roots.flatMap((r) => [...scanExecution(r), ...scanTrainRunnerExecution(r)]);
   const rp = process.env.ATDD_VIOLATIONS_REPORT;
   if (rp) writeFileSync(rp, JSON.stringify({ violations: out }, null, 2), "utf8");
   process.stderr.write(`bun-executes: ${out.length} violation(s)\n`);
