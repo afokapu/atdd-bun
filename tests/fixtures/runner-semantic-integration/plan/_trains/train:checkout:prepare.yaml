@@ -1,0 +1,6 @@
+train_id: train:checkout:prepare
+sequence:
+  - from: user:buyer
+    to: wagon:order
+  - from: wagon:order
+    to: wagon:receipt

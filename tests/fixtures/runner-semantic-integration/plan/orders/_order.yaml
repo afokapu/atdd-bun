@@ -1,0 +1,4 @@
+wagon: order
+produce:
+  - name: order:prepared
+consume: []

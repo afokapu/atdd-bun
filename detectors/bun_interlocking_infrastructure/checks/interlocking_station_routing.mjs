@@ -19,6 +19,15 @@ import {
 
 const RULE = "coder.bun.station-master-interlocking-routing";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
+
+function dispatchDelegatesThroughInterlocking(text) {
+  const match = /\b(?:export\s+)?function\s+dispatch\s*\([^)]*\)\s*\{([\s\S]*)\}\s*$/.exec(text);
+  if (!match) return false;
+  const body = match[1];
+  if (/\breturn\s+new\s+InterlockingRunner\s*\([^)]*\)\s*\.\s*execute\s*\(/.test(body)) return true;
+  const runner = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+InterlockingRunner\s*\(/.exec(body)?.[1];
+  return Boolean(runner && new RegExp(`\\breturn\\s+(?:await\\s+)?${runner}\\s*\\.\\s*execute\\s*\\(`).test(body));
+}
 const violations = [];
 
 for (const scanRoot of roots) {
@@ -55,6 +64,16 @@ for (const scanRoot of roots) {
           lineAt(text, line),
         ),
       );
+    }
+    if (!dispatchDelegatesThroughInterlocking(text)) {
+      violations.push(mk(
+        RULE,
+        rel(app, croot),
+        line,
+        0,
+        "station-master-dispatch-bypasses-runners: mapped interlocking dispatch must return InterlockingRunner execution; inert runner references or direct business data do not execute the selected train",
+        lineAt(text, line),
+      ));
     }
   }
 }

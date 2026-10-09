@@ -1,0 +1,8 @@
+interlocking_id: interlocking:cart
+entrypoint:
+  exposed: true
+  actions: [checkout]
+routes:
+  - route_id: ready
+    train_id: train:checkout:prepare
+    train_path: plan/_trains/train:checkout:prepare.yaml

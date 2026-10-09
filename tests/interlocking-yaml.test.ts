@@ -103,7 +103,10 @@ test("a route id covers its route only in a test of its own interlocking", async
     await writeFile(join(root, "plan", "_trains", "_interlockings", "alpha.yaml"), doc("alpha"));
     await writeFile(join(root, "plan", "_trains", "_interlockings", "beta.yaml"), doc("beta"));
     await mkdir(join(root, "e2e", "interlockings", "alpha"), { recursive: true });
-    await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { test } from "bun:test";\ntest("interlocking:alpha refuse", () => {});\n');
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "interlocking.ts"), "export class InterlockingRunner { resolveTrain() { return { routeId: 'refuse', trainId: 'train:alpha:refuse-alpha' }; } }\n");
+    await writeFile(join(root, "src", "runner.ts"), "export class TrainRunner { constructor(_: string) {} execute() { return {}; } }\n");
+    await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { expect, test } from "bun:test";\nimport { InterlockingRunner } from "../../../src/interlocking";\nimport { TrainRunner } from "../../../src/runner";\ntest("interlocking:alpha refuse", () => { const resolution = new InterlockingRunner().resolveTrain("refuse", {}); const result = new TrainRunner(resolution.trainId).execute({}); expect(resolution.routeId).toBe("refuse"); expect(result).toBeDefined(); });\n');
     const coverage = (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-route-coverage");
     expect(coverage.map(v => v.file)).toEqual([expect.stringContaining("beta.yaml")]);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -128,12 +131,12 @@ test("an E2E that drives the production Station Master uses the runners it compo
   try {
     await cp(join(detectors, "bun_interlocking_coverage", "fixtures", "clean", "interlocking_production_runner"), root, { recursive: true });
     const test_ = join(root, "e2e", "interlockings", "match-resolution", "via-station.test.ts");
-    await writeFile(test_, 'import { expect, test } from "bun:test";\nimport { dispatch } from "../../../src/server";\ntest("nominal-all-voted", async () => expect(await dispatch("resolve_match", {})).toBeDefined());\n');
+    await writeFile(test_, 'import { expect, test } from "bun:test";\nimport { dispatch } from "../../../src/server";\ntest("nominal-all-voted", async () => { const result = await dispatch("resolve_match", {}); expect(result).toBeDefined(); });\n');
     const flagged = async () => (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-production-runner-used" && v.file.endsWith("via-station.test.ts"));
     await mkdir(join(root, "src"), { recursive: true });
     await writeFile(join(root, "src", "server.ts"), "export const dispatch = async (_action: string, _inputs: object) => ({});\n");
     expect((await flagged()).length).toBe(1);   // a Station Master that composes no runners proves nothing
-    await writeFile(join(root, "src", "server.ts"), 'import { InterlockingRunner } from "./trains/interlocking";\nimport { TrainRunner } from "./trains/runner";\nconst runner = new InterlockingRunner(new TrainRunner());\nexport const dispatch = (action: string, inputs: object) => runner.resolveTrain(action, inputs, {});\n');
+    await writeFile(join(root, "src", "server.ts"), 'import { InterlockingRunner } from "./trains/interlocking";\nimport { TrainRunner } from "./trains/runner";\nconst runner = new InterlockingRunner();\nexport const dispatch = (action: string, inputs: object) => { const resolution = runner.resolveTrain(action, inputs, {}); return new TrainRunner(resolution.trainId).execute({}); };\n');
     expect(await flagged()).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -148,11 +151,35 @@ test("a wagon contract is judged only once some train carries the wagon", async 
     await writeFile(join(root, "plan", "b", "_b.yaml"), wagon("b", "x:b"));
     await writeFile(join(root, "plan", "_trains", "t-a.yaml"), "train_id: train:x:t-a\nsequence:\n- step: 1\n  from: user:u\n  to: wagon:a\n");
     await mkdir(join(root, "src"), { recursive: true });
-    await writeFile(join(root, "src", "a.ts"), 'export function runA(cargo: { put(k: string, v: unknown): void }) { cargo.put("x:a", 1); }\n');
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "src", "a.ts"), 'export class Cargo {}\nexport function runA(cargo: { put(k: string, v: unknown): void }) { cargo.put("x:a", 1); }\n');
+    await writeFile(join(root, "src", "trains", "runner.ts"), 'import { runA } from "../a";\nexport function runTrain(step: string, cargo: Cargo) { if (step === "a") return runA(cargo); }\n');
     await writeFile(join(root, "src", "b.ts"), "export const backfill = () => 1;\n");
     const contract = async () => (await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.wagon-honours-its-contract");
     expect(await contract()).toEqual([]);
     await writeFile(join(root, "plan", "_trains", "t-b.yaml"), "train_id: train:x:t-b\nsequence:\n- step: 1\n  from: wagon:a\n  to: wagon:b\n");
     expect((await contract()).map(v => v.evidence)).toEqual([expect.stringContaining('"x:b"')]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("artifact constants outside the executed wagon do not honour its Cargo contract", async () => {
+  // A lexical repository-wide match used to accept this: constants named the wagon's
+  // artifacts, while an unrelated helper moved different Cargo. Neither action is
+  // the carried wagon's executable contract.
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-contract-constants-"));
+  try {
+    await mkdir(join(root, "plan", "orders"), { recursive: true });
+    await mkdir(join(root, "plan", "_trains"), { recursive: true });
+    await mkdir(join(root, "src", "orders"), { recursive: true });
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "plan", "orders", "_orders.yaml"), "wagon: confirm-order\nproduce:\n  - name: orders:confirmed-order\nconsume:\n  - name: orders:priced-basket\n");
+    await writeFile(join(root, "plan", "_trains", "checkout.yaml"), "train_id: train:orders:checkout\nsequence:\n- step: 1\n  from: customer:active\n  to: wagon:confirm-order\n");
+    await writeFile(join(root, "src", "orders", "artifacts.ts"), 'export const CONSUMES = "orders:priced-basket";\nexport const PRODUCES = "orders:confirmed-order";\nexport class Cargo {}\n');
+    await writeFile(join(root, "src", "trains", "unrelated.ts"), 'export const audit = (cargo: Cargo) => { cargo.get("audit:entry"); cargo.put("audit:record", true); };\n');
+    const contract = async () => (await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.wagon-honours-its-contract");
+    expect((await contract()).map(v => v.evidence)).toEqual([
+      expect.stringContaining('"orders:confirmed-order"'),
+      expect.stringContaining('"orders:priced-basket"'),
+    ]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

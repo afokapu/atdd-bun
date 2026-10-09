@@ -20,6 +20,7 @@ import {
   STATION_MASTER,
   PROD_INTERLOCKING,
   PROD_TRAIN,
+  stationMasterExecutionProof,
   rel,
   mk,
   writeReport,
@@ -36,7 +37,7 @@ const SMOKE_PHASE = /^\s*\/\/\s*Phase:\s*SMOKE\b/m;
 function actionSmokeCovered(action, e2eFiles) {
   return e2eFiles.some(
     ({ raw, text: t }) =>
-      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN),
+      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) && stationMasterExecutionProof(t, action),
   );
 }
 

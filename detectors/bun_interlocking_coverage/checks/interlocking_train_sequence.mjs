@@ -16,22 +16,17 @@
 // suite green. The runtime obeyed the new plan; no test looked.
 import {
   parseJsonEnv, readText, findConsumerRoots, interlockingFiles, e2eFiles,
-  parseInterlocking, tokenCovered, rel, mk, PLAN_ROOT, unbuiltWagons,
+  parseInterlocking, rel, mk, PLAN_ROOT, unbuiltWagons, hasSequenceMutationProof,
 } from "../_shared/interlocking.mjs";
 import { writeFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export const RULE_SEQUENCE = "tester.bun.interlocking-train-sequence-is-exercised";
 
-// A line that ASSERTS AN ORDER: names the executed sequence AND compares it.
-// Merely touching the word is not asserting the order — `expect(trace.steps)` alone
-// says nothing about what ran, and counting it would repeat the over-broad trigger
-// that has now been fixed three times in this family.
-const SEQUENCE_ASSERTION =
-  /^[^\n]*\b(?:expect|assert)\b[^\n]*\b(?:steps|sequence|wagons)\b[^\n]*(?:==|toEqual|toStrictEqual|deepEqual)/m;
-
 export function assertsASequence(text) {
-  return SEQUENCE_ASSERTION.test(text);
+  // Retained as a narrow API for consumers of this module. The train id is intentionally
+  // unavailable here, so it cannot certify coverage; `trainSequenceCovered` below does.
+  return /\bexpect\s*\(\s*[A-Za-z_$][\w$]*\.(?:steps|sequence|wagons)\s*\)\s*\.to(?:Equal|StrictEqual)\s*\(/.test(text);
 }
 
 export function trainsReachableFromRoutes(records) {
@@ -45,8 +40,8 @@ export function trainsReachableFromRoutes(records) {
   return out;
 }
 
-export function trainSequenceCovered(trainId, texts) {
-  return texts.some((t) => tokenCovered(trainId, t) && assertsASequence(t));
+export function trainSequenceCovered(trainId, files, croot) {
+  return files.some(({ file, text }) => hasSequenceMutationProof(text, trainId, file, croot));
 }
 
 // Does the plan actually DECLARE a wagon sequence for this train?
@@ -85,13 +80,13 @@ export function scanExecution(scanRoot) {
     const records = interlockingFiles(croot).map((f) => parseInterlocking(readText(f))).filter(Boolean);
     if (!records.length) continue;
     const files = e2eFiles(croot).map((f) => ({ file: f, text: readText(f) }));
-    const texts = files.map((x) => x.text);
+
     for (const trainId of [...trainsReachableFromRoutes(records)].sort()) {
       // The finding points at the train's own document, where the sequence a test must assert is declared (FWS #fqUGvWHn25mq).
       const declared = declaresASequence(croot, trainId);
       if (!declared) continue;   // nothing declared to exercise
       if (unbuiltWagons(croot, trainId).length) continue;   // pending: a wagon on it has no source yet
-      if (trainSequenceCovered(trainId, texts)) continue;
+      if (trainSequenceCovered(trainId, files, croot)) continue;
       violations.push(
         mk(RULE_SEQUENCE, rel(declared, croot), 1, 0,
           `declared train "${trainId}" is selected by a route but no test asserts the wagon ` +

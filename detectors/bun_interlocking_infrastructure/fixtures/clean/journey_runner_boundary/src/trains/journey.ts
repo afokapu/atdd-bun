@@ -6,10 +6,23 @@ export class JourneyRunner {
   async execute(action: string, inputs: Record<string, unknown>, state?: unknown) {
     const declaration = Bun.YAML.parse(await Bun.file(this.journeyYamlPath).text()) as {
       entrypoint: { interlocking_id: string };
+      continuations: Array<{ from: { interlocking_id: string; route_id: string }; to: { interlocking_id: string } }>;
+      terminals: Array<{ from: { interlocking_id: string; route_id: string }; outcome: string }>;
     };
-    const id = declaration.entrypoint.interlocking_id.replace("interlocking:", "");
-    const path = `plan/_trains/_interlockings/${id}.yaml`;
-    const runner = new InterlockingRunner(path);
-    return runner.execute(action, inputs, state);
+    let current = declaration.entrypoint.interlocking_id;
+    for (;;) {
+      const id = current.replace("interlocking:", "");
+      const path = `plan/_trains/_interlockings/${id}.yaml`;
+      const runner = new InterlockingRunner(path);
+      const resolution = await runner.execute(action, inputs, state);
+      const continuation = declaration.continuations.find(edge => edge.from.interlocking_id === current && edge.from.route_id === resolution.routeId);
+      if (continuation) {
+        current = continuation.to.interlocking_id;
+        continue;
+      }
+      const terminal = declaration.terminals.find(edge => edge.from.interlocking_id === current && edge.from.route_id === resolution.routeId);
+      if (terminal) return { resolution, outcome: terminal.outcome };
+      throw new Error(`Journey topology has no outcome for ${current}`);
+    }
   }
 }
