@@ -156,3 +156,25 @@ test("a wagon contract is judged only once some train carries the wagon", async 
     expect((await contract()).map(v => v.evidence)).toEqual([expect.stringContaining('"x:b"')]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("artifact constants outside the executed wagon do not honour its Cargo contract", async () => {
+  // A lexical repository-wide match used to accept this: constants named the wagon's
+  // artifacts, while an unrelated helper moved different Cargo. Neither action is
+  // the carried wagon's executable contract.
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-contract-constants-"));
+  try {
+    await mkdir(join(root, "plan", "orders"), { recursive: true });
+    await mkdir(join(root, "plan", "_trains"), { recursive: true });
+    await mkdir(join(root, "src", "orders"), { recursive: true });
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "plan", "orders", "_orders.yaml"), "wagon: confirm-order\nproduce:\n  - name: orders:confirmed-order\nconsume:\n  - name: orders:priced-basket\n");
+    await writeFile(join(root, "plan", "_trains", "checkout.yaml"), "train_id: train:orders:checkout\nsequence:\n- step: 1\n  from: customer:active\n  to: wagon:confirm-order\n");
+    await writeFile(join(root, "src", "orders", "artifacts.ts"), 'export const CONSUMES = "orders:priced-basket";\nexport const PRODUCES = "orders:confirmed-order";\nexport class Cargo {}\n');
+    await writeFile(join(root, "src", "trains", "unrelated.ts"), 'export const audit = (cargo: Cargo) => { cargo.get("audit:entry"); cargo.put("audit:record", true); };\n');
+    const contract = async () => (await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.wagon-honours-its-contract");
+    expect((await contract()).map(v => v.evidence)).toEqual([
+      expect.stringContaining('"orders:confirmed-order"'),
+      expect.stringContaining('"orders:priced-basket"'),
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
