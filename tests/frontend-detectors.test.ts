@@ -165,9 +165,8 @@ export class TrainRunner {
   }
 }
 `);
-    expect((await runImplementation("bun_interlocking_binding", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
-      .map(v => `${v.rule_id} ${v.file.slice(root.length + 1)}`))
-      .toContain("coder.bun.runtime-executes-the-declaration src/trains/runner.ts");
+    const found = await runImplementation("bun_interlocking_binding", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] });
+    expect(found.some(v => v.rule_id === "coder.bun.runtime-executes-the-declaration" && v.file.endsWith("src/trains/runner.ts"))).toBeTrue();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

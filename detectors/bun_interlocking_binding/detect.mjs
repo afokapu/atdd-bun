@@ -24,7 +24,7 @@
 import { excludedPath } from "../../lib/scan.mjs";
 import { parseInterlocking as parseInterlockingDoc } from "../../lib/interlocking.mjs";
 import { readFileSync, writeFileSync, statSync, readdirSync } from "node:fs";
-import { scanExecution } from "./checks/interlocking_runtime_executes.mjs";
+import { scanExecution, scanTrainRunnerExecution } from "./checks/interlocking_runtime_executes.mjs";
 import { join, sep, resolve } from "node:path";
 
 const RULE = "coder.bun.interlocking-bilateral-binding";
@@ -544,7 +544,7 @@ function main() {
     // coder.bun.runtime-executes-the-declaration — no longer staged. This family is
     // monolithic rather than checks/-collecting, so it is called here rather than
     // discovered.
-    violations.push(...scanExecution(scanRoot));
+    violations.push(...scanExecution(scanRoot), ...scanTrainRunnerExecution(scanRoot));
   }
   writeFileSync(reportPath, JSON.stringify({ violations }, null, 2), "utf8");
   process.stderr.write(`bun-interlocking-binding: ${violations.length} violation(s)\n`);
