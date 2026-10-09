@@ -17,6 +17,17 @@ test("JourneyRunner cannot parse a declared continuation then return after its e
   );
 });
 
+test("JourneyRunner cannot satisfy continuation enforcement with dead topology reads before an early return", async () => {
+  const findings = await runImplementation(detector, {
+    ...config,
+    scanRoots: [join(fixtures, "journey_continuation_dead_read")],
+  });
+
+  expect(findings.map(item => item.evidence)).toContain(
+    "journey-runtime-continuation-ignored: JourneyRunner reads a continuation-bearing declaration but returns the entrypoint InterlockingRunner result without consuming continuations and terminals",
+  );
+});
+
 test("Station Master dispatch must invoke its mapped JourneyRunner instead of business logic", async () => {
   const findings = await runImplementation(detector, {
     ...config,

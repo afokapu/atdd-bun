@@ -67,7 +67,12 @@ function consumesDeclaredTopology(text) {
   // is the characteristic skipped-continuation mutation.
   const retainsResolution = /\b(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+(?:new\s+InterlockingRunner\s*\([^)]*\)|[A-Za-z_$][\w$]*)\s*\.\s*execute\s*\(/.test(masked);
   const readsEntrypoint = new RegExp("\\b" + name + "\\s*\\.\\s*entrypoint\\b").test(masked);
-  return readsEntrypoint && reads("continuations") && reads("terminals") && retainsResolution;
+  // Reading both lists is only discovery. A continuation must alter control flow to
+  // another declared interlocking and a terminal must decide the returned outcome;
+  // otherwise an early `return resolution` leaves the journey topology inert.
+  const followsContinuation = /\bif\s*\(\s*continuation\s*\)\s*\{[\s\S]{0,280}?\bcontinue\b/.test(masked);
+  const returnsTerminal = /\bif\s*\(\s*terminal\s*\)\s*(?:\{[\s\S]{0,280}?)?\breturn\b/.test(masked);
+  return readsEntrypoint && reads("continuations") && reads("terminals") && retainsResolution && followsContinuation && returnsTerminal;
 }
 
 function hiddenTopologyLiterals(text) {
