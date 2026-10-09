@@ -148,7 +148,9 @@ test("a wagon contract is judged only once some train carries the wagon", async 
     await writeFile(join(root, "plan", "b", "_b.yaml"), wagon("b", "x:b"));
     await writeFile(join(root, "plan", "_trains", "t-a.yaml"), "train_id: train:x:t-a\nsequence:\n- step: 1\n  from: user:u\n  to: wagon:a\n");
     await mkdir(join(root, "src"), { recursive: true });
-    await writeFile(join(root, "src", "a.ts"), 'export function runA(cargo: { put(k: string, v: unknown): void }) { cargo.put("x:a", 1); }\n');
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "src", "a.ts"), 'export class Cargo {}\nexport function runA(cargo: { put(k: string, v: unknown): void }) { cargo.put("x:a", 1); }\n');
+    await writeFile(join(root, "src", "trains", "runner.ts"), 'import { runA } from "../a";\nexport function runTrain(step: string, cargo: Cargo) { if (step === "a") return runA(cargo); }\n');
     await writeFile(join(root, "src", "b.ts"), "export const backfill = () => 1;\n");
     const contract = async () => (await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "coder.bun.wagon-honours-its-contract");
     expect(await contract()).toEqual([]);

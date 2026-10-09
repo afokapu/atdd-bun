@@ -24,7 +24,7 @@
 // CONTRACT (v1.1): reads ATDD_SCAN_ROOTS / ATDD_SCAN_EXCLUDES, writes RAW violations to
 // ATDD_VIOLATIONS_REPORT, exits 0 regardless of count.
 import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { join, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 const RULE = "coder.bun.wagon-honours-its-contract";
 const EXCLUDES = ["node_modules", "dist", "build", ".next", ".git", "_generated"];
@@ -101,6 +101,95 @@ export function maskComments(text) {
     .replace(/(^|[^:\\])\/\/[^\n]*/g, (m, p1) => p1 + " ".repeat(m.length - p1.length));
 }
 
+const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function closingBrace(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function handlerBody(text, name) {
+  const escaped = escape(name);
+  const forms = [
+    new RegExp(`\\b(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\([^)]*\\)\\s*(?::[^={]+)?\\{`),
+    new RegExp(`\\b(?:export\\s+)?(?:const|let)\\s+${escaped}\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`),
+  ];
+  for (const form of forms) {
+    const match = form.exec(text);
+    if (!match) continue;
+    const open = match.index + match[0].lastIndexOf("{");
+    const close = closingBrace(text, open);
+    if (close >= 0) return text.slice(open + 1, close);
+  }
+  return "";
+}
+
+function localConstants(text) {
+  const values = new Map();
+  const re = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*["']([^"']+)["']/g;
+  let match;
+  while ((match = re.exec(text)) !== null) values.set(match[1], match[2]);
+  return values;
+}
+
+function artifactArgument(argument, constants) {
+  const literal = /^\s*["']([^"']+)["']\s*$/.exec(argument);
+  if (literal) return literal[1];
+  const identifier = /^\s*([A-Za-z_$][\w$]*)\s*$/.exec(argument);
+  return identifier ? constants.get(identifier[1]) ?? null : null;
+}
+
+function cargoMoves(handler, module) {
+  const constants = localConstants(module), reads = new Set(), writes = new Set();
+  for (const [method, target] of [["get", reads], ["put", writes]]) {
+    const re = new RegExp(`\\bcargo\\s*\\.\\s*${method}\\s*\\(\\s*([^,)]*)`, "g");
+    let match;
+    while ((match = re.exec(handler)) !== null) {
+      const artifact = artifactArgument(match[1], constants);
+      if (artifact) target.add(artifact);
+    }
+  }
+  return { reads, writes };
+}
+
+function importedHandlers(runner) {
+  const handlers = [];
+  const re = /^\s*import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/gm;
+  let match;
+  while ((match = re.exec(runner.text)) !== null) {
+    if (!match[2].startsWith(".")) continue;
+    const target = resolve(dirname(runner.file), match[2]);
+    const file = [target, `${target}.ts`, `${target}.tsx`, join(target, "index.ts")]
+      .find((candidate) => runner.sources.has(candidate));
+    if (!file) continue;
+    for (const entry of match[1].split(",")) {
+      const [imported, local = imported] = entry.trim().split(/\s+as\s+/);
+      if (imported && local && imported !== "Cargo") handlers.push({ name: local.trim(), file });
+    }
+  }
+  return handlers;
+}
+
+function executedHandlers(wagon, runners, sources) {
+  const handlers = [];
+  const wagonLiteral = escape(wagon);
+  for (const runner of runners) {
+    const imports = importedHandlers({ ...runner, sources });
+    for (const handler of imports) {
+      const branch = new RegExp(
+        `\\b(?:if\\s*\\(\\s*step\\s*={2,3}\\s*["']${wagonLiteral}["']\\s*\\)|case\\s*["']${wagonLiteral}["']\\s*:)` +
+        `[\\s\\S]{0,240}?\\b${escape(handler.name)}\\s*\\(\\s*cargo\\b`,
+      );
+      if (branch.test(runner.text)) handlers.push(handler);
+    }
+  }
+  return handlers;
+}
+
 const reportPath = process.env.ATDD_VIOLATIONS_REPORT;
 if (!reportPath) {
   process.stderr.write("bun-infra: ATDD_VIOLATIONS_REPORT not set\n");
@@ -126,26 +215,37 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
     if (!contracts.length) continue;                     // no declared contract
 
     const sources = walk(croot, (p) => TS.test(p) && !TEST.test(p), excludes)
-      .map((f) => ({ file: f, text: read(f) }));
-    // A wagon implementation is one that moves artifacts through Cargo. Detected by
-    // that behaviour rather than by filename — a `wagon.ts` naming heuristic is the
-    // kind of fitted check this hub has had to unpick more than once.
-    const wagonCode = sources.filter((s) => /\bCargo\b|\bcargo\s*\.\s*(?:put|get)\s*\(/.test(s.text));
-    if (!wagonCode.length) continue;                     // nothing implemented to judge
-
-    const blob = wagonCode.map((s) => maskComments(s.text)).join("\n");
+      .map((file) => ({ file, text: maskComments(read(file)) }));
+    // Do not turn a plan-only repository into a contract failure. Once this consumer
+    // does have Cargo-shaped source, however, each carried wagon must bind its own
+    // handler into the train path; a global source blob is not evidence of that.
+    if (!sources.some((s) => /\bCargo\b|\bcargo\s*\.\s*(?:put|get)\s*\(/.test(s.text))) continue;
+    const sourceByFile = new Map(sources.map((source) => [source.file, source.text]));
+    const trainRoot = join(croot, "src", "trains") + sep;
+    const runners = sources.filter((source) => source.file.startsWith(trainRoot));
     for (const c of contracts) {
       if (c.wagon && !carried.has(c.wagon)) continue;   // no train carries this wagon yet
+      const handlers = c.wagon ? executedHandlers(c.wagon, runners, sourceByFile) : [];
+      const reads = new Set(), writes = new Set();
+      for (const handler of handlers) {
+        const module = sourceByFile.get(handler.file) ?? "";
+        const body = handlerBody(module, handler.name);
+        const moves = cargoMoves(body, module);
+        for (const artifact of moves.reads) reads.add(artifact);
+        for (const artifact of moves.writes) writes.add(artifact);
+      }
       for (const [kind, names] of [["produce", c.produce], ["consume", c.consume]]) {
         for (const name of names) {
-          if (blob.includes(name)) continue;
+          const moved = kind === "produce" ? writes : reads;
+          if (moved.has(name)) continue;
           const rel = c.file.startsWith(croot + sep) ? c.file.slice(croot.length + 1) : c.file;
           violations.push({
             rule_id: RULE, file: rel, line: 1, col: 0,
             evidence:
               `the wagon declares it ${kind === "produce" ? "produces" : "consumes"} ` +
-              `"${name}", and no wagon implementation names it; the declared contract and ` +
-              `the Cargo it actually moves are free to disagree`,
+              `"${name}", but no handler reachable from that wagon's train step ` +
+              `${kind === "produce" ? "writes" : "reads"} it through Cargo; artifact constants ` +
+              `or unrelated Cargo code do not honour the wagon contract`,
             source_line: "",
           });
         }
