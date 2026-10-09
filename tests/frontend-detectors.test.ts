@@ -150,6 +150,27 @@ test("the Station Master is the module that declares JOURNEY_MAP, not a test tha
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("TrainRunner cannot pass by returning a fabricated literal trace instead of executing its declared train", async () => {
+  // RED mutant: InterlockingRunner honestly resolves its declaration, but the production
+  // executor ignores the supplied train entirely. The binding check must reject this
+  // independently of the resolver's correct route selection.
+  const root = await mkdtemp(join(tmpdir(), "atdd-trainrunner-noop-"));
+  try {
+    await cp(join(detectors, "bun_interlocking_binding", "fixtures", "clean"), root, { recursive: true });
+    await writeFile(join(root, "src", "trains", "runner.ts"), `
+export class TrainRunner {
+  constructor(private readonly trainId: string) {}
+  execute(_inputs: Record<string, unknown>) {
+    return { selectedTrainId: this.trainId, trace: ["load-match", "resolve-match"] };
+  }
+}
+`);
+    expect((await runImplementation("bun_interlocking_binding", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+      .map(v => `${v.rule_id} ${v.file.slice(root.length + 1)}`))
+      .toContain("coder.bun.runtime-executes-the-declaration src/trains/runner.ts");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("defining Bun.serve's fetch handler is not an outbound fetch call; a real call still is", async () => {
   // resolver-os #iFlkkL7jvEbC: `async fetch(request) {` was reported as a presentation-layer HTTP call.
   const root = await mkdtemp(join(tmpdir(), "atdd-fetch-handler-"));
