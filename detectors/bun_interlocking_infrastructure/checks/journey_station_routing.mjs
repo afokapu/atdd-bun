@@ -56,6 +56,28 @@ function actionMapping(text, action) {
   return { body: match[1], line: lineOfIndex(masked, match.index) };
 }
 
+function matchingBrace(text, open) {
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    if (text[i] === "{") depth++;
+    else if (text[i] === "}" && --depth === 0) return i;
+  }
+  return -1;
+}
+
+function dispatchInvokesMappedJourneyRunner(text) {
+  const masked = maskComments(text);
+  const dispatch = /\b(?:async\s+)?function\s+dispatch\s*\([^)]*\)\s*\{/.exec(masked);
+  if (!dispatch) return false;
+  const open = dispatch.index + dispatch[0].length - 1;
+  const close = matchingBrace(masked, open);
+  const body = masked.slice(open + 1, close < 0 ? masked.length : close);
+  const direct = /\breturn\s+(?:await\s+)?new\s+JourneyRunner\s*\(\s*[A-Za-z_$][\w$]*\s*\.\s*path\s*\)\s*\.\s*execute\s*\(/.test(body);
+  const constructed = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+JourneyRunner\s*\(\s*[A-Za-z_$][\w$]*\s*\.\s*path\s*\)/.exec(body);
+  const delegated = constructed && new RegExp("\\breturn\\s+(?:await\\s+)?" + constructed[1] + "\\s*\\.\\s*execute\\s*\\(").test(body);
+  return direct || delegated;
+}
+
 for (const scanRoot of roots) {
   for (const croot of findConsumerRoots(scanRoot)) {
     const journeys = journeyDocuments(croot).filter(item => item.data?.entrypoint?.exposed === true);
@@ -74,6 +96,14 @@ for (const scanRoot of roots) {
       1,
       0,
       "journey-station-unlinked: exposed journeys exist but Station Master never references JourneyRunner",
+      lineAt(text, 1),
+    ));
+    if (referencesToken(text, "JourneyRunner") && !dispatchInvokesMappedJourneyRunner(text)) violations.push(mk(
+      RULE,
+      appPath,
+      1,
+      0,
+      "journey-station-dispatch-bypasses-runner: Station Master dispatch must return a JourneyRunner execution for the mapped exposed journey",
       lineAt(text, 1),
     ));
 
