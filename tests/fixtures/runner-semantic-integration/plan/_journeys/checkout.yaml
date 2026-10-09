@@ -1,0 +1,13 @@
+journey_id: journey:checkout
+entrypoint:
+  interlocking_id: interlocking:cart
+  interlocking_path: plan/_trains/_interlockings/cart.yaml
+  exposed: true
+  actions: [checkout]
+continuations:
+  - from: { interlocking_id: interlocking:cart, route_id: ready }
+    artifact: order:prepared
+    to: { interlocking_id: interlocking:payment, path: plan/_trains/_interlockings/payment.yaml }
+terminals:
+  - from: { interlocking_id: interlocking:payment, route_id: paid }
+    outcome: complete

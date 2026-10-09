@@ -1,0 +1,8 @@
+interlocking_id: interlocking:payment
+entrypoint:
+  exposed: false
+  actions: []
+routes:
+  - route_id: paid
+    train_id: train:checkout:complete
+    train_path: plan/_trains/train:checkout:complete.yaml

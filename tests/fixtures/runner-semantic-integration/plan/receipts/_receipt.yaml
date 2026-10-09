@@ -1,0 +1,5 @@
+wagon: receipt
+produce:
+  - name: receipt:issued
+consume:
+  - name: order:prepared
