@@ -70,8 +70,8 @@ function consumesDeclaredTopology(text) {
   // Reading both lists is only discovery. A continuation must alter control flow to
   // another declared interlocking and a terminal must decide the returned outcome;
   // otherwise an early `return resolution` leaves the journey topology inert.
-  const followsContinuation = /\bif\s*\(\s*continuation\s*\)\s*\{[\s\S]{0,280}?\bcontinue\b/.test(masked);
-  const returnsTerminal = /\bif\s*\(\s*terminal\s*\)\s*(?:\{[\s\S]{0,280}?)?\breturn\b/.test(masked);
+  const followsContinuation = /\bif\s*\(\s*continuation\s*\)\s*\{[\s\S]{0,280}?\bcurrent\s*=\s*continuation\s*\.\s*to\s*\.\s*(?:interlocking_id|interlockingId)\b[\s\S]{0,280}?\bcontinue\b/.test(masked);
+  const returnsTerminal = /\bif\s*\(\s*terminal\s*\)\s*(?:\{[\s\S]{0,280}?)?\breturn\b[\s\S]{0,240}?\bterminal\s*\.\s*outcome\b/.test(masked);
   return readsEntrypoint && reads("continuations") && reads("terminals") && retainsResolution && followsContinuation && returnsTerminal;
 }
 

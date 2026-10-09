@@ -28,6 +28,17 @@ test("JourneyRunner cannot satisfy continuation enforcement with dead topology r
   );
 });
 
+test("JourneyRunner must advance through the matched continuation and return the matched terminal outcome", async () => {
+  const findings = await runImplementation(detector, {
+    ...config,
+    scanRoots: [join(fixtures, "journey_continuation_self_loop")],
+  });
+
+  expect(findings.map(item => item.evidence)).toContain(
+    "journey-runtime-continuation-ignored: JourneyRunner reads a continuation-bearing declaration but returns the entrypoint InterlockingRunner result without consuming continuations and terminals",
+  );
+});
+
 test("Station Master dispatch must invoke its mapped JourneyRunner instead of business logic", async () => {
   const findings = await runImplementation(detector, {
     ...config,
