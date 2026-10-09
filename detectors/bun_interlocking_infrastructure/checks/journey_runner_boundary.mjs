@@ -56,6 +56,20 @@ function loadsJourneyDeclaration(text) {
   return readsJourneyPath && parsesDeclaration;
 }
 
+function consumesDeclaredTopology(text) {
+  const masked = maskComments(text);
+  const declaration = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*Bun\.YAML\.parse\s*\(/.exec(masked);
+  if (!declaration) return false;
+  const name = declaration[1].replace(/[$]/g, "\\$");
+  const reads = (field) => new RegExp("\\b" + name + "\\s*\\.\\s*" + field + "\\s*\\.\\s*find\\s*\\(").test(masked);
+  // A runner must retain the interlocking result long enough to decide whether the
+  // declared route continues or terminates. Returning the first execute() directly
+  // is the characteristic skipped-continuation mutation.
+  const retainsResolution = /\b(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+(?:new\s+InterlockingRunner\s*\([^)]*\)|[A-Za-z_$][\w$]*)\s*\.\s*execute\s*\(/.test(masked);
+  const readsEntrypoint = new RegExp("\\b" + name + "\\s*\\.\\s*entrypoint\\b").test(masked);
+  return readsEntrypoint && reads("continuations") && reads("terminals") && retainsResolution;
+}
+
 function hiddenTopologyLiterals(text) {
   const masked = maskComments(text);
   const hits = [];
@@ -112,6 +126,14 @@ for (const scanRoot of roots) {
         line,
         0,
         "journey-runtime-transcription: JourneyRunner does not read and parse a journey declaration; topology may be hardcoded",
+        lineAt(text, line),
+      ));
+      if (loadsDeclaration && !consumesDeclaredTopology(text)) violations.push(mk(
+        RULE,
+        rel(file, croot),
+        line,
+        0,
+        "journey-runtime-continuation-ignored: JourneyRunner reads a continuation-bearing declaration but returns the entrypoint InterlockingRunner result without consuming continuations and terminals",
         lineAt(text, line),
       ));
       for (const hit of hardcodedInterlockingConstruction(text)) violations.push(mk(

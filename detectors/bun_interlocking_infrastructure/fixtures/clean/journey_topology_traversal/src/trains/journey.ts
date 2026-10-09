@@ -1,14 +1,23 @@
 import { InterlockingRunner } from "@app/interlocking-runtime";
 
+type Topology = {
+  entrypoint: { interlocking_id: string };
+  continuations: Array<{
+    from: { interlocking_id: string; route_id: string };
+    artifact: string;
+    to: { interlocking_id: string };
+  }>;
+  terminals: Array<{
+    from: { interlocking_id: string; route_id: string };
+    outcome: string;
+  }>;
+};
+
 export class JourneyRunner {
   constructor(private readonly journeyYamlPath: string) {}
 
   async execute(action: string, inputs: Record<string, unknown>, state?: unknown) {
-    const declaration = Bun.YAML.parse(await Bun.file(this.journeyYamlPath).text()) as {
-      entrypoint: { interlocking_id: string };
-      continuations: Array<{ from: { interlocking_id: string; route_id: string }; to: { interlocking_id: string } }>;
-      terminals: Array<{ from: { interlocking_id: string; route_id: string }; outcome: string }>;
-    };
+    const declaration = Bun.YAML.parse(await Bun.file(this.journeyYamlPath).text()) as Topology;
     let current = declaration.entrypoint.interlocking_id;
     for (;;) {
       const id = current.replace("interlocking:", "");

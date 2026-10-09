@@ -27,3 +27,12 @@ test("Station Master dispatch must invoke its mapped JourneyRunner instead of bu
     "journey-station-dispatch-bypasses-runner: Station Master dispatch must return a JourneyRunner execution for the mapped exposed journey",
   );
 });
+
+test("declaration-derived continuation and terminal traversal remains accepted", async () => {
+  const findings = await runImplementation(detector, {
+    ...config,
+    scanRoots: [join(fixtures, "../clean/journey_topology_traversal")],
+  });
+
+  expect(findings).toEqual([]);
+});
