@@ -1,12 +1,12 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()), err: (await new Response(child.stderr).text()) }; };
-async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); return root; }
+async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); await writeFile(join(root, ".git", "info", "exclude"), "node_modules/\n"); await mkdir(join(root, "node_modules", "@afokapu"), { recursive: true }); await symlink(resolve(import.meta.dir, ".."), join(root, "node_modules", "@afokapu", "atdd-bun"), "dir"); return root; }
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
 
 async function worktreeLayout() {
@@ -20,6 +20,24 @@ async function worktreeLayout() {
 test("real Git installation is idempotent, worktree-local, and removable", async () => {
   const root = await repo(); try { expect((await installHooks(root)).ok).toBeTrue(); expect((await installHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeTrue(); expect((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); for (const event of hookEvents) expect((await readFile(join(root, ".githooks", event), "utf8")).includes("atdd ")).toBeFalse(); const wt = `${root}-wt`; expect((await git(root, ["worktree", "add", "-q", "-b", "linked", wt])).code).toBe(0); expect((await installHooks(wt)).ok).toBeTrue(); expect((await git(wt, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe(".githooks"); expect((await uninstallHooks(root)).ok).toBeTrue(); expect((await hooksStatus(root)).ok).toBeFalse(); }
   finally { await cleanup(root); await cleanup(`${root}-wt`); }
+}, 20_000);
+
+test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8");
+    expect(dispatcher).not.toContain(resolve(import.meta.dir, "../src/cli.ts"));
+  } finally { await cleanup(root); }
+});
+
+test("a consumer src/cli.ts cannot impersonate a missing project-local atdd-bun hook CLI", async () => {
+  const root = await repo("main"); try {
+    await rm(join(root, "node_modules"), { recursive: true, force: true });
+    await installHooks(root);
+    await mkdir(join(root, "src"), { recursive: true }); await writeFile(join(root, "src", "cli.ts"), "process.exit(0);\n");
+    await writeFile(join(root, "readme.md"), "changed\n"); await git(root, ["add", "."]);
+    expect((await git(root, ["commit", "-m", "must-not-bypass"])).code).not.toBe(0);
+  } finally { await cleanup(root); }
 }, 20_000);
 
 test("real Git policy rejects protected branches, each micro threshold, deletion without token, and bad traceability", async () => {
