@@ -7,8 +7,8 @@
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
-import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
-import { join, sep } from "node:path";
+import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
 
 export const DEFAULT_EXCLUDES = ["_generated", "node_modules", "dist", "build", ".next"];
 export const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
@@ -338,7 +338,23 @@ function productionReceivers(text) {
 // [{ resolution, execution }] means an actual resolution value feeds actual train execution.
 // `execution` is null for an unassigned execute result; route/runner proof may assert resolution,
 // while trace and sequence proof require the named execution result.
-export function productionExecutionProofs(text) {
+export function hasResolvedProductionRunnerImports(text, file, croot) {
+  const imported = new Set();
+  const re = /^\s*import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/gm;
+  for (const match of text.matchAll(re)) {
+    if (!match[2].startsWith(".")) continue;
+    const names = match[1].split(",").map(name => name.trim().split(/\s+as\s+/)[0]);
+    const target = resolve(dirname(file), match[2]);
+    const candidates = [target, `${target}.ts`, `${target}.tsx`, `${target}.js`, `${target}.mjs`, join(target, "index.ts")];
+    const source = candidates.find(candidate => existsSync(candidate) && candidate.startsWith(resolve(croot) + sep) && !/\.(test|spec)\.[cm]?[jt]sx?$/.test(candidate));
+    if (!source) continue;
+    for (const name of names) if (name === PROD_INTERLOCKING || name === PROD_TRAIN) imported.add(name);
+  }
+  return imported.has(PROD_INTERLOCKING) && imported.has(PROD_TRAIN);
+}
+
+export function productionExecutionProofs(text, file, croot) {
+  if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return [];
   const receivers = productionReceivers(text);
   const proofs = [];
   const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
@@ -361,8 +377,8 @@ export function assertsExpression(text, expression, expected = null) {
   return Boolean(m && (!expected || tokenCovered(expected, m[0])));
 }
 
-export function hasProductionExecutionProof(text) {
-  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+export function hasProductionExecutionProof(text, file, croot) {
+  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
     if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
       (execution && assertsExpression(text, escaped(execution)))) return true;
     if (!execution) return false;
@@ -371,9 +387,9 @@ export function hasProductionExecutionProof(text) {
   });
 }
 
-export function routeHasProductionProof(route, text, interlockingId = null) {
+export function routeHasProductionProof(route, text, interlockingId = null, file, croot) {
   const slug = interlockingId?.replace(/^interlocking:/, "");
-  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
     const assertedRoute = assertsExpression(text, `${escaped(resolution)}\\.routeId`, route.routeId);
     const assertedTrain = assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, route.trainId);
     const scoped = !interlockingId || tokenCovered(interlockingId, text) || tokenCovered(slug, text);
@@ -381,8 +397,8 @@ export function routeHasProductionProof(route, text, interlockingId = null) {
   });
 }
 
-export function traceHasProductionProvenance(text) {
-  return productionExecutionProofs(text).some(({ execution }) => {
+export function traceHasProductionProvenance(text, file, croot) {
+  return productionExecutionProofs(text, file, croot).some(({ execution }) => {
     if (!execution) return false;
     const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
     return Boolean(trace);
@@ -418,8 +434,8 @@ export function stationModuleExecutionProof(text, stationText) {
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality
 // kills reorder/removal mutants, objectContaining records a handoff edge, and at(-1) observes the
 // final wagon.  All three must be about the TrainRunner result, never a hand-built literal.
-export function hasSequenceMutationProof(text, trainId) {
-  return productionExecutionProofs(text).some(({ resolution, execution }) => {
+export function hasSequenceMutationProof(text, trainId, file, croot) {
+  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
     if (!execution || !assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, trainId)) return false;
     const result = escaped(execution);
     const ordered = new RegExp(`expect\\s*\\(\\s*${result}\\.(?:steps|sequence|wagons)\\s*\\)\\s*\\.to(?:Equal|StrictEqual)\\s*\\(\\s*\\[`, "s").test(text);

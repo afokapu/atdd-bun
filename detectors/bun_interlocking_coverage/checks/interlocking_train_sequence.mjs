@@ -40,8 +40,8 @@ export function trainsReachableFromRoutes(records) {
   return out;
 }
 
-export function trainSequenceCovered(trainId, texts) {
-  return texts.some((t) => hasSequenceMutationProof(t, trainId));
+export function trainSequenceCovered(trainId, files, croot) {
+  return files.some(({ file, text }) => hasSequenceMutationProof(text, trainId, file, croot));
 }
 
 // Does the plan actually DECLARE a wagon sequence for this train?
@@ -80,13 +80,13 @@ export function scanExecution(scanRoot) {
     const records = interlockingFiles(croot).map((f) => parseInterlocking(readText(f))).filter(Boolean);
     if (!records.length) continue;
     const files = e2eFiles(croot).map((f) => ({ file: f, text: readText(f) }));
-    const texts = files.map((x) => x.text);
+
     for (const trainId of [...trainsReachableFromRoutes(records)].sort()) {
       // The finding points at the train's own document, where the sequence a test must assert is declared (FWS #fqUGvWHn25mq).
       const declared = declaresASequence(croot, trainId);
       if (!declared) continue;   // nothing declared to exercise
       if (unbuiltWagons(croot, trainId).length) continue;   // pending: a wagon on it has no source yet
-      if (trainSequenceCovered(trainId, texts)) continue;
+      if (trainSequenceCovered(trainId, files, croot)) continue;
       violations.push(
         mk(RULE_SEQUENCE, rel(declared, croot), 1, 0,
           `declared train "${trainId}" is selected by a route but no test asserts the wagon ` +

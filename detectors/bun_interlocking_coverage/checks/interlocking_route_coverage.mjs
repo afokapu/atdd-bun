@@ -30,11 +30,11 @@ for (const scanRoot of roots) {
     const records = interlockingFiles(croot)
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
-    const e2eTexts = e2eFiles(croot).map((f) => maskComments(readText(f)));
+    const e2eTexts = e2eFiles(croot).map((file) => ({ file, text: maskComments(readText(file)) }));
 
     for (const { file, rec } of records) {
       for (const route of rec.routes) {
-        if (e2eTexts.some((text) => routeHasProductionProof(route, text, rec.interlockingId))) continue;
+        if (e2eTexts.some(({ file, text }) => routeHasProductionProof(route, text, rec.interlockingId, file, croot))) continue;
         if (unbuiltWagons(croot, route.trainId).length) continue;   // pending: a wagon on its train has no source yet
         const cat =
           route.category !== null

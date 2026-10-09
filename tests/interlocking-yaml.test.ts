@@ -103,6 +103,9 @@ test("a route id covers its route only in a test of its own interlocking", async
     await writeFile(join(root, "plan", "_trains", "_interlockings", "alpha.yaml"), doc("alpha"));
     await writeFile(join(root, "plan", "_trains", "_interlockings", "beta.yaml"), doc("beta"));
     await mkdir(join(root, "e2e", "interlockings", "alpha"), { recursive: true });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "interlocking.ts"), "export class InterlockingRunner { resolveTrain() { return { routeId: 'refuse', trainId: 'train:alpha:refuse-alpha' }; } }\n");
+    await writeFile(join(root, "src", "runner.ts"), "export class TrainRunner { constructor(_: string) {} execute() { return {}; } }\n");
     await writeFile(join(root, "e2e", "interlockings", "alpha", "refuse.routes.test.ts"), 'import { expect, test } from "bun:test";\nimport { InterlockingRunner } from "../../../src/interlocking";\nimport { TrainRunner } from "../../../src/runner";\ntest("interlocking:alpha refuse", () => { const resolution = new InterlockingRunner().resolveTrain("refuse", {}); const result = new TrainRunner(resolution.trainId).execute({}); expect(resolution.routeId).toBe("refuse"); expect(result).toBeDefined(); });\n');
     const coverage = (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).filter(v => v.rule_id === "tester.bun.interlocking-route-coverage");
     expect(coverage.map(v => v.file)).toEqual([expect.stringContaining("beta.yaml")]);

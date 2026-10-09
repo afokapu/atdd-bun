@@ -70,7 +70,7 @@ for (const scanRoot of roots) {
         }
       }
 
-      const semantic = hasProductionExecutionProof(text) ||
+      const semantic = hasProductionExecutionProof(text, file, croot) ||
         records.some((rec) => rec.actions.some((action) => stationMasterExecutionProof(text, action))) ||
         (drivesStationMaster(text) && stationModuleExecutionProof(text, station));
       if (!semantic) {
