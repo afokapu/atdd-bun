@@ -244,3 +244,42 @@ test("resolve_match dispatch does not use the inert helper", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("semantic smoke rejects an exported dispatch that discards execution or resolves on an unrecognized receiver", async () => {
+  const bodies = {
+    "discarded execution": `  const resolution = runner.resolveTrain(action, inputs);
+  await new TrainRunner(resolution.trainId).execute({});
+  return { selectedTrainId: "train:match:match-resolution-standard" };`,
+    "unrecognized receiver": `  const fake = { resolveTrain: (_a: string, _i: object) => ({ trainId: "train:match:match-resolution-standard" }) };
+  const resolution = fake.resolveTrain(action, inputs);
+  return await new TrainRunner(resolution.trainId).execute({});`,
+  };
+  for (const [name, body] of Object.entries(bodies)) {
+    const root = await mkdtemp(join(tmpdir(), "atdd-inert-station-dispatch-"));
+    try {
+      await cp(join(detector, "fixtures", "clean", "interlocking_smoke_coverage"), root, { recursive: true });
+      await mkdir(join(root, "src"), { recursive: true });
+      await writeFile(join(root, "src", "server.ts"), `import { InterlockingRunner } from "./trains/interlocking";
+import { TrainRunner } from "./trains/runner";
+const runner = new InterlockingRunner("plan/_trains/_interlockings/match-resolution.yaml");
+export async function dispatch(action: string, inputs: object) {
+${body}
+}
+`);
+      await writeFile(join(root, "e2e", "smoke", "resolve-match.smoke.test.ts"), `// Phase: SMOKE
+import { expect, test } from "bun:test";
+import { dispatch } from "../../src/server";
+import { InterlockingRunner } from "../../convex/trains/interlocking";
+import { TrainRunner } from "../../convex/trains/runner";
+test("resolve_match dispatch", async () => {
+  const result = await dispatch("resolve_match", { allPlayersVoted: true });
+  expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
+  expect(InterlockingRunner).toBeDefined(); expect(TrainRunner).toBeDefined();
+});
+`);
+      expect(rule("tester.bun.interlocking-smoke-coverage-for-station-master", await run(root)), name).not.toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
