@@ -3,10 +3,12 @@
 // afokapu/atdd#1248 route space + #1251 runner call model). Each check under ../checks/*.mjs imports
 // this module and scans a consumer tree for ONE tester.bun.interlocking-* rule.
 //
-// ZERO third-party deps — node builtins only. The interlocking route space is stack-neutral planner
+// Node builtins only, except lib/journey-chain.mjs, which proves the journey-mediated chain on the
+// TypeScript compiler AST. The interlocking route space is stack-neutral planner
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
+import { entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -338,41 +340,239 @@ function productionReceivers(text) {
 // [{ resolution, execution }] means an actual resolution value feeds actual train execution.
 // `execution` is null for an unassigned execute result; route/runner proof may assert resolution,
 // while trace and sequence proof require the named execution result.
-export function hasResolvedProductionRunnerImports(text, file, croot) {
-  const imported = new Set();
+function resolvedLocalNamedImport(text, file, croot, symbol) {
+  if (!file || !croot) return null;
   const re = /^\s*import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/gm;
   for (const match of text.matchAll(re)) {
     if (!match[2].startsWith(".")) continue;
     const names = match[1].split(",").map(name => name.trim().split(/\s+as\s+/)[0]);
+    if (!names.includes(symbol)) continue;
     const target = resolve(dirname(file), match[2]);
     const candidates = [target, `${target}.ts`, `${target}.tsx`, `${target}.js`, `${target}.mjs`, join(target, "index.ts")];
     const source = candidates.find(candidate => existsSync(candidate) && candidate.startsWith(resolve(croot) + sep) && !/\.(test|spec)\.[cm]?[jt]sx?$/.test(candidate));
-    if (!source) continue;
-    for (const name of names) if (name === PROD_INTERLOCKING || name === PROD_TRAIN) imported.add(name);
+    if (source) return source;
   }
-  return imported.has(PROD_INTERLOCKING) && imported.has(PROD_TRAIN);
+  return null;
+}
+
+export function hasResolvedProductionRunnerImports(text, file, croot) {
+  return Boolean(
+    resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING) &&
+    resolvedLocalNamedImport(text, file, croot, PROD_TRAIN),
+  );
+}
+
+// Index just past a string or comment starting at `i`, or `i` itself when `i` starts code.
+function skipLiteral(text, i) {
+  const c = text[i], next = text[i + 1];
+  if (c === "/" && next === "/") { const end = text.indexOf("\n", i + 2); return end < 0 ? text.length : end; }
+  if (c === "/" && next === "*") { const end = text.indexOf("*/", i + 2); return end < 0 ? text.length : end + 2; }
+  if (c === "'" || c === '"' || c === "`") {
+    for (let j = i + 1; j < text.length; j++) {
+      if (text[j] === "\\") { j++; continue; }
+      if (text[j] === c) return j + 1;
+    }
+    return text.length;
+  }
+  return i;
+}
+
+// Index of the first bracket that closes a scope opened before `text` begins.
+function enclosingEnd(text) {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    if ("([{".includes(text[i])) depth++;
+    else if (")]}".includes(text[i]) && --depth < 0) return i;
+  }
+  return text.length;
+}
+
+// A `return` statement ends at `;`, at the scope's closing bracket, or at a newline that cannot continue it.
+function returnStatementEnd(text, start) {
+  let depth = 0;
+  for (let i = start + "return".length; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) { if (--depth < 0) return i; }
+    else if (depth === 0 && c === ";") return i;
+    else if (depth === 0 && c === "\n") {
+      const head = text.slice(start + "return".length, i).trim();
+      const next = text.slice(i + 1).trimStart()[0] ?? "";
+      if (!head || (!/[=+\-*/%&|^?:,.!<>]$/.test(head) && !/^[.?:+\-*/%&|^,=<>)\]]/.test(next))) return i;
+    }
+  }
+  return text.length;
+}
+
+// True when a statement starting at `index` is the body of a braceless `if (…)`, `for (…)`, `while (…)`, or `else`.
+function conditionalStatement(text, index) {
+  const before = maskComments(text.slice(0, index)).trimEnd();
+  if (/(?:^|[^\w$.])else$/.test(before)) return true;
+  if (!before.endsWith(")")) return false;
+  let depth = 0;
+  for (let i = before.length - 1; i >= 0; i--) {
+    if (before[i] === ")") depth++;
+    else if (before[i] === "(" && --depth === 0) return /(?:^|[^\w$.])(?:if|for|while)\s*$/.test(before.slice(0, i));
+  }
+  return false;
+}
+
+// [[start, end]] of the first `return` that always runs when control reaches it at the top level of `text`
+// (or [] when none does); anything after it is unreachable. Nested blocks, callbacks, and braceless
+// conditional bodies are excluded; `try`/`finally` bodies are not.
+function topLevelReturns(text) {
+  const ranges = [], stack = [];
+  for (let i = 0; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) stack.push(c === "{" && /(?:^|[^\w$.])(?:try|finally)\s*$/.test(text.slice(Math.max(0, i - 16), i)) ? "always" : c);
+    else if (")]}".includes(c)) { if (!stack.length) break; stack.pop(); }
+    else if (stack.every((entry) => entry === "always") && text.startsWith("return", i) &&
+      !/[\w$.]/.test(text[i - 1] ?? "") && !/[\w$]/.test(text[i + 6] ?? "") && !conditionalStatement(text, i)) {
+      ranges.push([i, returnStatementEnd(text, i)]);
+      break;
+    }
+  }
+  return ranges;
+}
+
+// Operators that make an operand conditional, discarded, or replaced by another value: comma, ternary,
+// short-circuit logic, arrows, unary/binary arithmetic and comparison, and `void`/`typeof`/`delete`/
+// `instanceof`/`in`. A non-null `!` may follow a value, so only a prefix `!` counts.
+const PREFIX_REPLACING = /^(?:\?(?![.?])|\?\?|&&|\|\||=>|[,:!~+\-*/%<>=&|^])|^(?:void|typeof|delete|instanceof|in)\b/;
+const SUFFIX_REPLACING = /^(?:\?(?![.?])|\?\?|&&|\|\||[,:~+\-*/%<>=&|^])|^(?:instanceof|in)\b/;
+const replacing = (pattern, text, i) => !/[\w$]/.test(text[i - 1] ?? "") || !/^[a-z]/.test(text[i]) ? pattern.exec(text.slice(i, i + 10)) : null;
+
+function returnsValueAt(text, start, end, index) {
+  const stack = [{ kind: "group", operator: false }];
+  for (let i = start + "return".length; i < index; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if (c === "(") {
+      const prev = text.slice(start, i);
+      const group = /(?:^|[^\w$])(?:return|await|typeof|void|yield|in|of|case)\s*$/.test(prev) || !/[\w$)\]]\s*$/.test(prev);
+      stack.push({ kind: group ? "group" : "call", operator: false });
+    } else if ("[{".includes(c)) stack.push({ kind: c, operator: false });
+    else if (")]}".includes(c)) stack.pop();
+    else {
+      const op = replacing(PREFIX_REPLACING, text, i);
+      if (op) { stack.at(-1).operator = true; i += op[0].length - 1; }
+    }
+  }
+  for (let level = stack.length - 1; level >= 0 && stack[level].kind === "group"; level--) if (stack[level].operator) return false;
+  let depth = 0;
+  for (let i = index; i < end; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) {
+      if (depth > 0) depth--;
+      else { stack.pop(); if (!stack.length || stack.at(-1).kind !== "group") return true; }
+    } else if (depth === 0 && stack.at(-1).kind === "group" && replacing(SUFFIX_REPLACING, text, i)) return false;
+  }
+  return true;
+}
+
+// True when a match of `pattern` ending by `limit` is returned at the top level of `text`, inline or
+// through a variable assigned from it.
+function returnsMatch(text, pattern, limit = text.length) {
+  const ranges = topLevelReturns(text);
+  const returned = (index) => ranges.some(([start, end]) => index > start && index < end && returnsValueAt(text, start, end, index));
+  for (const m of text.matchAll(new RegExp(pattern, "g"))) {
+    if ((m.index ?? 0) + m[0].length <= limit && returned(m.index ?? 0)) return true;
+  }
+  const assigned = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${pattern}`, "g");
+  for (const m of text.matchAll(assigned)) {
+    const after = (m.index ?? 0) + m[0].length;
+    if (after > limit) continue;
+    for (const ref of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(m[1])}(?![\\w$])`, "g"))) {
+      if ((ref.index ?? 0) >= after && returned(ref.index ?? 0)) return true;
+    }
+  }
+  return false;
+}
+
+// Index of the first use of `name` that could rebind or mutate it. Allowed: member-chain reads (not
+// assigned or called), object keys, `void`/`console.*` arguments, the execute argument matched by
+// `executeArgument`, and object/array values inside a returned expression. An object or array holding the
+// resolution anywhere else is an alias whose later member writes are invisible here, so it ends the binding.
+function firstRebinding(text, name, executeArgument, returns) {
+  for (const m of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(name)}(?![\\w$])`, "g"))) {
+    const index = m.index ?? 0;
+    const before = text.slice(0, index), rest = text.slice(index + m[0].length);
+    const chain = /^(?:\s*\??\.\s*[A-Za-z_$][\w$]*|\s*\[[^\]]*\])+/.exec(rest);
+    if (chain) {
+      if (/^\s*(?:=(?![=>])|\+\+|--|(?:\*\*|[-+*/%&|^]|<<|>>>?|\?\?|&&|\|\|)=|\()/.test(rest.slice(chain[0].length))) return index;
+      continue;
+    }
+    if (new RegExp(`(?:${executeArgument})$`).test(before)) continue;
+    if (/[{,]\s*$/.test(before) && /^\s*:/.test(rest)) continue; // an object key, not a reference
+    if (/\bvoid\s+$/.test(before)) continue;
+    if (/\bconsole\s*\.\s*(?:log|info|warn|error|debug|trace)\s*\(\s*$/.test(before) && /^\s*\)/.test(rest)) continue;
+    if (/(?:[{,]\s*(?:[A-Za-z_$][\w$]*\s*:\s*)?|\[\s*)$/.test(before) && /^\s*[,}\]]/.test(rest) &&
+      returns.some(([start, end]) => index > start && index < end)) continue;
+    return index;
+  }
+  return text.length;
+}
+
+// `after` starts inside the `resolveTrain(` call that produced `resolution`. The binding holds only inside
+// the block that declared the resolution, and only until the resolution is passed, aliased, assigned, or
+// mutated anywhere other than the execution itself.
+function resolutionBinding(after, resolution, executeArgument) {
+  const statement = after.slice(enclosingEnd(after) + 1);
+  const scope = statement.slice(0, enclosingEnd(statement));
+  return { scope, bound: scope.slice(0, firstRebinding(scope, resolution, executeArgument, topLevelReturns(scope))) };
+}
+
+function trainExecutionForms(resolution) {
+  const r = escaped(resolution);
+  const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`;
+  // The declaration-driven runner form constructs from THIS resolution's trainPath (optionally followed
+  // by handler/context args) and executes that same resolution object.
+  const constructed = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*`;
+  return { legacy, constructed, declaration: `${constructed}${r}\\s*(?:,|\\))` };
+}
+
+function resolutionTrainExecution(after, resolution) {
+  const { legacy, constructed, declaration } = trainExecutionForms(resolution);
+  const { scope, bound } = resolutionBinding(after, resolution, constructed);
+  const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
+  const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
+  const returns = `\\breturn\\s+(?:await\\s+)?`;
+  return {
+    execution: assigned?.[1] ?? null,
+    found: Boolean(assigned || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
+    returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
+      Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
+  };
 }
 
 export function productionExecutionProofs(text, file, croot) {
   if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return [];
   const receivers = productionReceivers(text);
   const proofs = [];
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   for (const m of text.matchAll(resolutions)) {
     const [whole, resolution, receiver] = m;
     const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
-    const after = text.slice((m.index ?? 0) + whole.length);
-    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
-    const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
-    if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
+    const proof = resolutionTrainExecution(text.slice((m.index ?? 0) + whole.length), resolution);
+    if (proof.found) proofs.push({ resolution, execution: proof.execution });
   }
   return proofs;
 }
 
 export function assertsExpression(text, expression, expected = null) {
-  const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match))\\b([\\s\\S]{0,220})`);
+  const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match))\\b([\\s\\S]{0,220})`);
   const m = pat.exec(text);
   return Boolean(m && (!expected || tokenCovered(expected, m[0])));
 }
@@ -451,33 +651,55 @@ function exportedActionBody(text, name) {
   return null;
 }
 
-function exportedActionReturnsProductionExecution(stationText, action) {
-  const body = exportedActionBody(stationText, action);
-  if (!body) return false;
-  const receivers = productionReceivers(stationText);
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
-  for (const m of body.matchAll(resolutions)) {
-    const [whole, resolution, receiver] = m;
-    const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
-    const named = [...receivers].some((name) => receiver.trim().endsWith(name));
-    if (!direct && !named) continue;
-    const after = body.slice((m.index ?? 0) + whole.length);
-    const directReturn = new RegExp(`\\breturn\\s+(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
-    if (directReturn) return true;
-    const execution = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after)?.[1];
-    if (execution && new RegExp(`\\breturn\\s+(?:await\\s+)?${escaped(execution)}\\s*;?`).test(after)) return true;
-  }
-  return false;
+// As on main, the exported action itself must resolve on a recognized InterlockingRunner and
+// return that resolution's execution; a discarded or module-local execution is not evidence.
+function directProductionModuleExecution(body, moduleText = body) {
+  if (!new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(moduleText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(moduleText)) return false;
+  const receivers = productionReceivers(moduleText);
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  return [...body.matchAll(resolutions)].some(match => {
+    const recognized = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(match[2]) ||
+      [...receivers].some((name) => match[2].trim().endsWith(name));
+    return recognized && resolutionTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]).returned;
+  });
 }
 
-// HTTP/module entrypoints do not expose a StationMaster instance to the test. The asserted result
-// must therefore come from the SAME exported action the test invokes, and that action's own return
-// path must resolve then execute the selected train. Module-wide runner tokens are not evidence.
-export function stationModuleExecutionProof(text, stationText, action) {
-  if (!stationText) return false;
-  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
-  return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
-    exportedActionReturnsProductionExecution(stationText, call[2]));
+// HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
+// witness is an asserted result from the same exported action the test invokes. That action must
+// either directly execute the selected train or return a JourneyRunner execution whose local
+// InterlockingRunner then executes the same resolution's declaration path.
+function stationModuleCall(text, action) {
+  return new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
+}
+
+export function stationModuleExecutionProof(text, stationText, action, stationFile, croot) {
+  if (!stationText || !stationFile || !croot) return false;
+  const call = stationModuleCall(text, action);
+  if (call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`)) {
+    // The journey-mediated chain is proven on the TypeScript AST (lib/journey-chain.mjs).
+    if (provenJourneyAction(stationText, stationFile, croot, call[2])) return true;
+    const body = exportedActionBody(stationText, call[2]);
+    if (body && directProductionModuleExecution(body, stationText)) return true;
+  }
+  return stationEntryExecutionProof(text, stationText, action, stationFile, croot);
+}
+
+// An HTTP-shaped entry (e.g. `stationMaster(command)`) whose asserted result depends on its awaited
+// call of a proven journey action with this literal action name.
+function stationEntryExecutionProof(text, stationText, action, stationFile, croot) {
+  const calls = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?(${ident})\\s*\\(`, "g");
+  return [...text.matchAll(calls)].some(([, result, entry]) => {
+    const delegated = entryDelegatedAction(stationText, stationFile, entry);
+    return Boolean(delegated && delegated.action === action &&
+      assertsExpression(text, `${escaped(result)}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
+      provenJourneyAction(stationText, stationFile, croot, delegated.callee));
+  });
+}
+
+export function routeHasStationModuleProof(route, text, action, stationText, stationFile, croot) {
+  const call = stationModuleCall(text, action);
+  return Boolean(call && stationModuleExecutionProof(text, stationText, action, stationFile, croot) &&
+    assertsExpression(text, `${escaped(call[1])}\\.selectedTrainId`, route.trainId));
 }
 
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality

@@ -1,0 +1,18 @@
+schema_version: 1.0.0
+journey_id: journey:replay-world-session
+title: Replay World Session
+status: draft
+entrypoint:
+  interlocking_id: interlocking:session-replay
+  exposed: true
+  actions:
+  - replay_session
+  reason: null
+  surfaces:
+  - backend
+continuations: []
+terminals:
+- from:
+    interlocking_id: interlocking:session-replay
+    route_id: replay
+  outcome: recorded session replayed

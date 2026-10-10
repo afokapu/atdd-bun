@@ -6,6 +6,7 @@
 // exercises it — referenced by its routeId or resolved trainId in an `e2e/**/*.ts` test. An admissible
 // route with no covering e2e test is a silent-green route-control branch. Bun mirror of core
 // tester.interlocking.route-coverage.
+import { join } from "node:path";
 import {
   parseJsonEnv,
   readText,
@@ -14,6 +15,7 @@ import {
   e2eFiles,
   parseInterlocking,
   routeHasProductionProof,
+  routeHasStationModuleProof,
   maskComments,
   rel,
   mk,
@@ -31,10 +33,17 @@ for (const scanRoot of roots) {
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
     const e2eTexts = e2eFiles(croot).map((file) => ({ file, text: maskComments(readText(file)) }));
+    const station = ["server.ts", "src/server.ts"]
+      .map((name) => ({ file: join(croot, name), text: readText(join(croot, name)) }))
+      .find((entry) => entry.text);
 
     for (const { file, rec } of records) {
       for (const route of rec.routes) {
-        if (e2eTexts.some(({ file, text }) => routeHasProductionProof(route, text, rec.interlockingId, file, croot))) continue;
+        const covered = e2eTexts.some(({ file: testFile, text }) =>
+          routeHasProductionProof(route, text, rec.interlockingId, testFile, croot) ||
+          (station && rec.actions.some((action) => routeHasStationModuleProof(route, text, action, station.text, station.file, croot))),
+        );
+        if (covered) continue;
         if (unbuiltWagons(croot, route.trainId).length) continue;   // pending: a wagon on its train has no source yet
         const cat =
           route.category !== null

@@ -1,0 +1,14 @@
+interlocking_id: interlocking:source-corpus-admission
+entrypoint:
+  exposed: true
+  actions:
+    - create_world
+route_resolution:
+  strategy: fail_on_multiple_match
+routes:
+  - route_id: refuse
+    train_id: train:source:refuse
+    train_path: plan/_trains/train:source:refuse.yaml
+    guard:
+      id: guard:refuse
+      input: source

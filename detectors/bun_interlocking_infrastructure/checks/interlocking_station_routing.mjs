@@ -16,6 +16,7 @@ import {
   mk,
   writeReport,
 } from "../_shared/interlocking.mjs";
+import { provenJourneyActions } from "../../../lib/journey-chain.mjs";
 
 const RULE = "coder.bun.station-master-interlocking-routing";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -37,6 +38,10 @@ for (const scanRoot of roots) {
     const text = readText(app);
     const jm = journeyMap(text);
     if (!jm.hasInterlocking) continue; // pure direct-train Station Master carries no obligation.
+    // A journey-mediated Station Master delegates to the runners through JourneyRunner; when an exported
+    // action provably returns JourneyRunner -> InterlockingRunner -> TrainRunner execution (bound
+    // imports, live returns, no overrides), it need not reference the lower runners itself.
+    if (provenJourneyActions(text, app, croot).length > 0) continue;
 
     const line = jm.interlockingLine || 1;
     if (!referencesToken(text, "InterlockingRunner")) {

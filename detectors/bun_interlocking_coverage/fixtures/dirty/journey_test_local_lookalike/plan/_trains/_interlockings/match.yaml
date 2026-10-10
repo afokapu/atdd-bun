@@ -1,0 +1,9 @@
+interlocking_id: interlocking:match
+entrypoint:
+  exposed: true
+  actions:
+    - resolve_match
+routes:
+  - route_id: nominal
+    train_id: train:match:nominal
+    train_path: plan/_trains/train:match:nominal.yaml

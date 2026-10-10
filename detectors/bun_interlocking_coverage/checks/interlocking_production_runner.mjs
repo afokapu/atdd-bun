@@ -39,7 +39,9 @@ for (const scanRoot of roots) {
     // A test that imports the Station Master drives the runners it composes: the call model's entry point
     // (FWS #sEW3F9b49iA7). It counts only when the Station Master module itself references both production runners;
     // substitutes are still caught by FORBIDDEN_PATTERNS above.
-    const station = ["server.ts", join("src", "server.ts")].map((name) => readText(join(croot, name))).find((t) => t && tokenCovered(PROD_INTERLOCKING, maskComments(t)) && tokenCovered(PROD_TRAIN, maskComments(t)));
+    const station = ["server.ts", join("src", "server.ts")]
+      .map((name) => ({ file: join(croot, name), text: readText(join(croot, name)) }))
+      .find((entry) => entry.text);
     const drivesStationMaster = (text) => Boolean(station) && /\bfrom\s+["'][^"']*\bserver(?:\.ts)?["']|import\(\s*["'][^"']*\bserver(?:\.ts)?["']\s*\)/.test(text);
     const records = interlockingFiles(croot)
       .map((f) => parseInterlocking(readText(f)))
@@ -72,7 +74,9 @@ for (const scanRoot of roots) {
 
       const semantic = hasProductionExecutionProof(text, file, croot) ||
         records.some((rec) => rec.actions.some((action) => stationMasterExecutionProof(text, action))) ||
-        (drivesStationMaster(text) && records.some((rec) => rec.actions.some((action) => stationModuleExecutionProof(text, station, action))));
+        (drivesStationMaster(text) && records.some((rec) => rec.actions.some((action) =>
+          stationModuleExecutionProof(text, station.text, action, station.file, croot),
+        )));
       if (!semantic) {
         violations.push(
           mk(
