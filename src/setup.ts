@@ -2,7 +2,7 @@ import { ciInit, ciStatus } from "./ci";
 import { hooksStatus, installHooks } from "./hooks";
 import { agentInit, agentStatus } from "./agent";
 import { integrityInit, integrityStatus } from "./integrity";
-import { defaultProfiles } from "./enforce";
+import { concreteProfiles, defaultProfiles, normalizeProfileName } from "./enforce";
 import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -19,8 +19,10 @@ export async function policyInit(root = process.cwd()) {
     try {
       const config = Bun.YAML.parse(text) as Record<string, unknown>;
       const profiles = config && typeof config === "object" && !Array.isArray(config) && Array.isArray(config.profiles) && config.profiles.length && config.profiles.every(profile => typeof profile === "string") ? config.profiles as string[] : null;
-      if (profiles && config.ratchet === undefined) {
-        await writeFile(file, `${text.replace(/\s*$/, "")}\nratchet:\n  mode: reject-new\n  profiles: [${profiles.join(", ")}]\n`);
+      const normalized = profiles?.map(normalizeProfileName);
+      const validProfiles = normalized && normalized.every(profile => concreteProfiles.includes(profile as typeof concreteProfiles[number])) && new Set(normalized).size === normalized.length;
+      if (profiles && validProfiles && config.ratchet === undefined) {
+        await writeFile(file, `${text.replace(/\s*$/, "")}\nratchet:\n  mode: reject-new\n  profiles: ${JSON.stringify(profiles)}\n`);
         return { ok: true, message: `${file} added ratchet policy` };
       }
     } catch { /* Preserve malformed and non-policy consumer configuration for its normal validation path. */ }
