@@ -177,3 +177,23 @@ for (const [name, { file, edit }] of Object.entries(reviewSix)) {
     for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
   });
 }
+
+// Review #6 supplement (maintainer, M-20261010T151554Z): R-c is not an accepted residual. A local
+// side-effect module imported by the Station Master that patches a runner prototype violates the
+// guarantee, so override checks must cover the Station Master's transitive local imports.
+test("production-shape proof rejects R-c: a side-effect module imported by the Station Master patches the prototype", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-side-effect-patch-"));
+  try {
+    await cp(fixture, root, { recursive: true });
+    await writeFile(join(root, "src", "trains", "patch.ts"), `import { InterlockingRunner } from "./interlocking.ts";
+
+(InterlockingRunner.prototype as any).execute = async () => (${fakeInterlocked});
+`);
+    const server = join(root, "src", "server.ts");
+    await writeFile(server, `import "./trains/patch.ts";\n${await readFile(server, "utf8")}`);
+    const found = ruleIds(await both(root));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
