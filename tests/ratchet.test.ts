@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { activationContextDigest, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy } from "../src/ratchet";
+import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy } from "../src/ratchet";
 
 const finding = (overrides: Record<string, unknown> = {}) => ({
   rule_id: "coder.bun.layer-naming",
@@ -23,6 +23,17 @@ test("ratchet context binds exact effective profiles and normalized policy, excl
   const base = { profiles: ["flow", "traceability"], topology: { plan_root: "plan" }, ratchet: { mode: "report" } };
   expect(contextDigest(base, ["flow", "traceability"])).toBe(contextDigest({ ...base, ratchet: { mode: "reject-new" } }, ["flow", "traceability"]));
   expect(contextDigest(base, ["flow", "traceability"])).not.toBe(contextDigest({ ...base, topology: { plan_root: "contracts" } }, ["flow", "traceability"]));
+});
+
+test("root-aware finding paths make equivalent base/candidate absolute and relative locations one carried identity", () => {
+  const baseRoot = "/tmp/ratchet-base", candidateRoot = "/tmp/ratchet-candidate", path = "plan/_journeys/entitlement.yaml";
+  const baseRelative = canonicalFindingPath(baseRoot, path), candidateAbsolute = canonicalFindingPath(candidateRoot, `${candidateRoot}/${path}`);
+  expect(baseRelative).toBe(path); expect(candidateAbsolute).toBe(path);
+  const baseFinding = finding({ file: baseRelative }), candidateFinding = finding({ file: candidateAbsolute });
+  expect(findingFingerprint(baseFinding)).toBe(findingFingerprint(candidateFinding));
+  expect(compareFindings([baseFinding], [candidateFinding])).toMatchObject({ carried: [findingFingerprint(baseFinding)], new: [], resolved: [] });
+  expect(() => canonicalFindingPath(baseRoot, "../outside.yaml")).toThrow("repository-relative");
+  expect(() => canonicalFindingPath(baseRoot, "/tmp/elsewhere.yaml")).toThrow("repository-relative");
 });
 
 test("activation permits only a strict profile expansion and keeps every non-profile policy input bound", () => {

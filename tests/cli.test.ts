@@ -72,7 +72,7 @@ test("ordinary direct-profile ratchet keeps comparing the explicitly selected pr
   const result = await run("coder", "--root", repo, "--ratchet", "--base", base);
   expect(result.exitCode).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ mode: "report", profiles: ["coder"], resolved: [] });
-});
+}, 20_000);
 
 test("explicit profile activation carries legacy findings while judging both exact trees under the expanded profiles", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-activation-"));

@@ -1,10 +1,10 @@
 #!/usr/bin/env bun
 import { enforce, enabledProfiles, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
-import { activationContextDigest, compareFindings, contextDigest, isStrictProfileExpansion, parseRatchetPolicy } from "./ratchet";
+import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, isStrictProfileExpansion, parseRatchetPolicy } from "./ratchet";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
@@ -173,7 +173,7 @@ if (!args.includes("--ratchet")) {
         if (!(profileActivation ? activationIsValid : ordinaryContextMatches)) { console.error(profileActivation ? "ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context" : "ratchet base and candidate profile/context differ; use a separately governed adoption path"); process.exitCode = 1; }
         else {
           const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);
-          const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: relative(directory, finding.file).replaceAll("\\", "/") }));
+          const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(directory, finding.file) }));
           const delta = compareFindings(normalize(baseFindings, scratch), normalize(candidateFindings, candidateRoot));
           console.log(JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, candidate: (await git(candidateRoot, ["rev-parse", "HEAD"])).out, profiles: stable(candidateProfiles), context: contextDigest(candidateConfig, candidateProfiles), ...delta }, null, 2));
           if (policy.mode === "reject-new" && delta.new.length) process.exitCode = 1;
