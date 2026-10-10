@@ -119,6 +119,18 @@ test("init adds deterministic reject-new policy to an existing explicit profile 
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("init preserves invalid or duplicate explicit profiles without appending a partial ratchet policy", async () => {
+  const cases = ["profiles: [docs, nope]\n", "profiles: [docs, docs]\n", "profiles: [workflow, flow]\n"];
+  for (const config of cases) {
+    const root = await mkdtemp(join(tmpdir(), "atdd-ratchet-invalid-policy-"));
+    try {
+      await writeFile(join(root, "atdd-bun.yaml"), config);
+      expect((await policyInit(root)).message).toContain("kept");
+      expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe(config);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+});
+
 test("8, pushed: a multi-commit direct push [docs, security] → no list → [docs] is judged from the pre-push tip", async () => {
   const { checkIntegrity } = await import("../src/integrity");
   await brownfield("profiles: [docs, security]\n", async root => {
