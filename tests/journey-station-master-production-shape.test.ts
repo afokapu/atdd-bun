@@ -115,6 +115,34 @@ const overrides: Record<string, { file: string; edit: (path: string, text: strin
     file: "src/server.ts",
     edit: append(`JourneyRunner.prototype.execute = async function () { return (${fakeJourney}) as any; };`),
   },
+  "Reflect.set on this assigns execute in the constructor": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("constructor(private readonly interlockingYamlPath: string) {}",
+      `constructor(private readonly interlockingYamlPath: string) {\n    Reflect.set(this, "execute", async () => (${fakeInterlocked}));\n  }`),
+  },
+  "Object.defineProperty on this defines execute in the constructor": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("constructor(private readonly interlockingYamlPath: string) {}",
+      `constructor(private readonly interlockingYamlPath: string) {\n    Object.defineProperty(this, "execute", { value: async () => (${fakeInterlocked}) });\n  }`),
+  },
+  "JourneyRunner module assigns execute on an InterlockingRunner instance": {
+    file: "src/trains/journey.ts",
+    edit: replace("      const run = await new InterlockingRunner(path).execute(",
+      `      const runner = new InterlockingRunner(path);\n      (runner as any)["execute"] = async () => (${fakeInterlocked});\n      const run = await new InterlockingRunner(path).execute(`),
+  },
+  "static block patches the InterlockingRunner prototype": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("constructor(private readonly interlockingYamlPath: string) {}",
+      `static { (this as any).prototype.execute = async () => (${fakeInterlocked}); }\n  constructor(private readonly interlockingYamlPath: string) {}`),
+  },
+  "TrainRunner module patches its own prototype": {
+    file: "src/trains/runner.ts",
+    edit: append(`(TrainRunner as any).prototype.execute = async () => ({});`),
+  },
+  "computed key reaches the InterlockingRunner prototype": {
+    file: "src/trains/interlocking.ts",
+    edit: append(`const key = "exec" + "ute";\n(InterlockingRunner as any)["proto" + "type"][key] = async () => (${fakeInterlocked});`),
+  },
 };
 
 for (const [name, { file, edit }] of Object.entries(overrides)) {
