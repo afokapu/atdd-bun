@@ -11,6 +11,35 @@ test("ci init is idempotent, preserves an existing workflow, and emits the requi
   const root = await mkdtemp(join(tmpdir(), "atdd-ci-")); try { expect((await ciInit(root)).ok).toBeTrue(); expect((await ciInit(root)).ok).toBeFalse(); const workflow = join(root, ".github/workflows/atdd-bun.yml"), content = await readFile(workflow, "utf8"); for (const term of ["pull_request:", "merge_group:", "actions/checkout@v4", "oven-sh/setup-bun@v2", "bun install --frozen-lockfile", "bun run atdd-bun all"]) expect(content).toContain(term); for (const forbidden of ["bunx", "atdd ", "python", "gh ", "curl", "wget"]) expect(content).not.toContain(forbidden); await writeFile(workflow, "kept\n"); expect((await ciInit(root)).ok).toBeFalse(); expect(await readFile(workflow, "utf8")).toBe("kept\n"); expect((await ciInit(root, true)).ok).toBeTrue(); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("generated CI grants only read access and supplies the ephemeral Actions token only to frozen package installation", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-private-package-"));
+  const npmrc = "@forgeonehundred:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n";
+  const lock = `{
+  "lockfileVersion": 1,
+  "packages": {
+    "@forgeonehundred/resolver-os": ["@forgeonehundred/resolver-os@0.1.0", "", {}, "sha512-fixture"],
+  }
+}
+`;
+  try {
+    await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { "@forgeonehundred/resolver-os": "0.1.0" } }));
+    await writeFile(join(root, ".npmrc"), npmrc);
+    await writeFile(join(root, "bun.lock"), lock);
+    expect((await ciInit(root)).ok).toBeTrue();
+    const workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
+
+    expect((Bun.YAML.parse(workflow) as { permissions: unknown }).permissions).toEqual({ contents: "read", packages: "read" });
+    expect(workflow).toContain("run: bun install --frozen-lockfile\n        env:\n          NODE_AUTH_TOKEN: ${{ github.token }}");
+    expect(workflow).toContain("persist-credentials: false");
+    expect(workflow).not.toContain("secrets.");
+    expect(workflow).not.toMatch(/(?:ghp_|github_pat_|NPM_TOKEN|GITHUB_TOKEN|npm[_-]?pat|github[_-]?pat)/i);
+    expect(workflow.match(/NODE_AUTH_TOKEN/g)).toHaveLength(1);
+    expect(workflow.match(/github\.token/g)).toHaveLength(1);
+    expect(await readFile(join(root, ".npmrc"), "utf8")).toBe(npmrc);
+    expect(await readFile(join(root, "bun.lock"), "utf8")).toBe(lock);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("agent init writes one managed instruction block, preserving existing content", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-agent-"));
   try {
