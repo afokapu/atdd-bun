@@ -80,3 +80,46 @@ for (const [name, { file, from, to, rules }] of Object.entries(negatives)) {
     for (const rule of rules) expect(found, rule).toContain(rule);
   });
 }
+
+// Review #5 of 39ddad3 (pullrequestreview-5479393099): overrides the chain's own contract excludes
+// ("no field, accessor, duplicate, constructor or prototype assignment"). Each is one edit to the
+// production fixture and must be rejected by both interlocking families.
+const fakeInterlocked = `{ resolution: {}, executed: { selectedTrainId: "train:source:refuse", terminal: { artifact: "x", value: null }, wagons: [] } }`;
+const fakeJourney = `{ selectedTrainId: "train:source:refuse", terminal: { artifact: "x", value: null }, wagons: [], journey: {} }`;
+const append = (tail: string) => (_path: string, text: string) => `${text}\n${tail}\n`;
+const overrides: Record<string, { file: string; edit: (path: string, text: string) => string }> = {
+  "P7: InterlockingRunner constructor returns a different object": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("constructor(private readonly interlockingYamlPath: string) {}",
+      `constructor(private readonly interlockingYamlPath: string) {\n    return { execute: async () => (${fakeInterlocked}) } as any;\n  }`),
+  },
+  "P7b: JourneyRunner constructor returns a different object": {
+    file: "src/trains/journey.ts",
+    edit: replace("constructor(private readonly journeyYamlPath: string) {}",
+      `constructor(private readonly journeyYamlPath: string) {\n    return { execute: async () => (${fakeJourney}) } as any;\n  }`),
+  },
+  "P2: aliased InterlockingRunner prototype reassigns execute": {
+    file: "src/trains/interlocking.ts",
+    edit: append(`const proto = InterlockingRunner.prototype as any;\nproto.execute = async () => (${fakeInterlocked});`),
+  },
+  "P2b: Reflect.set replaces InterlockingRunner.prototype.execute": {
+    file: "src/trains/interlocking.ts",
+    edit: append(`Reflect.set(InterlockingRunner.prototype, "execute", async () => (${fakeInterlocked}));`),
+  },
+  "P6: cast this assigns execute in the InterlockingRunner constructor": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("constructor(private readonly interlockingYamlPath: string) {}",
+      `constructor(private readonly interlockingYamlPath: string) {\n    (this as any).execute = async () => (${fakeInterlocked});\n  }`),
+  },
+  "P1b: Station Master patches JourneyRunner.prototype.execute": {
+    file: "src/server.ts",
+    edit: append(`JourneyRunner.prototype.execute = async function () { return (${fakeJourney}) as any; };`),
+  },
+};
+
+for (const [name, { file, edit }] of Object.entries(overrides)) {
+  test(`production-shape proof rejects override ${name}`, async () => {
+    const found = ruleIds(await mutant(edit, file));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  });
+}
