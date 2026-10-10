@@ -1,0 +1,18 @@
+schema_version: 1.0.0
+journey_id: journey:create-world-pack
+title: Create World Pack
+status: draft
+entrypoint:
+  interlocking_id: interlocking:source-corpus-admission
+  exposed: true
+  actions:
+  - create_world
+  reason: null
+  surfaces:
+  - backend
+continuations: []
+terminals:
+- from:
+    interlocking_id: interlocking:source-corpus-admission
+    route_id: refuse
+  outcome: unsupported source refused
