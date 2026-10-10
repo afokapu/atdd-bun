@@ -1,4 +1,4 @@
-# Publishes @afokapu/atdd-bun to npm on every push to main that touches packaged files.
+# Publishes @afokapu/atdd-bun to npm on every push to main.
 # Version is automatic: next patch after the latest published version, unless
 # package.json already declares a higher version (bump it by hand for minor/major).
 # Auth uses npm trusted publishing (OIDC) — no NPM_TOKEN secret.
@@ -6,20 +6,6 @@ name: Publish
 on:
   push:
     branches: [main]
-    paths:
-      - src/**
-      - detectors/**
-      - lib/**
-      - conventions/**
-      - planner-nodes/**
-      - planner-schemas/**
-      - templates/**
-      - bunfig.toml
-      - package.json
-      - bun.lock
-      - README.md
-      - PLANNER_PORT.md
-      - HOOK_AUDIT.md
   workflow_dispatch:
 concurrency:
   group: publish
