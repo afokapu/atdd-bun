@@ -406,17 +406,31 @@ function returnStatementEnd(text, start) {
   return text.length;
 }
 
-// [start, end] of each `return` statement at the top level of `text` (nested blocks and callbacks excluded).
-function topLevelReturns(text) {
-  const ranges = [];
+// True when a statement starting at `index` is the body of a braceless `if (…)`, `for (…)`, `while (…)`, or `else`.
+function conditionalStatement(text, index) {
+  const before = text.slice(0, index).trimEnd();
+  if (/(?:^|[^\w$.])else$/.test(before)) return true;
+  if (!before.endsWith(")")) return false;
   let depth = 0;
+  for (let i = before.length - 1; i >= 0; i--) {
+    if (before[i] === ")") depth++;
+    else if (before[i] === "(" && --depth === 0) return /(?:^|[^\w$.])(?:if|for|while)\s*$/.test(before.slice(0, i));
+  }
+  return false;
+}
+
+// [start, end] of each `return` that always runs when control reaches it at the top level of `text`:
+// nested blocks, callbacks, and braceless conditional bodies are excluded; `try`/`finally` bodies are not.
+function topLevelReturns(text) {
+  const ranges = [], stack = [];
   for (let i = 0; i < text.length; i++) {
     const skip = skipLiteral(text, i);
     if (skip !== i) { i = skip - 1; continue; }
     const c = text[i];
-    if ("([{".includes(c)) depth++;
-    else if (")]}".includes(c)) { if (--depth < 0) break; }
-    else if (depth === 0 && text.startsWith("return", i) && !/[\w$.]/.test(text[i - 1] ?? "") && !/[\w$]/.test(text[i + 6] ?? "")) {
+    if ("([{".includes(c)) stack.push(c === "{" && /(?:^|[^\w$.])(?:try|finally)\s*$/.test(text.slice(Math.max(0, i - 16), i)) ? "always" : c);
+    else if (")]}".includes(c)) { if (!stack.length) break; stack.pop(); }
+    else if (stack.every((entry) => entry === "always") && text.startsWith("return", i) &&
+      !/[\w$.]/.test(text[i - 1] ?? "") && !/[\w$]/.test(text[i + 6] ?? "") && !conditionalStatement(text, i)) {
       const end = returnStatementEnd(text, i);
       ranges.push([i, end]);
       i = end - 1;
@@ -425,16 +439,44 @@ function topLevelReturns(text) {
   return ranges;
 }
 
-// True when a match of `pattern` starting before `limit` is returned at the top level of `text`, inline
-// or through a variable assigned from it.
+// The expression at `index` is the returned value (or part of it) unless a later comma at the return's top
+// level or inside a grouping paren makes it a discarded comma-expression operand.
+function returnsValueAt(text, start, end, index) {
+  const stack = [];
+  for (let i = start + "return".length; i < index; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if (c === "(") {
+      const prev = text.slice(start, i);
+      stack.push(/(?:^|[^\w$])(?:return|await|typeof|void|yield|in|of|case)\s*$/.test(prev) || !/[\w$)\]]\s*$/.test(prev) ? "group" : "call");
+    } else if ("[{".includes(c)) stack.push(c);
+    else if (")]}".includes(c)) stack.pop();
+  }
+  let depth = 0;
+  for (let i = index; i < end; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) { if (depth > 0) depth--; else stack.pop(); }
+    else if (c === "," && depth === 0 && (!stack.length || stack.at(-1) === "group")) return false;
+  }
+  return true;
+}
+
+// True when a match of `pattern` ending by `limit` is returned at the top level of `text`, inline or
+// through a variable assigned from it.
 function returnsMatch(text, pattern, limit = text.length) {
   const ranges = topLevelReturns(text);
-  const returned = (index) => ranges.some(([start, end]) => index > start && index < end);
-  for (const m of text.matchAll(new RegExp(pattern, "g"))) if ((m.index ?? 0) < limit && returned(m.index ?? 0)) return true;
+  const returned = (index) => ranges.some(([start, end]) => index > start && index < end && returnsValueAt(text, start, end, index));
+  for (const m of text.matchAll(new RegExp(pattern, "g"))) {
+    if ((m.index ?? 0) + m[0].length <= limit && returned(m.index ?? 0)) return true;
+  }
   const assigned = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${pattern}`, "g");
   for (const m of text.matchAll(assigned)) {
-    if ((m.index ?? 0) >= limit) continue;
     const after = (m.index ?? 0) + m[0].length;
+    if (after > limit) continue;
     for (const ref of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(m[1])}(?![\\w$])`, "g"))) {
       if ((ref.index ?? 0) >= after && returned(ref.index ?? 0)) return true;
     }
@@ -442,39 +484,51 @@ function returnsMatch(text, pattern, limit = text.length) {
   return false;
 }
 
-// Index of the first use of `name` that could rebind or mutate it: anything other than a member read,
-// a `key: name` or shorthand object value, `void name`, or the resolution argument of the declaration-path execute.
-function firstRebinding(text, name, executeArgument) {
+// Index of the first use of `name` that could rebind or mutate it. Allowed: member-chain reads (not
+// assigned or called), object keys, `void`/`console.*` arguments, the execute argument matched by
+// `executeArgument`, and object/array values inside a returned expression. An object or array holding the
+// resolution anywhere else is an alias whose later member writes are invisible here, so it ends the binding.
+function firstRebinding(text, name, executeArgument, returns) {
   for (const m of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(name)}(?![\\w$])`, "g"))) {
-    const before = text.slice(0, m.index), rest = text.slice((m.index ?? 0) + m[0].length);
-    const member = /^\s*\??\.\s*[A-Za-z_$][\w$]*/.exec(rest);
-    if (member) {
-      if (/^\s*(?:=(?![=>])|\+\+|--|(?:\*\*|[-+*/%&|^]|<<|>>>?|\?\?|&&|\|\|)=|[([.])/.test(rest.slice(member[0].length))) return m.index ?? 0;
+    const index = m.index ?? 0;
+    const before = text.slice(0, index), rest = text.slice(index + m[0].length);
+    const chain = /^(?:\s*\??\.\s*[A-Za-z_$][\w$]*|\s*\[[^\]]*\])+/.exec(rest);
+    if (chain) {
+      if (/^\s*(?:=(?![=>])|\+\+|--|(?:\*\*|[-+*/%&|^]|<<|>>>?|\?\?|&&|\|\|)=|\()/.test(rest.slice(chain[0].length))) return index;
       continue;
     }
-    if (new RegExp(`${executeArgument}$`).test(before)) continue;
-    if (/[{,]\s*(?:[A-Za-z_$][\w$]*\s*:\s*)?$/.test(before) && /^\s*[,}]/.test(rest)) continue;
+    if (new RegExp(`(?:${executeArgument})$`).test(before)) continue;
     if (/[{,]\s*$/.test(before) && /^\s*:/.test(rest)) continue; // an object key, not a reference
     if (/\bvoid\s+$/.test(before)) continue;
-    return m.index ?? 0;
+    if (/\bconsole\s*\.\s*(?:log|info|warn|error|debug|trace)\s*\(\s*$/.test(before) && /^\s*\)/.test(rest)) continue;
+    if (/(?:[{,]\s*(?:[A-Za-z_$][\w$]*\s*:\s*)?|\[\s*)$/.test(before) && /^\s*[,}\]]/.test(rest) &&
+      returns.some(([start, end]) => index > start && index < end)) continue;
+    return index;
   }
   return text.length;
 }
 
-// `after` starts inside the `resolveTrain(` call that produced `resolution`.
-function resolutionTrainExecution(after, resolution) {
-  const r = escaped(resolution);
-  const selected = `${r}\\.(?:trainId|selectedTrainId)`;
-  const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${selected}\\s*\\)\\s*\\.execute\\s*\\(`;
-  // The declaration-driven runner form constructs from THIS resolution's trainPath (optionally
-  // followed by handler/context args) and executes that same resolution object. It holds only
-  // inside the block that declared the resolution, and only until the resolution is passed,
-  // assigned, or mutated anywhere other than this call.
-  const constructed = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*`;
-  const declaration = `${constructed}${r}\\s*(?:,|\\))`;
+// `after` starts inside the `resolveTrain(` call that produced `resolution`. The binding holds only inside
+// the block that declared the resolution, and only until the resolution is passed, aliased, assigned, or
+// mutated anywhere other than the execution itself.
+function resolutionBinding(after, resolution, executeArgument) {
   const statement = after.slice(enclosingEnd(after) + 1);
   const scope = statement.slice(0, enclosingEnd(statement));
-  const bound = scope.slice(0, firstRebinding(scope, resolution, constructed));
+  return { scope, bound: scope.slice(0, firstRebinding(scope, resolution, executeArgument, topLevelReturns(scope))) };
+}
+
+function trainExecutionForms(resolution) {
+  const r = escaped(resolution);
+  const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`;
+  // The declaration-driven runner form constructs from THIS resolution's trainPath (optionally followed
+  // by handler/context args) and executes that same resolution object.
+  const constructed = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*`;
+  return { legacy, constructed, declaration: `${constructed}${r}\\s*(?:,|\\))` };
+}
+
+function resolutionTrainExecution(after, resolution) {
+  const { legacy, constructed, declaration } = trainExecutionForms(resolution);
+  const { scope, bound } = resolutionBinding(after, resolution, constructed);
   const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
   const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
   const returns = `\\breturn\\s+(?:await\\s+)?`;
@@ -484,6 +538,13 @@ function resolutionTrainExecution(after, resolution) {
     returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
       Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
   };
+}
+
+// Journey path: both the legacy and declaration forms must be returned within the resolution's binding.
+function boundReturnedTrainExecution(after, resolution) {
+  const { legacy, constructed, declaration } = trainExecutionForms(resolution);
+  const { scope, bound } = resolutionBinding(after, resolution, `${constructed}|${legacy}\\s*`);
+  return returnsMatch(scope, `(?:${legacy}|${declaration})`, bound.length);
 }
 
 export function productionExecutionProofs(text, file, croot) {
@@ -582,30 +643,6 @@ function exportedActionBody(text, name) {
   return null;
 }
 
-// Inside the production module, `this.resolveTrain()` is recognized only within the
-// InterlockingRunner class body; any other receiver must be a recognized InterlockingRunner.
-function recognizedInterlockingReceiver(text, receiver, index) {
-  const target = receiver.trim().replace(/^await\s+/, "");
-  if (target === "this") {
-    const header = new RegExp(`\\bclass\\s+${PROD_INTERLOCKING}\\b[^{]*\\{`).exec(text);
-    if (!header) return false;
-    const open = (header.index ?? 0) + header[0].length - 1;
-    const body = balancedBlock(text, open);
-    return body !== null && index > open && index < open + body.length + 1;
-  }
-  return new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(target) ||
-    [...productionReceivers(text)].some((name) => target.endsWith(name));
-}
-
-function hasDeclarationBoundTrainExecution(text, file, croot) {
-  if (!resolvedLocalNamedImport(text, file, croot, PROD_TRAIN)) return false;
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
-  return [...text.matchAll(resolutions)].some(match =>
-    recognizedInterlockingReceiver(text, match[2], match.index ?? 0) &&
-    resolutionTrainExecution(text.slice((match.index ?? 0) + match[0].length), match[1]).returned,
-  );
-}
-
 // As on main, the exported action itself must resolve on a recognized InterlockingRunner and
 // return that resolution's execution; a discarded or module-local execution is not evidence.
 function directProductionModuleExecution(body, moduleText = body) {
@@ -636,13 +673,25 @@ function methodBody(body, name) {
   return null;
 }
 
-// JourneyRunner.execute itself must return the InterlockingRunner execution; a traversal elsewhere in
-// the module (an uncalled method or helper) is not evidence.
+// The chain is pinned method to method: JourneyRunner.execute must return
+// `new InterlockingRunner(…).execute(…)`, and that InterlockingRunner.execute must resolve on `this` and
+// return the resolution's TrainRunner execution. Traversal in any other method or helper is not evidence.
+const annotated = `(?:\\s*:\\s*(?:\\{[^{}]*\\}|[^=;\\n{}])+)?`;
+
+function interlockingExecuteReturnsTrainExecution(text, file, croot) {
+  if (!resolvedLocalNamedImport(text, file, croot, PROD_TRAIN)) return false;
+  const body = methodBody(classBody(text, PROD_INTERLOCKING), "execute");
+  if (!body) return false;
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})${annotated}\\s*=\\s*(?:await\\s+)?this\\.resolveTrain\\s*\\(`, "g");
+  return [...body.matchAll(resolutions)].some((match) =>
+    boundReturnedTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]));
+}
+
 function journeyRunnerTraversesProductionRunners(text, file, croot) {
   const interlocking = resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING);
   const execute = methodBody(classBody(text, "JourneyRunner"), "execute");
   if (!interlocking || !execute || !returnsMatch(execute, `new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(`)) return false;
-  return hasDeclarationBoundTrainExecution(readText(interlocking), interlocking, croot);
+  return interlockingExecuteReturnsTrainExecution(readText(interlocking), interlocking, croot);
 }
 
 function exportedActionReturnsJourneyExecution(stationText, stationFile, croot, actionName) {
