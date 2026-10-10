@@ -372,9 +372,12 @@ function resolutionTrainExecution(after, resolution) {
   const bound = rebound ? after.slice(0, rebound.index) : after;
   const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
   const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
+  const returns = `\\breturn\\s+(?:await\\s+)?`;
   return {
     execution: assigned?.[1] ?? null,
     found: Boolean(assigned || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
+    returned: new RegExp(`${returns}${legacy}`).test(after) || new RegExp(`${returns}${declaration}`).test(bound) ||
+      Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
   };
 }
 
@@ -498,12 +501,17 @@ function hasDeclarationBoundTrainExecution(text, file, croot) {
   );
 }
 
+// As on main, the exported action itself must resolve on a recognized InterlockingRunner and
+// return that resolution's execution; a discarded or module-local execution is not evidence.
 function directProductionModuleExecution(body, moduleText = body) {
   if (!new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(moduleText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(moduleText)) return false;
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*[^=;{}\\n]{0,240}?\\.resolveTrain\\s*\\(`, "g");
-  return [...body.matchAll(resolutions)].some(match =>
-    resolutionTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]).found,
-  );
+  const receivers = productionReceivers(moduleText);
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  return [...body.matchAll(resolutions)].some(match => {
+    const recognized = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(match[2]) ||
+      [...receivers].some((name) => match[2].trim().endsWith(name));
+    return recognized && resolutionTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]).returned;
+  });
 }
 
 function journeyRunnerTraversesProductionRunners(text, file, croot) {
