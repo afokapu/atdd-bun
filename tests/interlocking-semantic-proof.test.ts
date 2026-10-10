@@ -123,6 +123,9 @@ test("semantic proof accepts Bun mutation witnesses from the selected TrainRunne
   try {
     await mkdir(join(root, "plan", "_trains", "_interlockings"), { recursive: true });
     await mkdir(join(root, "e2e", "interlockings"), { recursive: true });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "interlocking.ts"), "export class InterlockingRunner {}\n");
+    await writeFile(join(root, "src", "runner.ts"), "export class TrainRunner {}\n");
     await writeFile(join(root, "plan", "_trains", "_interlockings", "route.yaml"), `interlocking_id: interlocking:proof\nroutes:\n  - route_id: nominal\n    train_id: train:proof:nominal\n`);
     await writeFile(join(root, "plan", "_trains", "nominal.yaml"), `train_id: train:proof:nominal\nsequence:\n  - from: user:actor\n    to: wagon:first\n  - from: wagon:first\n    to: wagon:last\n`);
     await writeFile(join(root, "e2e", "interlockings", "sequence.test.ts"), `import { expect, test } from "bun:test";
@@ -149,6 +152,9 @@ test("semantic proof accepts an awaited TrainRunner execution result", async () 
   try {
     await mkdir(join(root, "plan", "_trains", "_interlockings"), { recursive: true });
     await mkdir(join(root, "e2e", "interlockings"), { recursive: true });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "interlocking.ts"), "export class InterlockingRunner {}\n");
+    await writeFile(join(root, "src", "runner.ts"), "export class TrainRunner {}\n");
     await writeFile(join(root, "plan", "_trains", "_interlockings", "route.yaml"), `interlocking_id: interlocking:async-proof\nroutes:\n  - route_id: nominal\n    train_id: train:async-proof:nominal\n`);
     await writeFile(join(root, "plan", "_trains", "nominal.yaml"), `train_id: train:async-proof:nominal\nsequence:\n  - from: user:actor\n    to: wagon:first\n  - from: wagon:first\n    to: wagon:last\n`);
     await writeFile(join(root, "e2e", "interlockings", "awaited.test.ts"), `import { expect, test } from "bun:test";
