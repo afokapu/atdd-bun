@@ -94,15 +94,44 @@ test("init declares every profile explicitly in a new atdd-bun.yaml, so a greenf
     await git(root, "init", "-q", "-b", "main");
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.7.0" } }));
     expect((await initializeRepository(root)).ok).toBeTrue();
-    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[] };
+    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[]; ratchet: { mode: string; profiles: string[] } };
     const governed = every;
     expect(written.profiles).toEqual(governed);
+    // A clean consumer gets a lawful, explicit exact-base policy from the supported generator;
+    // it never needs to hand-edit its project YAML to enter reject-new mode.
+    expect(written.ratchet).toEqual({ mode: "reject-new", profiles: governed });
     expect(drops(written.profiles, ["docs"])).toEqual([`profiles drops ${governed.filter(p => p !== "docs").join(", ")}`]);
     // An existing atdd-bun.yaml is never touched.
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
     expect((await policyInit(root)).message).toContain("kept");
     expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe("max_staged_files: 20\n");
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("init adds deterministic reject-new policy to an existing explicit profile selection without changing that selection", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-ratchet-existing-policy-"));
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs, flow]\nmax_staged_files: 20\n");
+    expect((await policyInit(root)).ok).toBeTrue();
+    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[]; ratchet: { mode: string; profiles: string[] } };
+    expect(written.profiles).toEqual(["docs", "flow"]);
+    expect(written.ratchet).toEqual({ mode: "reject-new", profiles: ["docs", "flow"] });
+    const once = await readFile(join(root, "atdd-bun.yaml"), "utf8");
+    expect((await policyInit(root)).message).toContain("kept");
+    expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe(once);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("init preserves invalid or duplicate explicit profiles without appending a partial ratchet policy", async () => {
+  const cases = ["profiles: [docs, nope]\n", "profiles: [docs, docs]\n", "profiles: [workflow, flow]\n"];
+  for (const config of cases) {
+    const root = await mkdtemp(join(tmpdir(), "atdd-ratchet-invalid-policy-"));
+    try {
+      await writeFile(join(root, "atdd-bun.yaml"), config);
+      expect((await policyInit(root)).message).toContain("kept");
+      expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe(config);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
 });
 
 test("8, pushed: a multi-commit direct push [docs, security] → no list → [docs] is judged from the pre-push tip", async () => {

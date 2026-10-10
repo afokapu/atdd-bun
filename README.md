@@ -103,8 +103,11 @@ the adoption that establishes the governed set, so a brownfield repository can d
 `profiles: [docs]` in an ordinary pull request. From then on, the integrity check reports, against
 the base branch, removing a profile from the list and removing the list itself. The second closes
 the two-step bypass `[docs, security]` → no list → `[docs]`. `init` writes a new `atdd-bun.yaml`
-with every profile listed, so a greenfield repository is governed from its first commit; trim the
-list before that commit to adopt gradually.
+with every profile listed and a matching explicit `reject-new` ratchet policy, so a greenfield
+repository is governed from its first commit. For an existing configuration with an explicit
+profile list but no policy, `init` appends only the matching policy and preserves the selected
+profiles and every other configuration field; keep the two selected-profile lists equal when
+trimming them before the first commit to adopt gradually.
 
 ## Configuration
 
@@ -129,9 +132,13 @@ release: { enabled: false }
 
 When enabled without overrides, a primary checkout at `~/Github/<repo>` uses linked worktrees at `~/Github/worktrees/<repo>/<branch>`. The defaults use `primary_directory: .` (the current primary checkout) and `root: ../worktrees/{repo}`; `{repo}` expands to the primary checkout's directory name. Repositories that need another layout can set either field explicitly.
 
-## Exact-base finding ratchet (opt-in)
+## Exact-base finding ratchet
 
-Strict enforcement is the default: `bun run atdd-bun all` still fails for every finding. A consumer may opt into an exact-base comparison for one explicit profile set:
+`bun run atdd-bun init` generates an explicit `reject-new` policy whose profiles exactly match
+the generated selected profiles. For an existing explicit selection with no policy, the same
+command appends that matching policy without changing the selection or other configuration.
+Without a policy, strict enforcement remains the default; `bun run atdd-bun all` still fails for
+every finding:
 
 ```yaml
 # atdd-bun.yaml
@@ -160,9 +167,19 @@ bun run atdd-bun --profile flow,traceability --ratchet --ratchet-activate-profil
 
 This is an activation-only exception to the ordinary equal-context rule, not a baseline migration. It requires an explicit candidate `profiles:` list, an explicit base list that is a strict subset of it, and identical non-profile policy/configuration. A removal, implicit/default-list adoption, unrelated configuration change, dirty tree, unavailable/non-ancestor base, or omission of `--ratchet-activate-profiles` fails closed. The command stores no activation state or accepted findings; after the governed expansion lands, use ordinary `--ratchet` with exact matching context. Strict non-ratchet enforcement remains unchanged.
 
-### Generated activation commit gate
+### Generated exact-base commit gate
 
-A generated `pre-commit` hook recognizes only a staged `reject-new` strict profile expansion. It materializes the exact committed `HEAD` base and the staged index tree in an isolated worktree, runs both with the candidate's expanded profile set, and emits the same carried/new/resolved report. The commit proceeds only when `new` is empty. This is the supported bootstrap path for the activation commit; it never writes a baseline or weakens an ordinary hook. It fails closed unless the index has the explicit matching ratchet policy, the worktree has no unstaged or untracked state, the base profile list is a strict subset, and all non-profile policy is identical. All other commits retain ordinary strict hook enforcement.
+A generated `pre-commit` hook recognizes a staged `reject-new` policy and materializes the exact
+committed `HEAD` base plus the staged index tree in an isolated worktree. With an already-active,
+unchanged explicit profile set and identical context, it runs ordinary exact-base comparison and
+emits the carried/new/resolved report; the commit proceeds only when `new` is empty. A strict
+profile expansion uses the same comparison as the one-time activation exception.
+
+The gate never writes a baseline or weakens policy outside that exact comparison. It fails closed
+unless the index has the explicit matching ratchet policy, the worktree has no unstaged or
+untracked state, and either the selected profiles/context are unchanged or the base profiles are
+a strict subset with identical non-profile policy. Removals, context drift, unavailable/non-ancestor
+bases, a bypass, waivers, mutable baselines, and new findings remain rejected.
 
 ## Docs-site theme
 
