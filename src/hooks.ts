@@ -1,7 +1,9 @@
-import { chmod, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { enabledProfiles, enforce } from "./enforce";
+import { tmpdir } from "node:os";
+import { concreteProfiles, enabledProfiles, enforce, normalizeProfileName } from "./enforce";
+import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, isStrictProfileExpansion, parseRatchetPolicy } from "./ratchet";
 import { topologyFor } from "./topology";
 import { JOURNEY_DOCS_DIR } from "./journey-docs";
 
@@ -11,7 +13,9 @@ export const defaultWorktreePolicy: WorktreePolicy = { enabled: false, root: "..
 export const defaultHookPolicy: HookPolicy = { max_staged_files: 20, max_staged_changed_lines: 350, max_commits_per_push: 10, max_registry_removed_lines: 350, registry_paths: ["plan/_*.yaml", "plan/_*.yml", "contracts/_*.yaml", "contracts/_*.yml"], protected_branches: ["main", "master"], require_plan_reference: true, require_traceability: true, worktrees: defaultWorktreePolicy };
 export const hookEvents = ["pre-commit", "commit-msg", "pre-push", "pre-merge-commit", "post-commit", "post-merge"] as const;
 export type HookEvent = typeof hookEvents[number];
-const git = async (root: string, args: string[], input?: string) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdin: input ? new Blob([input]) : undefined, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()).trim(), err: (await new Response(child.stderr).text()).trim() }; };
+// Git exports these repository-local variables to hooks. A temporary worktree must discover its own Git directory instead.
+const gitEnvironment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_QUARANTINE_PATH"].includes(key)));
+const git = async (root: string, args: string[], input?: string, raw = false) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, env: gitEnvironment, stdin: input ? new Blob([input]) : undefined, stdout: "pipe", stderr: "pipe" }); const out = await new Response(child.stdout).text(), err = await new Response(child.stderr).text(); return { code: await child.exited, out: raw ? out : out.trim(), err: raw ? err : err.trim() }; };
 const bad = (message: string) => ({ ok: false, message });
 const files = async (root: string, args: string[]) => (await git(root, args)).out.split("\n").filter(Boolean);
 const strings = (value: unknown) => Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : undefined;
@@ -30,6 +34,50 @@ const stagedStats = async (root: string) => (await git(root, ["diff", "--cached"
 export async function policy(root: string): Promise<HookPolicy> { const file = join(root, "atdd-bun.yaml"); if (!existsSync(file)) return defaultHookPolicy; const data = Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown>; const configuredWorktrees = data?.worktrees && typeof data.worktrees === "object" && !Array.isArray(data.worktrees) ? data.worktrees as Record<string, unknown> : {}; return { ...defaultHookPolicy, ...Object.fromEntries(Object.entries(data ?? {}).filter(([key, value]) => key in defaultHookPolicy && key !== "worktrees" && typeof value === typeof (defaultHookPolicy as any)[key])), protected_branches: strings(data?.protected_branches) ?? defaultHookPolicy.protected_branches, registry_paths: strings(data?.registry_paths) ?? defaultHookPolicy.registry_paths, worktrees: { ...defaultWorktreePolicy, ...Object.fromEntries(Object.entries(configuredWorktrees).filter(([key, value]) => key in defaultWorktreePolicy && typeof value === typeof (defaultWorktreePolicy as any)[key])) } }; }
 async function validation(root: string, changed: string[], full: boolean, registryChanged = false) { const profiles: any[] = [], topology = await topologyFor(root); if (registryChanged || changed.some(path => path.startsWith(`${topology.planRoot}/`)) || changed.includes("atdd-bun.yaml")) profiles.push("planner", "traceability"); if (changed.some(path => /\.(?:[cm]?[jt]sx?|html)$/.test(path))) profiles.push("coder", "tester"); if (changed.includes("atdd-bun.yaml") || changed.some(path => /\.ya?ml$/.test(path))) profiles.push("topology"); if (changed.some(isGeneratedView)) profiles.push("docs"); if (!profiles.length) return { ok: true, message: "no affected area" }; try { const enabled = await enabledProfiles(root), selected = full ? ["all" as const] : [...new Set(profiles)].filter(profile => enabled.includes(profile)); if (!selected.length) return { ok: true, message: "no activated profile covers the affected area" }; const findings = await enforce({ root, profiles: selected }); return findings.length ? bad(findings.map(f => `${f.rule_id}: ${f.file}`).join("\n")) : { ok: true, message: "validation clean" }; } catch (error) { return bad(`Bun enforcer resolution failed: ${String(error)}`); } }
 
+const stable = (profiles: string[]) => [...new Set(profiles)].sort();
+const configAt = async (root: string) => {
+  const file = join(root, "atdd-bun.yaml");
+  return existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown> : {};
+};
+
+/** The sole bootstrap exception: a staged strict profile expansion is compared with its exact HEAD, never accepted. */
+async function profileActivationCommitGate(root: string): Promise<{ ok: boolean; message: string } | null> {
+  const stagedConfig = await git(root, ["show", ":atdd-bun.yaml"]);
+  if (stagedConfig.code) return null;
+  let candidateConfig: Record<string, unknown>, policy;
+  try { candidateConfig = Bun.YAML.parse(stagedConfig.out) as Record<string, unknown>; policy = parseRatchetPolicy(candidateConfig); }
+  catch (error) { return bad(`ratchet activation commit gate configuration is invalid: ${String(error)}`); }
+  if (policy?.mode !== "reject-new" || !Array.isArray(candidateConfig.profiles) || !candidateConfig.profiles.every(profile => typeof profile === "string")) return null;
+  if ((await git(root, ["diff", "--quiet"])).code !== 0 || (await git(root, ["ls-files", "--others", "--exclude-standard"])).out) return bad("ratchet activation commit gate requires no unstaged or untracked candidate state");
+  const head = await git(root, ["rev-parse", "--verify", "HEAD^{commit}"]);
+  if (head.code || !/^[0-9a-f]{40}$/i.test(head.out)) return bad("ratchet activation commit gate requires an exact committed HEAD base");
+  const scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-commit-gate-"));
+  try {
+    const added = await git(root, ["worktree", "add", "--detach", "--no-checkout", scratch, head.out]);
+    if (added.code) return bad(`could not materialize ratchet activation base: ${added.err || added.out}`);
+    const checkedOut = await git(scratch, ["checkout", "--detach", head.out]);
+    if (checkedOut.code) return bad(`could not checkout ratchet activation base: ${checkedOut.err || checkedOut.out}`);
+    const baseConfig = await configAt(scratch), candidateProfiles = stable(candidateConfig.profiles.map(normalizeProfileName));
+    const baseProfiles = stable(await enabledProfiles(scratch));
+    if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || stable(policy.profiles.map(normalizeProfileName)).join(",") !== candidateProfiles.join(",") || !isStrictProfileExpansion(baseProfiles, candidateProfiles) || activationContextDigest(baseConfig) !== activationContextDigest(candidateConfig)) return bad("ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context");
+    const baseFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
+    const patch = await git(root, ["diff", "--cached", "--binary"], undefined, true);
+    if (patch.code) return bad(`could not read staged ratchet activation candidate: ${patch.err || patch.out}`);
+    const applied = await git(scratch, ["apply", "--whitespace=nowarn"], patch.out);
+    if (applied.code) return bad(`could not materialize staged ratchet activation candidate: ${applied.err || applied.out}`);
+    const materialized = await configAt(scratch);
+    if (activationContextDigest(materialized) !== activationContextDigest(candidateConfig)) return bad("staged ratchet activation candidate did not materialize exactly");
+    const candidateFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
+    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
+    const delta = compareFindings(normalize(baseFindings), normalize(candidateFindings));
+    const tree = await git(root, ["write-tree"]);
+    if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
+    const report = JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base: head.out, candidate: tree.out, profiles: candidateProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta });
+    return { ok: delta.new.length === 0, message: report };
+  } catch (error) { return bad(`ratchet activation commit gate failed closed: ${String(error)}`); }
+  finally { await git(root, ["worktree", "remove", "--force", scratch]); await rm(scratch, { recursive: true, force: true }); }
+}
+
 const inside = (parent: string, child: string) => { const path = relative(parent, child); return path === "" || (path !== ".." && !path.startsWith("../") && !path.startsWith("..\\")); };
 async function primaryRoot(root: string): Promise<string | null> { const result = await git(root, ["rev-parse", "--git-common-dir"]); if (result.code) return null; return dirname(resolve(root, result.out)); }
 export type WorktreeLayout = { primary: string; worktreeRoot: string; current: string; branch: string };
@@ -40,7 +88,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
   if (["pre-commit", "pre-merge-commit"].includes(event) && cfg.protected_branches.includes(branch)) return bad(`protected branch ${branch} is blocked`);
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
-  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
+  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const activation = await profileActivationCommitGate(root); if (activation) return activation; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [,,remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); const local = row[1]; if (local && !/^0+$/.test(local)) { const range = !remoteSha || /^0+$/.test(remoteSha) ? `${local}^..${local}` : `${remoteSha}..${local}`, count = Number((await git(root, ["rev-list", "--count", range])).out); if (count > cfg.max_commits_per_push) return bad(`commits per push ${count} exceed ${cfg.max_commits_per_push}`); } } return validation(root, await files(root, ["diff", "--name-only", "HEAD~1..HEAD"]), true); }
   if (event === "post-commit") { const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }

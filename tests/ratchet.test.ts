@@ -49,6 +49,8 @@ test("explicit consumer policy distinguishes report-only from reject-new and nev
   expect(parseRatchetPolicy({ ratchet: { mode: "report", profiles: ["coder"] } })).toEqual({ mode: "report", profiles: ["coder"] });
   expect(parseRatchetPolicy({ ratchet: { mode: "reject-new", profiles: ["coder"] } })).toEqual({ mode: "reject-new", profiles: ["coder"] });
   expect(() => parseRatchetPolicy({ ratchet: { mode: "accept-baseline", profiles: ["coder"] } })).toThrow("ratchet.mode");
+  expect(() => parseRatchetPolicy({ ratchet: { mode: "reject-new", profiles: ["coder"], baseline: "mutable" } })).toThrow("baselines and waivers");
+  expect(() => parseRatchetPolicy({ ratchet: { mode: "reject-new", profiles: ["coder"], waiver: "skip" } })).toThrow("baselines and waivers");
 });
 
 test("exact-base comparison classifies carried/new/resolved findings", () => {
