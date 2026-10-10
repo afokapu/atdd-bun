@@ -228,3 +228,23 @@ for (const [name, { file, edit }] of Object.entries(unrelatedWrites)) {
     expect(await mutant(edit, file)).toEqual([]);
   });
 }
+
+// Review #7 of 82bba1b (pullrequestreview-5479679404), S2: the Station Master reaches the patch through
+// a tsconfig path alias that Bun honors at runtime, so the closure must resolve local aliases too.
+test("production-shape proof rejects S2: a tsconfig path-aliased side-effect module patches the prototype", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-aliased-patch-"));
+  try {
+    await cp(fixture, root, { recursive: true });
+    await writeFile(join(root, "tsconfig.json"), JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } } }, null, 2));
+    await writeFile(join(root, "src", "patch.ts"), `import { InterlockingRunner } from "./trains/interlocking.ts";
+
+(InterlockingRunner.prototype as any).execute = async () => (${fakeInterlocked});
+`);
+    const server = join(root, "src", "server.ts");
+    await writeFile(server, `import "@/patch.ts";\n${await readFile(server, "utf8")}`);
+    const found = ruleIds(await both(root));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
