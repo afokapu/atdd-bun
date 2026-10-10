@@ -104,8 +104,10 @@ the adoption that establishes the governed set, so a brownfield repository can d
 the base branch, removing a profile from the list and removing the list itself. The second closes
 the two-step bypass `[docs, security]` → no list → `[docs]`. `init` writes a new `atdd-bun.yaml`
 with every profile listed and a matching explicit `reject-new` ratchet policy, so a greenfield
-repository is governed from its first commit; keep the two selected-profile lists equal when
-trimming them before that commit to adopt gradually.
+repository is governed from its first commit. For an existing configuration with an explicit
+profile list but no policy, `init` appends only the matching policy and preserves the selected
+profiles and every other configuration field; keep the two selected-profile lists equal when
+trimming them before the first commit to adopt gradually.
 
 ## Configuration
 
@@ -133,9 +135,10 @@ When enabled without overrides, a primary checkout at `~/Github/<repo>` uses lin
 ## Exact-base finding ratchet
 
 `bun run atdd-bun init` generates an explicit `reject-new` policy whose profiles exactly match
-the generated selected profiles. Existing consumers may opt into an exact-base comparison by
-adding an explicit policy for one profile set. Without a policy, strict enforcement remains the
-default; `bun run atdd-bun all` still fails for every finding:
+the generated selected profiles. For an existing explicit selection with no policy, the same
+command appends that matching policy without changing the selection or other configuration.
+Without a policy, strict enforcement remains the default; `bun run atdd-bun all` still fails for
+every finding:
 
 ```yaml
 # atdd-bun.yaml
