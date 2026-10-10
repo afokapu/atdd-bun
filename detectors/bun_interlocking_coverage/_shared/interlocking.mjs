@@ -338,35 +338,51 @@ function productionReceivers(text) {
 // [{ resolution, execution }] means an actual resolution value feeds actual train execution.
 // `execution` is null for an unassigned execute result; route/runner proof may assert resolution,
 // while trace and sequence proof require the named execution result.
-export function hasResolvedProductionRunnerImports(text, file, croot) {
-  const imported = new Set();
+function resolvedLocalNamedImport(text, file, croot, symbol) {
+  if (!file || !croot) return null;
   const re = /^\s*import\s*\{([^}]+)\}\s*from\s*["']([^"']+)["']/gm;
   for (const match of text.matchAll(re)) {
     if (!match[2].startsWith(".")) continue;
     const names = match[1].split(",").map(name => name.trim().split(/\s+as\s+/)[0]);
+    if (!names.includes(symbol)) continue;
     const target = resolve(dirname(file), match[2]);
     const candidates = [target, `${target}.ts`, `${target}.tsx`, `${target}.js`, `${target}.mjs`, join(target, "index.ts")];
     const source = candidates.find(candidate => existsSync(candidate) && candidate.startsWith(resolve(croot) + sep) && !/\.(test|spec)\.[cm]?[jt]sx?$/.test(candidate));
-    if (!source) continue;
-    for (const name of names) if (name === PROD_INTERLOCKING || name === PROD_TRAIN) imported.add(name);
+    if (source) return source;
   }
-  return imported.has(PROD_INTERLOCKING) && imported.has(PROD_TRAIN);
+  return null;
+}
+
+export function hasResolvedProductionRunnerImports(text, file, croot) {
+  return Boolean(
+    resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING) &&
+    resolvedLocalNamedImport(text, file, croot, PROD_TRAIN),
+  );
+}
+
+function resolutionTrainExecution(after, resolution) {
+  const selected = `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`;
+  const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${selected}\\s*\\)\\s*\\.execute\\s*\\(`;
+  // The declaration-driven runner form carries the path selected by THIS resolution
+  // into the constructor, then passes its id and arbitrary handler/context values to execute.
+  const declaration = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.trainPath\\s*\\)\\s*\\.execute\\s*\\(\\s*${selected}(?=\\s*(?:,|\\)))`;
+  const call = `(?:${legacy}|${declaration})`;
+  const assigned = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${call}`).exec(after);
+  return { execution: assigned?.[1] ?? null, found: Boolean(assigned || new RegExp(call).test(after)) };
 }
 
 export function productionExecutionProofs(text, file, croot) {
   if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return [];
   const receivers = productionReceivers(text);
   const proofs = [];
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   for (const m of text.matchAll(resolutions)) {
     const [whole, resolution, receiver] = m;
     const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
-    const after = text.slice((m.index ?? 0) + whole.length);
-    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
-    const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
-    if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
+    const proof = resolutionTrainExecution(text.slice((m.index ?? 0) + whole.length), resolution);
+    if (proof.found) proofs.push({ resolution, execution: proof.execution });
   }
   return proofs;
 }
@@ -451,33 +467,59 @@ function exportedActionBody(text, name) {
   return null;
 }
 
-function exportedActionReturnsProductionExecution(stationText, action) {
-  const body = exportedActionBody(stationText, action);
-  if (!body) return false;
-  const receivers = productionReceivers(stationText);
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
-  for (const m of body.matchAll(resolutions)) {
-    const [whole, resolution, receiver] = m;
-    const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
-    const named = [...receivers].some((name) => receiver.trim().endsWith(name));
-    if (!direct && !named) continue;
-    const after = body.slice((m.index ?? 0) + whole.length);
-    const directReturn = new RegExp(`\\breturn\\s+(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
-    if (directReturn) return true;
-    const execution = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after)?.[1];
-    if (execution && new RegExp(`\\breturn\\s+(?:await\\s+)?${escaped(execution)}\\s*;?`).test(after)) return true;
-  }
-  return false;
+function hasDeclarationBoundTrainExecution(text, file, croot) {
+  if (!resolvedLocalNamedImport(text, file, croot, PROD_TRAIN)) return false;
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*[^=;{}\\n]{0,240}?\\.resolveTrain\\s*\\(`, "g");
+  return [...text.matchAll(resolutions)].some(match =>
+    resolutionTrainExecution(text.slice((match.index ?? 0) + match[0].length), match[1]).found,
+  );
 }
 
-// HTTP/module entrypoints do not expose a StationMaster instance to the test. The asserted result
-// must therefore come from the SAME exported action the test invokes, and that action's own return
-// path must resolve then execute the selected train. Module-wide runner tokens are not evidence.
-export function stationModuleExecutionProof(text, stationText, action) {
-  if (!stationText) return false;
-  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
-  return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
-    exportedActionReturnsProductionExecution(stationText, call[2]));
+function directProductionModuleExecution(body, moduleText = body) {
+  if (!new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(moduleText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(moduleText)) return false;
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*[^=;{}\\n]{0,240}?\\.resolveTrain\\s*\\(`, "g");
+  return [...body.matchAll(resolutions)].some(match =>
+    resolutionTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]).found,
+  );
+}
+
+function journeyRunnerTraversesProductionRunners(text, file, croot) {
+  const interlocking = resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING);
+  if (!interlocking || !new RegExp(`new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(`).test(text)) return false;
+  return hasDeclarationBoundTrainExecution(readText(interlocking), interlocking, croot);
+}
+
+function exportedActionReturnsJourneyExecution(stationText, stationFile, croot, actionName) {
+  const body = exportedActionBody(stationText, actionName);
+  const journey = resolvedLocalNamedImport(stationText, stationFile, croot, "JourneyRunner");
+  if (!body || !journey || !journeyRunnerTraversesProductionRunners(readText(journey), journey, croot)) return false;
+  if (/\breturn\s+(?:await\s+)?new\s+JourneyRunner\s*\([^)]*\)\s*\.execute\s*\(/.test(body)) return true;
+  const runner = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+JourneyRunner\s*\([^)]*\)/.exec(body)?.[1];
+  return Boolean(runner && new RegExp(`\\breturn\\s+(?:await\\s+)?${escaped(runner)}\\s*\\.execute\\s*\\(`).test(body));
+}
+
+// HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
+// witness is an asserted result from the same exported action the test invokes. That action must
+// either directly execute the selected train or return a JourneyRunner execution whose local
+// InterlockingRunner then executes the same resolution's declaration path.
+function stationModuleCall(text, action) {
+  return new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
+}
+
+export function stationModuleExecutionProof(text, stationText, action, stationFile, croot) {
+  if (!stationText || !stationFile || !croot) return false;
+  const call = stationModuleCall(text, action);
+  if (!call || !assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`)) return false;
+  const body = exportedActionBody(stationText, call[2]);
+  if (!body) return false;
+  if (exportedActionReturnsJourneyExecution(stationText, stationFile, croot, call[2])) return true;
+  return directProductionModuleExecution(body, stationText);
+}
+
+export function routeHasStationModuleProof(route, text, action, stationText, stationFile, croot) {
+  const call = stationModuleCall(text, action);
+  return Boolean(call && stationModuleExecutionProof(text, stationText, action, stationFile, croot) &&
+    assertsExpression(text, `${escaped(call[1])}\\.selectedTrainId`, route.trainId));
 }
 
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality
