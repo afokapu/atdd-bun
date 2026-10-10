@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -41,6 +42,50 @@ test("generated CI grants only read access and supplies the ephemeral Actions to
     expect(await readFile(join(root, "bun.lock"), "utf8")).toBe(lock);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("a scoped npm interpolation authenticates an isolated frozen Bun install without inheriting a token", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-private-package-install-"));
+  const token = "fixture-ephemeral";
+  const seen: Array<string | null> = [];
+  let server: ReturnType<typeof Bun.serve>;
+  const install = async (cwd: string, env: Record<string, string>, ...args: string[]) => {
+    const child = Bun.spawn({ cmd: ["bun", "install", "--cwd", cwd, ...args], env, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+    return { code, output: stdout + stderr };
+  };
+  try {
+    await mkdir(join(root, "package"));
+    await writeFile(join(root, "package/package.json"), JSON.stringify({ name: "@forgeonehundred/resolver-os", version: "0.1.0" }));
+    const tarball = join(root, "resolver-os-0.1.0.tgz");
+    const archive = Bun.spawn({ cmd: ["tar", "-czf", tarball, "package"], cwd: root });
+    expect(await archive.exited).toBe(0);
+    const integrity = "sha512-" + createHash("sha512").update(new Uint8Array(await Bun.file(tarball).arrayBuffer())).digest("base64");
+    server = Bun.serve({ port: 0, fetch(request) {
+      const url = new URL(request.url);
+      seen.push(request.headers.get("authorization"));
+      if (request.headers.get("authorization") !== `Bearer ${token}`) return new Response("unauthorized", { status: 401 });
+      if (decodeURIComponent(url.pathname) === "/@forgeonehundred/resolver-os") return Response.json({ name: "@forgeonehundred/resolver-os", "dist-tags": { latest: "0.1.0" }, versions: { "0.1.0": { name: "@forgeonehundred/resolver-os", version: "0.1.0", dist: { tarball: `http://127.0.0.1:${server.port}/-/resolver-os-0.1.0.tgz`, integrity } } } });
+      if (url.pathname === "/-/resolver-os-0.1.0.tgz") return new Response(Bun.file(tarball));
+      return new Response("not found", { status: 404 });
+    } });
+    const consumer = join(root, "consumer");
+    await mkdir(consumer);
+    await writeFile(join(consumer, "package.json"), JSON.stringify({ name: "fixture", dependencies: { "@forgeonehundred/resolver-os": "0.1.0" } }));
+    await writeFile(join(consumer, ".npmrc"), `@forgeonehundred:registry=http://127.0.0.1:${server.port}\n//127.0.0.1:${server.port}/:_authToken=\${NODE_AUTH_TOKEN}\n`);
+    const withoutToken = { ...process.env } as Record<string, string>;
+    delete withoutToken.NODE_AUTH_TOKEN;
+    expect((await install(consumer, withoutToken, "--cache-dir", join(root, "cache-without-token"))).code).not.toBe(0);
+    expect(seen).toContain("Bearer ${NODE_AUTH_TOKEN}");
+    const isolated = { ...withoutToken, NODE_AUTH_TOKEN: token };
+    expect((await install(consumer, isolated, "--cache-dir", join(root, "cache-bootstrap"))).code).toBe(0);
+    await rm(join(consumer, "node_modules"), { recursive: true, force: true });
+    const frozen = await install(consumer, isolated, "--frozen-lockfile", "--force", "--cache-dir", join(root, "cache-frozen"));
+    expect(frozen.code).toBe(0);
+    expect(frozen.output).not.toContain(token);
+    expect((await readFile(join(consumer, "bun.lock"), "utf8"))).toContain('"@forgeonehundred/resolver-os"');
+    expect(seen.filter(value => value === `Bearer ${token}`).length).toBeGreaterThan(2);
+  } finally { server?.stop(true); await rm(root, { recursive: true, force: true }); }
+}, 30_000);
 
 test("ci init refuses a persisted GitHub Packages credential without changing consumer files", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-private-package-persisted-token-"));
