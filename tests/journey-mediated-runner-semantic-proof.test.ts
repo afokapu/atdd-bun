@@ -307,6 +307,25 @@ const thirdReviewMutants: Record<string, Record<string, string>> = {
     "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
     return void ${exec};`),
   },
+  "structural: execution passed through an arbitrary wrapper call": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    const wrap = (_value: unknown) => (${business});
+    return wrap(${exec});`),
+  },
+  "structural: finally return overrides the execution": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    try {
+      return ${exec};
+    } finally {
+      return ${business};
+    }`),
+  },
+  "structural: closure mutates resolution.trainPath before construction": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    const retarget = () => { resolution.trainPath = "plan/_trains/train:unrelated.yaml"; };
+    retarget();
+    return ${exec};`),
+  },
 };
 
 for (const [name, files] of Object.entries(thirdReviewMutants)) {

@@ -3,10 +3,16 @@
 // afokapu/atdd#1248 route space + #1251 runner call model). Each check under ../checks/*.mjs imports
 // this module and scans a consumer tree for ONE tester.bun.interlocking-* rule.
 //
-// ZERO third-party deps — node builtins only. The interlocking route space is stack-neutral planner
+// Node builtins only, except journey-chain.mjs, which proves the journey-mediated chain on the
+// TypeScript compiler AST. The interlocking route space is stack-neutral planner
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
+import {
+  actionReturnsJourneyExecution,
+  interlockingExecuteReturnsTrainExecution,
+  journeyExecuteReturnsInterlockingExecution,
+} from "./journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -408,7 +414,7 @@ function returnStatementEnd(text, start) {
 
 // True when a statement starting at `index` is the body of a braceless `if (…)`, `for (…)`, `while (…)`, or `else`.
 function conditionalStatement(text, index) {
-  const before = text.slice(0, index).trimEnd();
+  const before = maskComments(text.slice(0, index)).trimEnd();
   if (/(?:^|[^\w$.])else$/.test(before)) return true;
   if (!before.endsWith(")")) return false;
   let depth = 0;
@@ -419,8 +425,9 @@ function conditionalStatement(text, index) {
   return false;
 }
 
-// [start, end] of each `return` that always runs when control reaches it at the top level of `text`:
-// nested blocks, callbacks, and braceless conditional bodies are excluded; `try`/`finally` bodies are not.
+// [[start, end]] of the first `return` that always runs when control reaches it at the top level of `text`
+// (or [] when none does); anything after it is unreachable. Nested blocks, callbacks, and braceless
+// conditional bodies are excluded; `try`/`finally` bodies are not.
 function topLevelReturns(text) {
   const ranges = [], stack = [];
   for (let i = 0; i < text.length; i++) {
@@ -431,20 +438,20 @@ function topLevelReturns(text) {
     else if (")]}".includes(c)) { if (!stack.length) break; stack.pop(); }
     else if (stack.every((entry) => entry === "always") && text.startsWith("return", i) &&
       !/[\w$.]/.test(text[i - 1] ?? "") && !/[\w$]/.test(text[i + 6] ?? "") && !conditionalStatement(text, i)) {
-      const end = returnStatementEnd(text, i);
-      ranges.push([i, end]);
-      i = end - 1;
+      ranges.push([i, returnStatementEnd(text, i)]);
+      break;
     }
   }
   return ranges;
 }
 
-// Operators that make an operand conditional or discarded: comma, ternary, and short-circuit logic.
-const SEQUENCING = /^(?:,|\?(?![.?])|:|&&|\|\||\?\?)/;
+// Operators that make an operand conditional, discarded, or replaced by another value: comma, ternary,
+// short-circuit logic, arrows, unary/binary arithmetic and comparison, and `void`/`typeof`/`delete`/
+// `instanceof`/`in`. A non-null `!` may follow a value, so only a prefix `!` counts.
+const PREFIX_REPLACING = /^(?:\?(?![.?])|\?\?|&&|\|\||=>|[,:!~+\-*/%<>=&|^])|^(?:void|typeof|delete|instanceof|in)\b/;
+const SUFFIX_REPLACING = /^(?:\?(?![.?])|\?\?|&&|\|\||[,:~+\-*/%<>=&|^])|^(?:instanceof|in)\b/;
+const replacing = (pattern, text, i) => !/[\w$]/.test(text[i - 1] ?? "") || !/^[a-z]/.test(text[i]) ? pattern.exec(text.slice(i, i + 10)) : null;
 
-// The expression at `index` is the returned value (or a call argument, object value, or array element of
-// it) unless, at the return's top level or inside a grouping paren, it sits beside a comma, ternary, or
-// short-circuit operator that can discard it or skip it.
 function returnsValueAt(text, start, end, index) {
   const stack = [{ kind: "group", operator: false }];
   for (let i = start + "return".length; i < index; i++) {
@@ -458,7 +465,7 @@ function returnsValueAt(text, start, end, index) {
     } else if ("[{".includes(c)) stack.push({ kind: c, operator: false });
     else if (")]}".includes(c)) stack.pop();
     else {
-      const op = SEQUENCING.exec(text.slice(i, i + 2));
+      const op = replacing(PREFIX_REPLACING, text, i);
       if (op) { stack.at(-1).operator = true; i += op[0].length - 1; }
     }
   }
@@ -472,7 +479,7 @@ function returnsValueAt(text, start, end, index) {
     else if (")]}".includes(c)) {
       if (depth > 0) depth--;
       else { stack.pop(); if (!stack.length || stack.at(-1).kind !== "group") return true; }
-    } else if (depth === 0 && stack.at(-1).kind === "group" && SEQUENCING.test(text.slice(i, i + 2))) return false;
+    } else if (depth === 0 && stack.at(-1).kind === "group" && replacing(SUFFIX_REPLACING, text, i)) return false;
   }
   return true;
 }
@@ -550,13 +557,6 @@ function resolutionTrainExecution(after, resolution) {
     returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
       Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
   };
-}
-
-// Journey path: both the legacy and declaration forms must be returned within the resolution's binding.
-function boundReturnedTrainExecution(after, resolution) {
-  const { legacy, constructed, declaration } = trainExecutionForms(resolution);
-  const { scope, bound } = resolutionBinding(after, resolution, `${constructed}|${legacy}\\s*`);
-  return returnsMatch(scope, `(?:${legacy}|${declaration})`, bound.length);
 }
 
 export function productionExecutionProofs(text, file, croot) {
@@ -668,51 +668,17 @@ function directProductionModuleExecution(body, moduleText = body) {
   });
 }
 
-function classBody(text, name) {
-  const header = new RegExp(`\\bclass\\s+${escaped(name)}\\b[^{]*\\{`).exec(text);
-  return header ? balancedBlock(text, (header.index ?? 0) + header[0].length - 1) : null;
-}
-
-function methodBody(body, name) {
-  if (!body) return null;
-  const header = new RegExp(`(?:^|[\\s;{}])(?:(?:public|private|protected|static|override)\\s+)*(?:async\\s+)?${escaped(name)}\\s*\\(`, "g");
-  for (const match of body.matchAll(header)) {
-    const params = (match.index ?? 0) + match[0].length;
-    const close = params + enclosingEnd(body.slice(params));
-    const open = /^\s*(?::\s*[^{;=]+)?\{/.exec(body.slice(close + 1));
-    if (open) return balancedBlock(body, close + open[0].length);
-  }
-  return null;
-}
-
-// The chain is pinned method to method: JourneyRunner.execute must return
-// `new InterlockingRunner(…).execute(…)`, and that InterlockingRunner.execute must resolve on `this` and
-// return the resolution's TrainRunner execution. Traversal in any other method or helper is not evidence.
-const annotated = `(?:\\s*:\\s*(?:\\{[^{}]*\\}|[^=;\\n{}])+)?`;
-
-function interlockingExecuteReturnsTrainExecution(text, file, croot) {
-  if (!resolvedLocalNamedImport(text, file, croot, PROD_TRAIN)) return false;
-  const body = methodBody(classBody(text, PROD_INTERLOCKING), "execute");
-  if (!body) return false;
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})${annotated}\\s*=\\s*(?:await\\s+)?this\\.resolveTrain\\s*\\(`, "g");
-  return [...body.matchAll(resolutions)].some((match) =>
-    boundReturnedTrainExecution(body.slice((match.index ?? 0) + match[0].length), match[1]));
-}
-
-function journeyRunnerTraversesProductionRunners(text, file, croot) {
-  const interlocking = resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING);
-  const execute = methodBody(classBody(text, "JourneyRunner"), "execute");
-  if (!interlocking || !execute || !returnsMatch(execute, `new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(`)) return false;
-  return interlockingExecuteReturnsTrainExecution(readText(interlocking), interlocking, croot);
-}
-
+// The journey-mediated chain is proven on the TypeScript AST (journey-chain.mjs); this layer only
+// resolves each hop to a local, non-test production module.
 function exportedActionReturnsJourneyExecution(stationText, stationFile, croot, actionName) {
-  const body = exportedActionBody(stationText, actionName);
   const journey = resolvedLocalNamedImport(stationText, stationFile, croot, "JourneyRunner");
-  if (!body || !journey || !journeyRunnerTraversesProductionRunners(readText(journey), journey, croot)) return false;
-  if (/\breturn\s+(?:await\s+)?new\s+JourneyRunner\s*\([^)]*\)\s*\.execute\s*\(/.test(body)) return true;
-  const runner = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+JourneyRunner\s*\([^)]*\)/.exec(body)?.[1];
-  return Boolean(runner && new RegExp(`\\breturn\\s+(?:await\\s+)?${escaped(runner)}\\s*\\.execute\\s*\\(`).test(body));
+  if (!journey || !actionReturnsJourneyExecution(stationText, stationFile, actionName)) return false;
+  const journeyText = readText(journey);
+  const interlocking = resolvedLocalNamedImport(journeyText, journey, croot, PROD_INTERLOCKING);
+  if (!interlocking || !journeyExecuteReturnsInterlockingExecution(journeyText, journey)) return false;
+  const interlockingText = readText(interlocking);
+  return Boolean(resolvedLocalNamedImport(interlockingText, interlocking, croot, PROD_TRAIN)) &&
+    interlockingExecuteReturnsTrainExecution(interlockingText, interlocking);
 }
 
 // HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
