@@ -364,7 +364,7 @@ export function productionExecutionProofs(text, file, croot) {
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
     const after = text.slice((m.index ?? 0) + whole.length);
-    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
+    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
     const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
     if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
   }
@@ -420,15 +420,64 @@ export function stationMasterExecutionProof(text, action) {
   return seen.has(PROD_INTERLOCKING) && seen.has(PROD_TRAIN) && assertsExpression(text, `${escaped(result)}(?:\\.[A-Za-z_$][\\w$]*)?`);
 }
 
-// HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
-// witness is an asserted dispatch result plus a module body that resolves and executes the selected
-// train; this keeps an end-to-end smoke from having to pierce the public boundary for private fields.
-export function stationModuleExecutionProof(text, stationText) {
-  if (!stationText || !new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(stationText) ||
-    !/\.resolveTrain\s*\(/.test(stationText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(stationText) ||
-    !/\.execute\s*\(/.test(stationText)) return false;
-  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(?:dispatch|handleAction|executeAction)\\s*\\(`).exec(text);
-  return Boolean(call && assertsExpression(text, escaped(call[1])));
+function balancedBlock(text, open) {
+  let depth = 0, quote = null;
+  for (let i = open; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (quote) {
+      if (c === "\\") { i++; continue; }
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === "`") { quote = c; continue; }
+    if (c === "/" && next === "/") { i = text.indexOf("\n", i + 2); if (i < 0) return null; continue; }
+    if (c === "/" && next === "*") { const end = text.indexOf("*/", i + 2); if (end < 0) return null; i = end + 1; continue; }
+    if (c === "{") depth++;
+    if (c === "}" && --depth === 0) return text.slice(open + 1, i);
+  }
+  return null;
+}
+
+function exportedActionBody(text, name) {
+  const n = escaped(name);
+  const headers = [
+    new RegExp(`\\bexport\\s+(?:async\\s+)?function\\s+${n}\\s*\\([^)]*\\)\\s*\\{`, "g"),
+    new RegExp(`\\bexport\\s+(?:const|let|var)\\s+${n}\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>\\s*\\{`, "g"),
+  ];
+  for (const header of headers) {
+    const match = header.exec(text);
+    if (match) return balancedBlock(text, (match.index ?? 0) + match[0].lastIndexOf("{"));
+  }
+  return null;
+}
+
+function exportedActionReturnsProductionExecution(stationText, action) {
+  const body = exportedActionBody(stationText, action);
+  if (!body) return false;
+  const receivers = productionReceivers(stationText);
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
+  for (const m of body.matchAll(resolutions)) {
+    const [whole, resolution, receiver] = m;
+    const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
+    const named = [...receivers].some((name) => receiver.trim().endsWith(name));
+    if (!direct && !named) continue;
+    const after = body.slice((m.index ?? 0) + whole.length);
+    const directReturn = new RegExp(`\\breturn\\s+(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
+    if (directReturn) return true;
+    const execution = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after)?.[1];
+    if (execution && new RegExp(`\\breturn\\s+(?:await\\s+)?${escaped(execution)}\\s*;?`).test(after)) return true;
+  }
+  return false;
+}
+
+// HTTP/module entrypoints do not expose a StationMaster instance to the test. The asserted result
+// must therefore come from the SAME exported action the test invokes, and that action's own return
+// path must resolve then execute the selected train. Module-wide runner tokens are not evidence.
+export function stationModuleExecutionProof(text, stationText, action) {
+  if (!stationText) return false;
+  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
+  return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
+    exportedActionReturnsProductionExecution(stationText, call[2]));
 }
 
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality

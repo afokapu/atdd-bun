@@ -1,0 +1,8 @@
+interlocking_id: interlocking:match-resolution
+entrypoint:
+  exposed: true
+  actions:
+    - resolve_match
+routes:
+  - route_id: nominal-all-voted
+    train_id: train:match:match-resolution-standard
