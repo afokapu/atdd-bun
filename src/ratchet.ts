@@ -62,7 +62,8 @@ export function parseRatchetPolicy(config: Record<string, unknown>): RatchetPoli
   if (config.ratchet === undefined) return null;
   const value = config.ratchet;
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("atdd-bun.yaml ratchet must be a mapping");
-  const mode = (value as Record<string, unknown>).mode, profiles = (value as Record<string, unknown>).profiles;
+  const fields = value as Record<string, unknown>, mode = fields.mode, profiles = fields.profiles;
+  if (Object.keys(fields).some(key => key !== "mode" && key !== "profiles")) throw new Error("atdd-bun.yaml ratchet permits only mode and profiles; baselines and waivers are unsupported");
   if (mode !== "report" && mode !== "reject-new") throw new Error("atdd-bun.yaml ratchet.mode must be report or reject-new");
   if (!Array.isArray(profiles) || !profiles.length || !profiles.every(profile => typeof profile === "string")) throw new Error("atdd-bun.yaml ratchet.profiles must be a non-empty list of profile names");
   return { mode, profiles: [...new Set(profiles)].sort() };

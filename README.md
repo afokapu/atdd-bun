@@ -153,6 +153,10 @@ bun run atdd-bun --profile flow,traceability --ratchet --ratchet-activate-profil
 
 This is an activation-only exception to the ordinary equal-context rule, not a baseline migration. It requires an explicit candidate `profiles:` list, an explicit base list that is a strict subset of it, and identical non-profile policy/configuration. A removal, implicit/default-list adoption, unrelated configuration change, dirty tree, unavailable/non-ancestor base, or omission of `--ratchet-activate-profiles` fails closed. The command stores no activation state or accepted findings; after the governed expansion lands, use ordinary `--ratchet` with exact matching context. Strict non-ratchet enforcement remains unchanged.
 
+### Generated activation commit gate
+
+A generated `pre-commit` hook recognizes only a staged `reject-new` strict profile expansion. It materializes the exact committed `HEAD` base and the staged index tree in an isolated worktree, runs both with the candidate's expanded profile set, and emits the same carried/new/resolved report. The commit proceeds only when `new` is empty. This is the supported bootstrap path for the activation commit; it never writes a baseline or weakens an ordinary hook. It fails closed unless the index has the explicit matching ratchet policy, the worktree has no unstaged or untracked state, the base profile list is a strict subset, and all non-profile policy is identical. All other commits retain ordinary strict hook enforcement.
+
 ## Docs-site theme
 
 A repository that publishes its AsciiDoc docs as a site does not need its own theme.
