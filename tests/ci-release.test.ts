@@ -87,6 +87,26 @@ test("a scoped npm interpolation authenticates an isolated frozen Bun install wi
   } finally { server?.stop(true); await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
+test("ci init rejects duplicate GitHub Packages auth assignments in either order", async () => {
+  const scope = "@forgeonehundred:registry=https://npm.pkg.github.com\n";
+  for (const assignments of [
+    "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n",
+    "//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n",
+  ]) {
+    const root = await mkdtemp(join(tmpdir(), "atdd-private-package-duplicate-auth-"));
+    try {
+      const npmrc = scope + assignments;
+      await writeFile(join(root, ".npmrc"), npmrc);
+      const result = await ciInit(root);
+      expect(result.ok).toBeFalse();
+      expect(result.message).toContain("exactly one");
+      expect(result.message).not.toContain("not-a-token-to-copy");
+      expect(await readFile(join(root, ".npmrc"), "utf8")).toBe(npmrc);
+      expect(await Bun.file(join(root, ".github/workflows/atdd-bun.yml")).exists()).toBeFalse();
+    } finally { await rm(root, { recursive: true, force: true }); }
+  }
+});
+
 test("ci init refuses a persisted GitHub Packages credential without changing consumer files", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-private-package-persisted-token-"));
   const npmrc = "@forgeonehundred:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n";

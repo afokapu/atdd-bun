@@ -13,7 +13,7 @@ export async function renderWorkflow(repo = process.cwd()) {
   return (await readFile(template, "utf8")).replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", "));
 }
 const githubPackagesRegistry = /^\s*@[\w.-]+:registry\s*=\s*https:\/\/npm\.pkg\.github\.com\/?\s*$/im;
-const githubPackagesAuth = /^\s*\/\/npm\.pkg\.github\.com\/:_authToken\s*=\s*(.*?)\s*$/im;
+const githubPackagesAuth = /^\s*\/\/npm\.pkg\.github\.com\/:_authToken\s*=\s*(.*?)\s*$/gim;
 const githubPackagesTokenInterpolation = "${NODE_AUTH_TOKEN}";
 
 /** Add only the npm-compatible environment interpolation required by an already-declared GitHub Packages scope.
@@ -23,7 +23,9 @@ async function githubPackagesNpmrc(repo: string) {
   if (!existsSync(path)) return { ok: true, path, content: undefined as string | undefined };
   const content = await readFile(path, "utf8");
   if (!githubPackagesRegistry.test(content)) return { ok: true, path, content: undefined as string | undefined };
-  const current = githubPackagesAuth.exec(content)?.[1];
+  const assignments = [...content.matchAll(githubPackagesAuth)].map(match => match[1]);
+  if (assignments.length > 1) return { ok: false, path, message: ".npmrc must declare exactly one npm.pkg.github.com _authToken assignment to avoid ambiguous authentication" };
+  const current = assignments[0];
   if (current !== undefined && current !== githubPackagesTokenInterpolation) return { ok: false, path, message: ".npmrc already configures npm.pkg.github.com authentication; replace it with the standard ${NODE_AUTH_TOKEN} interpolation instead of storing a credential" };
   if (current !== undefined) return { ok: true, path, content: undefined as string | undefined };
   return { ok: true, path, content: `${content}${content.endsWith("\n") ? "" : "\n"}//npm.pkg.github.com/:_authToken=${githubPackagesTokenInterpolation}\n` };
