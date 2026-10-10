@@ -94,9 +94,12 @@ test("init declares every profile explicitly in a new atdd-bun.yaml, so a greenf
     await git(root, "init", "-q", "-b", "main");
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.7.0" } }));
     expect((await initializeRepository(root)).ok).toBeTrue();
-    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[] };
+    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[]; ratchet: { mode: string; profiles: string[] } };
     const governed = every;
     expect(written.profiles).toEqual(governed);
+    // A clean consumer gets a lawful, explicit exact-base policy from the supported generator;
+    // it never needs to hand-edit its project YAML to enter reject-new mode.
+    expect(written.ratchet).toEqual({ mode: "reject-new", profiles: governed });
     expect(drops(written.profiles, ["docs"])).toEqual([`profiles drops ${governed.filter(p => p !== "docs").join(", ")}`]);
     // An existing atdd-bun.yaml is never touched.
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");

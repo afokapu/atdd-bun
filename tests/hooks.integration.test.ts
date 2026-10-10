@@ -68,6 +68,23 @@ test("profile activation commit gate compares HEAD with the staged candidate and
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("reject-new commit gate accepts an unchanged active profile set and carries existing findings", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "active ratchet with traceability debt", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    // A staged dependency/regeneration-style candidate leaves policy and its active profiles unchanged.
+    await writeFile(join(root, "package.json"), "{\"name\": \"consumer\"}\n");
+    await git(root, ["add", "package.json"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ mode: "reject-new", base, profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+  } finally { await cleanup(root); }
+}, 30_000);
+
 test("profile activation commit gate refuses an incomplete dirty candidate", async () => {
   const root = await repo(); try {
     await installHooks(root);
