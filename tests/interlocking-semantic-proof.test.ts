@@ -231,8 +231,116 @@ test("resolve_match dispatch does not use the inert helper", async () => {
   expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
   expect(InterlockingRunner).toBeDefined(); expect(TrainRunner).toBeDefined();
 });
+
 `);
     const findings = await run(root);
+    expect(rule("tester.bun.interlocking-smoke-coverage-for-station-master", findings)).not.toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("semantic proof accepts a declaration-selected trainPath with contextual runner arguments", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-train-path-proof-"));
+  try {
+    await mkdir(join(root, "plan", "_trains", "_interlockings"), { recursive: true });
+    await mkdir(join(root, "e2e", "interlockings"), { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "_interlockings", "route.yaml"), `interlocking_id: interlocking:train-path\nroutes:\n  - route_id: nominal\n    train_id: train:path:nominal\n`);
+    await writeFile(join(root, "plan", "_trains", "nominal.yaml"), `train_id: train:path:nominal\nsequence:\n  - from: user:actor\n    to: wagon:first\n  - from: wagon:first\n    to: wagon:last\n`);
+    await writeFile(join(root, "e2e", "interlockings", "train-path.test.ts"), `import { expect, test } from "bun:test";
+import { InterlockingRunner } from "../../src/interlocking";
+import { TrainRunner } from "../../src/runner";
+test("declaration-selected path reaches the runner", async () => {
+  const context = { handlers: {}, seed: { userId: "actor" } };
+  const resolution = new InterlockingRunner("plan/_trains/_interlockings/route.yaml").resolveTrain("nominal", context);
+  const execution = await new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+  expect(resolution.selectedTrainId).toBe("train:path:nominal");
+  expect(execution.steps).toEqual([{ from: "user:actor", to: "wagon:first" }, { from: "wagon:first", to: "wagon:last" }]);
+  expect(execution.steps).toContainEqual(expect.objectContaining({ from: "wagon:first", to: "wagon:last" }));
+  expect(execution.steps.at(-1)).toEqual(expect.objectContaining({ to: "wagon:last" }));
+});
+`);
+    const findings = await run(root);
+    for (const id of [
+      "tester.bun.interlocking-production-runner-used",
+      "tester.bun.interlocking-route-coverage",
+      "tester.bun.interlocking-train-sequence-is-exercised",
+    ]) expect(rule(id, findings)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("semantic smoke accepts an exported Station Master dispatch through JourneyRunner", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-journey-station-proof-"));
+  try {
+    await cp(join(detector, "fixtures", "clean", "interlocking_smoke_coverage"), root, { recursive: true });
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "src", "server.ts"), `import { JourneyRunner } from "./trains/journey";
+export async function dispatch(action: string, context: object) {
+  return await new JourneyRunner("plan/_journeys/match.yaml").execute(action, context);
+}
+`);
+    await writeFile(join(root, "src", "trains", "journey.ts"), `import { InterlockingRunner } from "./interlocking";
+export class JourneyRunner {
+  constructor(private readonly journeyPath: string) {}
+  async execute(action: string, context: object) {
+    return await new InterlockingRunner(this.journeyPath).execute(action, context);
+  }
+}
+`);
+    await writeFile(join(root, "e2e", "smoke", "resolve-match.smoke.test.ts"), `// Phase: SMOKE
+import { expect, test } from "bun:test";
+import { dispatch } from "../../src/server";
+import { InterlockingRunner } from "../../src/trains/interlocking";
+import { TrainRunner } from "../../src/trains/runner";
+test("resolve_match Station Master journey smoke", async () => {
+  const result = await dispatch("resolve_match", { allPlayersVoted: true });
+  expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
+  expect(InterlockingRunner).toBeDefined(); expect(TrainRunner).toBeDefined();
+});
+`);
+    const findings = await run(root);
+    expect(rule("tester.bun.interlocking-production-runner-used", findings)).toEqual([]);
+    expect(rule("tester.bun.interlocking-smoke-coverage-for-station-master", findings)).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("semantic proof rejects fabricated train paths and direct-business JourneyRunner bypasses", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-journey-bypass-mutants-"));
+  try {
+    await cp(join(detector, "fixtures", "clean", "interlocking_smoke_coverage"), root, { recursive: true });
+    await mkdir(join(root, "src", "trains"), { recursive: true });
+    await writeFile(join(root, "src", "server.ts"), `import { JourneyRunner } from "./trains/journey";
+const journey = new JourneyRunner("plan/_journeys/match.yaml");
+export async function dispatch(_action: string, _context: object) {
+  await journey.execute("resolve_match", _context);
+  return { selectedTrainId: "train:match:match-resolution-standard" };
+}
+`);
+    await writeFile(join(root, "src", "trains", "journey.ts"), `import { InterlockingRunner } from "./interlocking";
+export class JourneyRunner {
+  async execute(_action: string, _context: object) {
+    const inert = new InterlockingRunner("plan/_trains/_interlockings/match-resolution.yaml");
+    return { selectedTrainId: "train:match:match-resolution-standard", inert };
+  }
+}
+`);
+    await writeFile(join(root, "e2e", "smoke", "resolve-match.smoke.test.ts"), `// Phase: SMOKE
+import { expect, test } from "bun:test";
+import { dispatch } from "../../src/server";
+import { InterlockingRunner } from "../../src/trains/interlocking";
+import { TrainRunner } from "../../src/trains/runner";
+test("direct business bypass", async () => {
+  const result = await dispatch("resolve_match", { allPlayersVoted: true });
+  expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
+  expect(InterlockingRunner).toBeDefined(); expect(TrainRunner).toBeDefined();
+});
+`);
+    const findings = await run(root);
+    expect(rule("tester.bun.interlocking-production-runner-used", findings)).not.toEqual([]);
     expect(rule("tester.bun.interlocking-smoke-coverage-for-station-master", findings)).not.toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });

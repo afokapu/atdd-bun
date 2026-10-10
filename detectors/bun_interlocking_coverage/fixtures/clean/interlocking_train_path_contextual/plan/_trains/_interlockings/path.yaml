@@ -1,0 +1,8 @@
+interlocking_id: interlocking:train-path
+entrypoint:
+  exposed: true
+  actions:
+    - resolve_path
+routes:
+  - route_id: nominal-path
+    train_id: train:path:nominal

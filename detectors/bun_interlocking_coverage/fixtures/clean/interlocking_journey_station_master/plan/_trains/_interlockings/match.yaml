@@ -1,0 +1,8 @@
+interlocking_id: interlocking:journey-match
+entrypoint:
+  exposed: true
+  actions:
+    - resolve_match
+routes:
+  - route_id: nominal
+    train_id: train:journey:nominal
