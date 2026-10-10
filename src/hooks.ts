@@ -40,8 +40,8 @@ const configAt = async (root: string) => {
   return existsSync(file) ? Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown> : {};
 };
 
-/** The sole bootstrap exception: a staged strict profile expansion is compared with its exact HEAD, never accepted. */
-async function profileActivationCommitGate(root: string): Promise<{ ok: boolean; message: string } | null> {
+/** A staged reject-new policy compares its exact HEAD: equal active profiles are ordinary ratchet flow; strict expansion is the one bootstrap exception. */
+async function ratchetCommitGate(root: string): Promise<{ ok: boolean; message: string } | null> {
   const stagedConfig = await git(root, ["show", ":atdd-bun.yaml"]);
   if (stagedConfig.code) return null;
   let candidateConfig: Record<string, unknown>, policy;
@@ -59,14 +59,18 @@ async function profileActivationCommitGate(root: string): Promise<{ ok: boolean;
     if (checkedOut.code) return bad(`could not checkout ratchet activation base: ${checkedOut.err || checkedOut.out}`);
     const baseConfig = await configAt(scratch), candidateProfiles = stable(candidateConfig.profiles.map(normalizeProfileName));
     const baseProfiles = stable(await enabledProfiles(scratch));
-    if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || stable(policy.profiles.map(normalizeProfileName)).join(",") !== candidateProfiles.join(",") || !isStrictProfileExpansion(baseProfiles, candidateProfiles) || activationContextDigest(baseConfig) !== activationContextDigest(candidateConfig)) return bad("ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context");
+    const policyMatches = stable(policy.profiles.map(normalizeProfileName)).join(",") === candidateProfiles.join(",");
+    const activation = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
+    const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
+    if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || !policyMatches || (!activation && !unchanged)) return bad("ratchet reject-new requires either unchanged explicit profiles/context or an explicit monotonic profile expansion with identical non-profile context");
     const baseFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
     const patch = await git(root, ["diff", "--cached", "--binary"], undefined, true);
     if (patch.code) return bad(`could not read staged ratchet activation candidate: ${patch.err || patch.out}`);
     const applied = await git(scratch, ["apply", "--whitespace=nowarn"], patch.out);
     if (applied.code) return bad(`could not materialize staged ratchet activation candidate: ${applied.err || applied.out}`);
-    const materialized = await configAt(scratch);
-    if (activationContextDigest(materialized) !== activationContextDigest(candidateConfig)) return bad("staged ratchet activation candidate did not materialize exactly");
+    const materialized = await configAt(scratch), materializedProfiles = stable(await enabledProfiles(scratch));
+    const materializedContext = activation ? activationContextDigest(materialized) === activationContextDigest(candidateConfig) : materializedProfiles.join(",") === candidateProfiles.join(",") && contextDigest(materialized, materializedProfiles) === contextDigest(candidateConfig, candidateProfiles);
+    if (!materializedContext) return bad("staged ratchet candidate did not materialize exactly");
     const candidateFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
     const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
     const delta = compareFindings(normalize(baseFindings), normalize(candidateFindings));
@@ -88,7 +92,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
   if (["pre-commit", "pre-merge-commit"].includes(event) && cfg.protected_branches.includes(branch)) return bad(`protected branch ${branch} is blocked`);
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
-  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const activation = await profileActivationCommitGate(root); if (activation) return activation; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
+  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root); if (ratchet) return ratchet; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [,,remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); const local = row[1]; if (local && !/^0+$/.test(local)) { const range = !remoteSha || /^0+$/.test(remoteSha) ? `${local}^..${local}` : `${remoteSha}..${local}`, count = Number((await git(root, ["rev-list", "--count", range])).out); if (count > cfg.max_commits_per_push) return bad(`commits per push ${count} exceed ${cfg.max_commits_per_push}`); } } return validation(root, await files(root, ["diff", "--name-only", "HEAD~1..HEAD"]), true); }
   if (event === "post-commit") { const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }

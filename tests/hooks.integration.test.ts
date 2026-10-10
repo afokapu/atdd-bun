@@ -85,6 +85,18 @@ test("reject-new commit gate accepts an unchanged active profile set and carries
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("reject-new commit gate refuses unchanged-profile context drift", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: reject-new, profiles: [flow] }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "active ratchet", "--no-verify"]);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\nratchet: { mode: reject-new, profiles: [flow] }\ntopology: { plan_root: contracts }\n");
+    await git(root, ["add", "atdd-bun.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("unchanged explicit profiles/context") });
+  } finally { await cleanup(root); }
+}, 30_000);
+
 test("profile activation commit gate refuses an incomplete dirty candidate", async () => {
   const root = await repo(); try {
     await installHooks(root);
