@@ -348,7 +348,7 @@ export function productionExecutionProofs(text) {
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
     const after = text.slice((m.index ?? 0) + whole.length);
-    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
+    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
     const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
     if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
   }
@@ -412,7 +412,7 @@ export function stationModuleExecutionProof(text, stationText) {
     !/\.resolveTrain\s*\(/.test(stationText) || !new RegExp(`new\\s+${PROD_TRAIN}\\b`).test(stationText) ||
     !/\.execute\s*\(/.test(stationText)) return false;
   const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(?:dispatch|handleAction|executeAction)\\s*\\(`).exec(text);
-  return Boolean(call && assertsExpression(text, escaped(call[1])));
+  return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`));
 }
 
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality
