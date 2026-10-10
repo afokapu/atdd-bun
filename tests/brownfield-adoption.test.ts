@@ -108,6 +108,17 @@ test("init declares every profile explicitly in a new atdd-bun.yaml, so a greenf
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("init adds deterministic reject-new policy to an existing explicit profile selection without changing that selection", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-ratchet-existing-policy-"));
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs, flow]\nmax_staged_files: 20\n");
+    expect((await policyInit(root)).ok).toBeTrue();
+    const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[]; ratchet: { mode: string; profiles: string[] } };
+    expect(written.profiles).toEqual(["docs", "flow"]);
+    expect(written.ratchet).toEqual({ mode: "reject-new", profiles: ["docs", "flow"] });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("8, pushed: a multi-commit direct push [docs, security] → no list → [docs] is judged from the pre-push tip", async () => {
   const { checkIntegrity } = await import("../src/integrity");
   await brownfield("profiles: [docs, security]\n", async root => {
