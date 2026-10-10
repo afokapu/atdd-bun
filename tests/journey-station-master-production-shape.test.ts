@@ -151,3 +151,29 @@ for (const [name, { file, edit }] of Object.entries(overrides)) {
     for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
   });
 }
+
+// Review #6 of 870b4f3 (pullrequestreview-5479511646): decorators and an aliased prototype with a
+// variable key, each one edit to the production fixture.
+const reviewSix: Record<string, { file: string; edit: (path: string, text: string) => string }> = {
+  "Q2: class decorator replaces InterlockingRunner": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("export class InterlockingRunner {",
+      `function swap(_target: unknown): any {\n  return class { async execute() { return ${fakeInterlocked}; } async resolveTrain() { return {}; } };\n}\n\n@swap\nexport class InterlockingRunner {`),
+  },
+  "Q2b: method decorator replaces InterlockingRunner.execute": {
+    file: "src/trains/interlocking.ts",
+    edit: replace("  /** Selects exactly one declared train, then delegates its wagon execution. */\n  async execute(",
+      `  /** Selects exactly one declared train, then delegates its wagon execution. */\n  @((_t: unknown, _k: string, d: PropertyDescriptor) => { d.value = async () => (${fakeInterlocked}); return d; })\n  async execute(`),
+  },
+  "Q1b: class alias and variable key reach the prototype through Reflect.set": {
+    file: "src/trains/interlocking.ts",
+    edit: append(`const R = InterlockingRunner;\nconst key = "execute";\nReflect.set(R.prototype, key, async () => (${fakeInterlocked}));`),
+  },
+};
+
+for (const [name, { file, edit }] of Object.entries(reviewSix)) {
+  test(`production-shape proof rejects ${name}`, async () => {
+    const found = ruleIds(await mutant(edit, file));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  });
+}
