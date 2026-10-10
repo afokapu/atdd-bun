@@ -3,16 +3,12 @@
 // afokapu/atdd#1248 route space + #1251 runner call model). Each check under ../checks/*.mjs imports
 // this module and scans a consumer tree for ONE tester.bun.interlocking-* rule.
 //
-// Node builtins only, except journey-chain.mjs, which proves the journey-mediated chain on the
+// Node builtins only, except lib/journey-chain.mjs, which proves the journey-mediated chain on the
 // TypeScript compiler AST. The interlocking route space is stack-neutral planner
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
-import {
-  actionReturnsJourneyExecution,
-  interlockingExecuteReturnsTrainExecution,
-  journeyExecuteReturnsInterlockingExecution,
-} from "./journey-chain.mjs";
+import { entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -576,7 +572,7 @@ export function productionExecutionProofs(text, file, croot) {
 }
 
 export function assertsExpression(text, expression, expected = null) {
-  const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|Match))\\b([\\s\\S]{0,220})`);
+  const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match))\\b([\\s\\S]{0,220})`);
   const m = pat.exec(text);
   return Boolean(m && (!expected || tokenCovered(expected, m[0])));
 }
@@ -668,19 +664,6 @@ function directProductionModuleExecution(body, moduleText = body) {
   });
 }
 
-// The journey-mediated chain is proven on the TypeScript AST (journey-chain.mjs); this layer only
-// resolves each hop to a local, non-test production module.
-function exportedActionReturnsJourneyExecution(stationText, stationFile, croot, actionName) {
-  const journey = resolvedLocalNamedImport(stationText, stationFile, croot, "JourneyRunner");
-  if (!journey || !actionReturnsJourneyExecution(stationText, stationFile, actionName)) return false;
-  const journeyText = readText(journey);
-  const interlocking = resolvedLocalNamedImport(journeyText, journey, croot, PROD_INTERLOCKING);
-  if (!interlocking || !journeyExecuteReturnsInterlockingExecution(journeyText, journey)) return false;
-  const interlockingText = readText(interlocking);
-  return Boolean(resolvedLocalNamedImport(interlockingText, interlocking, croot, PROD_TRAIN)) &&
-    interlockingExecuteReturnsTrainExecution(interlockingText, interlocking);
-}
-
 // HTTP/module entrypoints do not expose a StationMaster instance to the test. Their equivalent
 // witness is an asserted result from the same exported action the test invokes. That action must
 // either directly execute the selected train or return a JourneyRunner execution whose local
@@ -692,11 +675,25 @@ function stationModuleCall(text, action) {
 export function stationModuleExecutionProof(text, stationText, action, stationFile, croot) {
   if (!stationText || !stationFile || !croot) return false;
   const call = stationModuleCall(text, action);
-  if (!call || !assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`)) return false;
-  const body = exportedActionBody(stationText, call[2]);
-  if (!body) return false;
-  if (exportedActionReturnsJourneyExecution(stationText, stationFile, croot, call[2])) return true;
-  return directProductionModuleExecution(body, stationText);
+  if (call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`)) {
+    // The journey-mediated chain is proven on the TypeScript AST (lib/journey-chain.mjs).
+    if (provenJourneyAction(stationText, stationFile, croot, call[2])) return true;
+    const body = exportedActionBody(stationText, call[2]);
+    if (body && directProductionModuleExecution(body, stationText)) return true;
+  }
+  return stationEntryExecutionProof(text, stationText, action, stationFile, croot);
+}
+
+// An HTTP-shaped entry (e.g. `stationMaster(command)`) whose asserted result depends on its awaited
+// call of a proven journey action with this literal action name.
+function stationEntryExecutionProof(text, stationText, action, stationFile, croot) {
+  const calls = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?(${ident})\\s*\\(`, "g");
+  return [...text.matchAll(calls)].some(([, result, entry]) => {
+    const delegated = entryDelegatedAction(stationText, stationFile, entry);
+    return Boolean(delegated && delegated.action === action &&
+      assertsExpression(text, `${escaped(result)}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
+      provenJourneyAction(stationText, stationFile, croot, delegated.callee));
+  });
 }
 
 export function routeHasStationModuleProof(route, text, action, stationText, stationFile, croot) {
