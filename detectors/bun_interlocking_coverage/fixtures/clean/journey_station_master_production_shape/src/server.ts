@@ -14,6 +14,11 @@ export const JOURNEY_MAP: Readonly<Record<string, StationRoute>> = {
     path: "plan/_journeys/play-world-scenario.yaml",
     interlockingId: "interlocking:scenario-compilation",
   },
+  replay_session: {
+    journeyId: "journey:replay-world-session",
+    path: "plan/_journeys/replay-world-session.yaml",
+    interlockingId: "interlocking:session-replay",
+  },
 };
 
 const unavailableWagonHandlers: WagonHandlerRegistry = {};

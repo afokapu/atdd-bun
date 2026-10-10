@@ -27,6 +27,14 @@ test("Station Master returns an incomplete Scenario continuation", async () => {
   expect(TrainRunner).toBeDefined();
 });
 
+test("Station Master returns an incomplete replay continuation", async () => {
+  await proveProductionRoute("plan/_trains/_interlockings/session-replay.yaml", "replay_session", { replay: { requested: true } });
+  const result = await executeAction("replay_session", { replay: { requested: true } });
+  expect(result).toMatchObject({ disposition: "INCOMPLETE_CONTINUATION", status: 202 });
+  expect(JOURNEY_MAP.replay_session.interlockingId).toBe("interlocking:session-replay");
+  expect(stationMaster).toBeDefined();
+});
+
 test("Station Master executes the bounded source refusal terminal", async () => {
   await proveProductionRoute("plan/_trains/_interlockings/source-corpus-admission.yaml", "create_world", { source: { required_supported: false } });
   const response = await stationMaster({ submission: { id: "smoke" }, supported: false });
