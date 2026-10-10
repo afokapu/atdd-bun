@@ -40,7 +40,7 @@ function actionSmokeCovered(action, e2eFiles, stationModule) {
   return e2eFiles.some(
     ({ raw, text: t }) =>
       SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) &&
-        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule)),
+        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule, action)),
   );
 }
 

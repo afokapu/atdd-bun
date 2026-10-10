@@ -457,9 +457,9 @@ function exportedActionReturnsProductionExecution(stationText, action) {
 // HTTP/module entrypoints do not expose a StationMaster instance to the test. The asserted result
 // must therefore come from the SAME exported action the test invokes, and that action's own return
 // path must resolve then execute the selected train. Module-wide runner tokens are not evidence.
-export function stationModuleExecutionProof(text, stationText) {
+export function stationModuleExecutionProof(text, stationText, action) {
   if (!stationText) return false;
-  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(`).exec(text);
+  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
   return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
     exportedActionReturnsProductionExecution(stationText, call[2]));
 }

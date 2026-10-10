@@ -72,7 +72,7 @@ for (const scanRoot of roots) {
 
       const semantic = hasProductionExecutionProof(text) ||
         records.some((rec) => rec.actions.some((action) => stationMasterExecutionProof(text, action))) ||
-        (drivesStationMaster(text) && stationModuleExecutionProof(text, station));
+        (drivesStationMaster(text) && records.some((rec) => rec.actions.some((action) => stationModuleExecutionProof(text, station, action))));
       if (!semantic) {
         violations.push(
           mk(
