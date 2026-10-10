@@ -184,6 +184,89 @@ for (const [name, files] of Object.entries(reviewMutants)) {
   });
 }
 
+// Fresh re-review of ea40607 (pullrequestreview-5479058044): further single-file false greens E1-E5,
+// each persisted verbatim and required to fail for its named gap.
+const interlockingClass = (methods: string) => `import { TrainRunner } from "./runner";
+
+export class InterlockingRunner {
+  constructor(private readonly interlockingPath: string) {}
+  resolveTrain(_action: string, _inputs: object) {
+    return { routeId: "nominal", trainId: "train:match:nominal", trainPath: "plan/_trains/train:match:nominal.yaml" };
+  }
+${methods}
+}
+`;
+const reReviewMutants: Record<string, Record<string, string>> = {
+  "E1: resolution aliased through an object shorthand value, then mutated": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    const holder = { resolution };
+    holder.resolution.trainPath = "plan/_trains/train:unrelated.yaml";
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`),
+  },
+  "E1: resolution aliased through a keyed object value, then mutated": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    const holder = { r: resolution };
+    holder.r.trainPath = "plan/_trains/train:unrelated.yaml";
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`),
+  },
+  "E2: invoked InterlockingRunner.execute returns business data beside an uncalled traversal": {
+    "src/trains/interlocking.ts": interlockingClass(`  execute(_action: string, _inputs: object, _context: { handlers: object; seed: object }) {
+    return { selectedTrainId: "train:match:nominal" };
+  }
+  real(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    const resolution = this.resolveTrain(action, inputs);
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+  }`),
+  },
+  "E3: legacy trainId form escapes the declaring scope through a same-name parameter": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    void resolution;
+    return this.run({ trainId: "train:match:nominal" }, context);`, `
+  run(resolution: { trainId: string }, context: { handlers: object; seed: object }) {
+    return new TrainRunner(resolution.trainId).execute(context.seed);
+  }`),
+  },
+  "E4: braceless dead branch returns the execution": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    if (false) return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+    return { selectedTrainId: "train:match:nominal" };`),
+  },
+  "E5: comma expression discards the execution": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return (new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed), { selectedTrainId: "train:match:nominal" });`),
+  },
+};
+
+for (const [name, files] of Object.entries(reReviewMutants)) {
+  test(`journey-mediated proof rejects re-review mutant ${name}`, async () => {
+    expect(smoke(await mutant(files))).not.toEqual([]);
+  });
+}
+
+// Legitimate shapes the stricter binding must keep accepting (re-review false reds R1, R2, R4a, R4b).
+const reReviewPositives: Record<string, string> = {
+  "R1: resolution logged before execution": `    const resolution = this.resolveTrain(action, inputs);
+    console.log(resolution);
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
+  "R2: trainPath member chain read before execution": `    const resolution = this.resolveTrain(action, inputs);
+    if (!resolution.trainPath.length) throw new Error("declaration has no train path");
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
+  "R4a: inline object type annotation on the resolution": `    const resolution: { trainId: string; trainPath: string } = this.resolveTrain(action, inputs);
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
+  "R4b: execution returned inside try": `    const resolution = this.resolveTrain(action, inputs);
+    try {
+      return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+    } finally {
+      void action;
+    }`,
+};
+
+for (const [name, body] of Object.entries(reReviewPositives)) {
+  test(`journey-mediated proof accepts ${name}`, async () => {
+    expect(await mutant({ "src/trains/interlocking.ts": interlocking(body) })).toEqual([]);
+  });
+}
+
 const journeyMutants: Record<string, Record<string, string>> = {
   "dispatch returning business data directly": {
     "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  void JourneyRunner; void mapping; void inputs; void context;
