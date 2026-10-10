@@ -49,6 +49,54 @@ test("real Git policy rejects protected branches, each micro threshold, deletion
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("profile activation commit gate compares HEAD with the staged candidate and carries existing findings", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "base with traceability debt", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await git(root, ["add", "atdd-bun.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ mode: "reject-new", base, profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+    const committed = await git(root, ["commit", "-qm", "activate profiles"]);
+    expect(committed.code, `${committed.out}\n${committed.err}`).toBe(0);
+    expect((await git(root, ["rev-parse", "HEAD"])).out.trim()).not.toBe(base);
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("profile activation commit gate refuses an incomplete dirty candidate", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "base", "--no-verify"]);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await git(root, ["add", "atdd-bun.yaml"]);
+    await writeFile(join(root, "untracked.txt"), "must not become an invisible activation candidate\n");
+    const result = await runHook("pre-commit", root);
+    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("no unstaged or untracked") });
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("profile activation commit gate rejects new staged findings", async () => {
+  const root = await repo(); try {
+    await installHooks(root);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "base with traceability debt", "--no-verify"]);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await writeFile(join(root, "plan", "payments.yaml"), "urn: wmbt:payments:E001\nacceptances:\n  - identity: { urn: acc:payments:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeFalse();
+    expect(JSON.parse(result.message)).toMatchObject({ mode: "reject-new", new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 30_000);
+
 test("pre-commit uses the canonical planner schema gate for staged plan artifacts", async () => {
   const root = await repo(); try {
     await installHooks(root);
