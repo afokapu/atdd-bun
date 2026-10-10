@@ -22,6 +22,8 @@ import {
   PROD_TRAIN,
   stationMasterExecutionProof,
   stationModuleExecutionProof,
+  importedJourneyRunnerModule,
+  journeyStationModuleExecutionProof,
   rel,
   mk,
   writeReport,
@@ -36,11 +38,11 @@ const violations = [];
 // it under the smoke rules (no substituted collaborators, observable outcome). A local E2E that names the action beside
 // the runners is not a smoke and no longer clears the rule (FWS #TzSCGS5ajYhP).
 const SMOKE_PHASE = /^\s*\/\/\s*Phase:\s*SMOKE\b/m;
-function actionSmokeCovered(action, e2eFiles, stationModule) {
+function actionSmokeCovered(action, e2eFiles, stationModule, journeyModule) {
   return e2eFiles.some(
     ({ raw, text: t }) =>
       SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) &&
-        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule, action)),
+        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule?.text, action) || journeyStationModuleExecutionProof(t, stationModule?.text, journeyModule, action)),
   );
 }
 
@@ -51,13 +53,14 @@ for (const scanRoot of roots) {
       .filter((x) => x.rec);
     const e2eTexts = e2eFiles(croot).map((f) => { const raw = readText(f); return { raw, text: maskComments(raw) }; });
     const stationModule = ["server.ts", join("src", "server.ts")]
-      .map((name) => readText(join(croot, name)))
-      .find((text) => text && text.includes(PROD_INTERLOCKING) && text.includes(PROD_TRAIN));
+      .map((name) => ({ file: join(croot, name), text: readText(join(croot, name)) }))
+      .find(({ text }) => text);
+    const journeyModule = importedJourneyRunnerModule(stationModule?.file, stationModule?.text);
 
     for (const { file, rec } of records) {
       if (!rec.exposed) continue;
       for (const action of rec.actions) {
-        if (actionSmokeCovered(action, e2eTexts, stationModule)) continue;
+        if (actionSmokeCovered(action, e2eTexts, stationModule, journeyModule)) continue;
         const [line, src] = lineOf(rec.rawText, new RegExp("^\\s*-\\s*['\"]?" + action + "['\"]?\\s*$"));
         violations.push(
           mk(

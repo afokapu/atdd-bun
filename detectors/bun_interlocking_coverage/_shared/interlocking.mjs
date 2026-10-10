@@ -8,7 +8,7 @@
 
 import { excludedPath } from "../../../lib/scan.mjs";
 import { readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
-import { join, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 
 export const DEFAULT_EXCLUDES = ["_generated", "node_modules", "dist", "build", ".next"];
 export const PLAN_ROOT = process.env.ATDD_PLAN_ROOT || "plan";
@@ -348,8 +348,11 @@ export function productionExecutionProofs(text) {
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
     const after = text.slice((m.index ?? 0) + whole.length);
-    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).exec(after);
-    const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.(?:trainId|selectedTrainId)\\s*\\)\\s*\\.execute\\s*\\(`).test(after);
+    const selected = `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`;
+    const declaredPath = `${escaped(resolution)}\\.trainPath(?:\\s*,[^)]*)?`;
+    const executionCall = `(?:${selected}\\s*\\)\\s*\\.execute\\s*\\(|${declaredPath}\\s*\\)\\s*\\.execute\\s*\\(\\s*${escaped(resolution)}\\b)`;
+    const execute = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?new\\s+${PROD_TRAIN}\\s*\\(\\s*${executionCall}`).exec(after);
+    const anonymous = new RegExp(`new\\s+${PROD_TRAIN}\\s*\\(\\s*${executionCall}`).test(after);
     if (execute || anonymous) proofs.push({ resolution, execution: execute?.[1] ?? null });
   }
   return proofs;
@@ -462,6 +465,42 @@ export function stationModuleExecutionProof(text, stationText, action) {
   const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
   return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
     exportedActionReturnsProductionExecution(stationText, call[2]));
+}
+
+// JourneyRunner is an intentional boundary: Station Master delegates the requested action to a
+// directly imported JourneyRunner, which in turn delegates it to InterlockingRunner.  Resolve only
+// an explicit relative named import; package aliases and arbitrary sibling modules are not proof.
+export function importedJourneyRunnerModule(stationFile, stationText) {
+  if (!stationFile || !stationText) return null;
+  const match = /\bimport\s*\{\s*JourneyRunner\s*\}\s*from\s*["'](\.[^"']+)["']/.exec(stationText);
+  if (!match) return null;
+  const base = resolve(dirname(stationFile), match[1]);
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, join(base, "index.ts")]) {
+    const text = readText(candidate);
+    if (/\b(?:export\s+)?class\s+JourneyRunner\b/.test(text)) return text;
+  }
+  return null;
+}
+
+function exportedActionDelegatesToJourney(stationText, action) {
+  const body = exportedActionBody(stationText, action);
+  if (!body) return false;
+  return new RegExp(`\\breturn\\s+(?:await\\s+)?new\\s+JourneyRunner\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(\\s*action\\b`).test(body);
+}
+
+function journeyDelegatesToInterlocking(journeyText) {
+  return /\bclass\s+JourneyRunner\b/.test(journeyText) &&
+    new RegExp(`\\breturn\\s+(?:await\\s+)?new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(\\s*(?:action|journeyAction)\\b`).test(journeyText);
+}
+
+// The smoke assertion is tied to the same exported action invoked by the test.  The Station
+// Master must return the JourneyRunner call itself (not call it inertly and fabricate a business
+// result), and the resolved JourneyRunner source must return an InterlockingRunner execution.
+export function journeyStationModuleExecutionProof(text, stationText, journeyText, action) {
+  if (!journeyText) return false;
+  const call = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*await\\s+(?:${ident}\\.)?(dispatch|handleAction|executeAction)\\s*\\(\\s*["']${escaped(action)}["']`).exec(text);
+  return Boolean(call && assertsExpression(text, `${escaped(call[1])}(?:\\.[A-Za-z_$][\\w$]*)?`) &&
+    exportedActionDelegatesToJourney(stationText, call[2]) && journeyDelegatesToInterlocking(journeyText));
 }
 
 // Bun's native `expect` vocabulary provides a compact mutation witness: exact ordered equality
