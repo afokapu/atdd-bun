@@ -197,3 +197,34 @@ test("production-shape proof rejects R-c: a side-effect module imported by the S
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Ordinary code that cannot change what the chain's freshly constructed runners execute stays accepted
+// (review #6 FR examples, plus the consumer's read-only getPrototypeOf in an imported module).
+const unrelatedWrites: Record<string, { file: string; edit: (path: string, text: string) => string }> = {
+  "a dynamic-key write to a local map in JourneyRunner": {
+    file: "src/trains/journey.ts",
+    edit: replace("    const traversed = [] as string[];", "    const traversed = [] as string[];\n    const seen: Record<string, number> = {};\n    seen[action] = (seen[action] ?? 0) + 1;"),
+  },
+  "a dynamic-key counter write in the Station Master": {
+    file: "src/server.ts",
+    edit: append(`const counters: Record<string, number> = {};\nexport function count(name: string) { counters[name] = (counters[name] ?? 0) + 1; return counters[name]; }`),
+  },
+  "an unrelated object's execute assignment": {
+    file: "src/server.ts",
+    edit: append(`const job: { execute?: () => string } = {};\njob.execute = () => "unrelated";`),
+  },
+  "Object.assign onto application state": {
+    file: "src/server.ts",
+    edit: append(`const state: Record<string, unknown> = {};\nexport function patchState(patch: Record<string, unknown>) { return Object.assign(state, patch); }`),
+  },
+  "a read-only getPrototypeOf plain-object check in an imported module": {
+    file: "src/trains/runner.ts",
+    edit: append(`export const isPlain = (value: object) => { const prototype = Object.getPrototypeOf(value); return prototype === Object.prototype || prototype === null; };`),
+  },
+};
+
+for (const [name, { file, edit }] of Object.entries(unrelatedWrites)) {
+  test(`production-shape proof still accepts ${name}`, async () => {
+    expect(await mutant(edit, file)).toEqual([]);
+  });
+}
