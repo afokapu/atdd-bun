@@ -275,6 +275,68 @@ for (const [name, body] of Object.entries(reReviewPositives)) {
   });
 }
 
+// Third review of 57e8c73 (pullrequestreview-5479107545): dead-expression and skipped-operand false greens.
+const exec = "new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed)";
+const business = `{ selectedTrainId: "train:match:nominal" }`;
+const deadJourney = (branch: string) => server(`import { JourneyRunner } from "./src/trains/journey";`, `  ${branch}
+  return ${business};`);
+const thirdReviewMutants: Record<string, Record<string, string>> = {
+  "E8: dispatch returns the JourneyRunner execution only inside a braced dead branch": {
+    "server.ts": deadJourney("if (false) { return new JourneyRunner(mapping.path).execute(action, inputs, context); }"),
+  },
+  "E8b: dispatch returns the JourneyRunner execution only inside a braceless dead branch": {
+    "server.ts": deadJourney("if (false) return new JourneyRunner(mapping.path).execute(action, inputs, context);"),
+  },
+  "E6: execution after an unconditional top-level business return": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return ${business};
+    return ${exec};`),
+  },
+  "E4b: block comment separates the dead if from its return": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    if (false) /* dead */ return ${exec};
+    return ${business};`),
+  },
+  "E4c: line comment separates the dead if from its return": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    if (false) // dead
+      return ${exec};
+    return ${business};`),
+  },
+  "E7: void discards the returned execution": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return void ${exec};`),
+  },
+};
+
+for (const [name, files] of Object.entries(thirdReviewMutants)) {
+  test(`journey-mediated proof rejects third-review mutant ${name}`, async () => {
+    expect(smoke(await mutant(files))).not.toEqual([]);
+  });
+}
+
+const thirdReviewPositives: Record<string, string> = {
+  "R5: try/catch that rethrows": `    const resolution = this.resolveTrain(action, inputs);
+    try {
+      return ${exec};
+    } catch (error) {
+      throw error;
+    }`,
+  "R6: early guard throw before execution": `    const resolution = this.resolveTrain(action, inputs);
+    if (!resolution.trainPath) throw new Error("declaration has no train path");
+    return ${exec};`,
+  "R7: returned record with an unrelated ternary value": `    const resolution = this.resolveTrain(action, inputs);
+    return Object.freeze({ executed: ${exec}, mode: action ? "declared" : "default" });`,
+  "R8: grouped return": `    const resolution = this.resolveTrain(action, inputs);
+    return (${exec});`,
+};
+
+for (const [name, body] of Object.entries(thirdReviewPositives)) {
+  test(`journey-mediated proof accepts ${name}`, async () => {
+    expect(await mutant({ "src/trains/interlocking.ts": interlocking(body) })).toEqual([]);
+  });
+}
+
 const journeyMutants: Record<string, Record<string, string>> = {
   "dispatch returning business data directly": {
     "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  void JourneyRunner; void mapping; void inputs; void context;
