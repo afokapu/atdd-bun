@@ -116,6 +116,9 @@ test("init adds deterministic reject-new policy to an existing explicit profile 
     const written = Bun.YAML.parse(await readFile(join(root, "atdd-bun.yaml"), "utf8")) as { profiles: string[]; ratchet: { mode: string; profiles: string[] } };
     expect(written.profiles).toEqual(["docs", "flow"]);
     expect(written.ratchet).toEqual({ mode: "reject-new", profiles: ["docs", "flow"] });
+    const once = await readFile(join(root, "atdd-bun.yaml"), "utf8");
+    expect((await policyInit(root)).message).toContain("kept");
+    expect(await readFile(join(root, "atdd-bun.yaml"), "utf8")).toBe(once);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
