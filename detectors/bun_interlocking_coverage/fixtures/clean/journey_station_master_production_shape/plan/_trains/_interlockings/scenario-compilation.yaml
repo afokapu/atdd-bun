@@ -1,0 +1,14 @@
+interlocking_id: interlocking:scenario-compilation
+entrypoint:
+  exposed: true
+  actions:
+    - create_scenario
+route_resolution:
+  strategy: fail_on_multiple_match
+routes:
+  - route_id: compile
+    train_id: train:scenario:compile
+    train_path: plan/_trains/train:scenario:compile.yaml
+    guard:
+      id: guard:compile
+      input: scenario

@@ -7,6 +7,7 @@
 // (exposed:false) interlockings have no Station Master action and are OUT OF SCOPE. Bun mirror of
 // core tester.interlocking.smoke-coverage-for-station-master. The enforced minimum smoke signature is
 // an `e2e/**/*.ts` file referencing the action name AND a Station Master reference AND both runners.
+import { join } from "node:path";
 import {
   parseJsonEnv,
   readText,
@@ -26,7 +27,6 @@ import {
   mk,
   writeReport,
 } from "../_shared/interlocking.mjs";
-import { join } from "node:path";
 
 const RULE = "tester.bun.interlocking-smoke-coverage-for-station-master";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -36,11 +36,12 @@ const violations = [];
 // it under the smoke rules (no substituted collaborators, observable outcome). A local E2E that names the action beside
 // the runners is not a smoke and no longer clears the rule (FWS #TzSCGS5ajYhP).
 const SMOKE_PHASE = /^\s*\/\/\s*Phase:\s*SMOKE\b/m;
-function actionSmokeCovered(action, e2eFiles, stationModule) {
+function actionSmokeCovered(action, e2eFiles, station, croot) {
   return e2eFiles.some(
-    ({ raw, text: t }) =>
-      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) &&
-        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule, action)),
+    ({ raw, text: t, file }) =>
+      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) &&
+        (stationMasterExecutionProof(t, action) ||
+          (station && stationModuleExecutionProof(t, station.text, action, station.file, croot))),
   );
 }
 
@@ -49,15 +50,15 @@ for (const scanRoot of roots) {
     const records = interlockingFiles(croot)
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
-    const e2eTexts = e2eFiles(croot).map((f) => { const raw = readText(f); return { raw, text: maskComments(raw) }; });
-    const stationModule = ["server.ts", join("src", "server.ts")]
-      .map((name) => readText(join(croot, name)))
-      .find((text) => text && text.includes(PROD_INTERLOCKING) && text.includes(PROD_TRAIN));
+    const e2eTexts = e2eFiles(croot).map((file) => { const raw = readText(file); return { file, raw, text: maskComments(raw) }; });
+    const station = ["server.ts", "src/server.ts"]
+      .map((name) => ({ file: join(croot, name), text: readText(join(croot, name)) }))
+      .find((entry) => entry.text);
 
     for (const { file, rec } of records) {
       if (!rec.exposed) continue;
       for (const action of rec.actions) {
-        if (actionSmokeCovered(action, e2eTexts, stationModule)) continue;
+        if (actionSmokeCovered(action, e2eTexts, station, croot)) continue;
         const [line, src] = lineOf(rec.rawText, new RegExp("^\\s*-\\s*['\"]?" + action + "['\"]?\\s*$"));
         violations.push(
           mk(
