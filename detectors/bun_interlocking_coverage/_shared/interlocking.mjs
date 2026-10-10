@@ -439,28 +439,40 @@ function topLevelReturns(text) {
   return ranges;
 }
 
-// The expression at `index` is the returned value (or part of it) unless a later comma at the return's top
-// level or inside a grouping paren makes it a discarded comma-expression operand.
+// Operators that make an operand conditional or discarded: comma, ternary, and short-circuit logic.
+const SEQUENCING = /^(?:,|\?(?![.?])|:|&&|\|\||\?\?)/;
+
+// The expression at `index` is the returned value (or a call argument, object value, or array element of
+// it) unless, at the return's top level or inside a grouping paren, it sits beside a comma, ternary, or
+// short-circuit operator that can discard it or skip it.
 function returnsValueAt(text, start, end, index) {
-  const stack = [];
+  const stack = [{ kind: "group", operator: false }];
   for (let i = start + "return".length; i < index; i++) {
     const skip = skipLiteral(text, i);
     if (skip !== i) { i = skip - 1; continue; }
     const c = text[i];
     if (c === "(") {
       const prev = text.slice(start, i);
-      stack.push(/(?:^|[^\w$])(?:return|await|typeof|void|yield|in|of|case)\s*$/.test(prev) || !/[\w$)\]]\s*$/.test(prev) ? "group" : "call");
-    } else if ("[{".includes(c)) stack.push(c);
+      const group = /(?:^|[^\w$])(?:return|await|typeof|void|yield|in|of|case)\s*$/.test(prev) || !/[\w$)\]]\s*$/.test(prev);
+      stack.push({ kind: group ? "group" : "call", operator: false });
+    } else if ("[{".includes(c)) stack.push({ kind: c, operator: false });
     else if (")]}".includes(c)) stack.pop();
+    else {
+      const op = SEQUENCING.exec(text.slice(i, i + 2));
+      if (op) { stack.at(-1).operator = true; i += op[0].length - 1; }
+    }
   }
+  for (let level = stack.length - 1; level >= 0 && stack[level].kind === "group"; level--) if (stack[level].operator) return false;
   let depth = 0;
   for (let i = index; i < end; i++) {
     const skip = skipLiteral(text, i);
     if (skip !== i) { i = skip - 1; continue; }
     const c = text[i];
     if ("([{".includes(c)) depth++;
-    else if (")]}".includes(c)) { if (depth > 0) depth--; else stack.pop(); }
-    else if (c === "," && depth === 0 && (!stack.length || stack.at(-1) === "group")) return false;
+    else if (")]}".includes(c)) {
+      if (depth > 0) depth--;
+      else { stack.pop(); if (!stack.length || stack.at(-1).kind !== "group") return true; }
+    } else if (depth === 0 && stack.at(-1).kind === "group" && SEQUENCING.test(text.slice(i, i + 2))) return false;
   }
   return true;
 }
