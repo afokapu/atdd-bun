@@ -118,6 +118,49 @@ test("declaration-path proof rejects a same-name resolution fabricated in a diff
   }))).not.toEqual([]);
 });
 
+// Independent review of 5d2e794 (pullrequestreview-5479008187): four single-file mutants that cleared
+// smoke. Each is persisted verbatim and must fail for its named gap.
+const reviewMutants: Record<string, Record<string, string>> = {
+  "A: InterlockingRunner discards the TrainRunner execution and returns business data": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+    return { selectedTrainId: "train:match:nominal" };`),
+  },
+  "B: a same-name resolution parameter in another method executes a fabricated path": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    void resolution;
+    return this.run({ trainId: "train:match:nominal", trainPath: "plan/_trains/train:match:nominal.yaml" }, context);`, `
+  run(resolution: { trainId: string; trainPath: string }, context: { handlers: object; seed: object }) {
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+  }`),
+  },
+  "C: JourneyRunner.execute returns business data beside an uncalled traversal": {
+    "src/trains/journey.ts": `import { InterlockingRunner } from "./interlocking";
+
+export class JourneyRunner {
+  constructor(private readonly journeyPath: string) {}
+  execute(_action: string, _inputs: object, _context: { handlers: object; seed: object }) {
+    return { selectedTrainId: "train:match:nominal" };
+  }
+  unused(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    return new InterlockingRunner(this.journeyPath).execute(action, inputs, context);
+  }
+}
+`,
+  },
+  "D: Object.assign rebinds resolution.trainPath before construction": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    Object.assign(resolution, { trainPath: "plan/_trains/train:unrelated.yaml" });
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`),
+  },
+};
+
+for (const [name, files] of Object.entries(reviewMutants)) {
+  test(`journey-mediated proof rejects review mutant ${name}`, async () => {
+    expect(smoke(await mutant(files))).not.toEqual([]);
+  });
+}
+
 const journeyMutants: Record<string, Record<string, string>> = {
   "dispatch returning business data directly": {
     "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  void JourneyRunner; void mapping; void inputs; void context;
