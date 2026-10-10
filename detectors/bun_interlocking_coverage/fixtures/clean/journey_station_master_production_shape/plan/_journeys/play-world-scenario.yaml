@@ -1,0 +1,24 @@
+schema_version: 1.0.0
+journey_id: journey:play-world-scenario
+title: Play World Scenario
+status: draft
+entrypoint:
+  interlocking_id: interlocking:scenario-compilation
+  exposed: true
+  actions:
+  - create_scenario
+  reason: null
+  surfaces:
+  - backend
+continuations:
+- from:
+    interlocking_id: interlocking:scenario-compilation
+    route_id: compile
+  artifact: world:scenario:package
+  to:
+    interlocking_id: interlocking:play-turn-routing
+terminals:
+- from:
+    interlocking_id: interlocking:scenario-compilation
+    route_id: refuse
+  outcome: invalid Scenario refused

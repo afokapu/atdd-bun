@@ -15,6 +15,7 @@ import {
   maskComments,
   PLAN_ROOT,
 } from "../_shared/interlocking.mjs";
+import { provenJourneyActions } from "../../../lib/journey-chain.mjs";
 
 const RULE = "coder.bun.station-master-journey-routing";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -98,7 +99,10 @@ for (const scanRoot of roots) {
       "journey-station-unlinked: exposed journeys exist but Station Master never references JourneyRunner",
       lineAt(text, 1),
     ));
-    if (referencesToken(text, "JourneyRunner") && !dispatchInvokesMappedJourneyRunner(text)) violations.push(mk(
+    // Any exported action (not only `dispatch`) may carry the mapped JourneyRunner execution, provided
+    // the whole chain is proven on the AST (lib/journey-chain.mjs).
+    if (referencesToken(text, "JourneyRunner") && !dispatchInvokesMappedJourneyRunner(text) &&
+      provenJourneyActions(text, app, croot).length === 0) violations.push(mk(
       RULE,
       appPath,
       1,

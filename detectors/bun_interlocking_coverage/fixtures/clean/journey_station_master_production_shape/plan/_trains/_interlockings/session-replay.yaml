@@ -1,0 +1,14 @@
+interlocking_id: interlocking:session-replay
+entrypoint:
+  exposed: true
+  actions:
+    - replay_session
+route_resolution:
+  strategy: fail_on_multiple_match
+routes:
+  - route_id: replay
+    train_id: train:session:replay
+    train_path: plan/_trains/train:session:replay.yaml
+    guard:
+      id: guard:replay
+      input: replay
