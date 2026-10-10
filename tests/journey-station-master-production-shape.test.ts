@@ -248,3 +248,43 @@ test("production-shape proof rejects S2: a tsconfig path-aliased side-effect mod
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Review #8 of 202f40e, S2-j: Bun also honors jsconfig path aliases, so they belong to the same
+// transitive local import closure as tsconfig aliases.
+test("production-shape proof rejects S2-j: a jsconfig path-aliased side-effect module patches the prototype", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-jsconfig-patch-"));
+  try {
+    await cp(fixture, root, { recursive: true });
+    await writeFile(join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } } }, null, 2));
+    await writeFile(join(root, "src", "patch.ts"), `import { InterlockingRunner } from "./trains/interlocking.ts";
+
+(InterlockingRunner.prototype as any).execute = async () => (${fakeInterlocked});
+`);
+    const server = join(root, "src", "server.ts");
+    await writeFile(server, `import "@/patch.ts";\n${await readFile(server, "utf8")}`);
+    const found = ruleIds(await both(root));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Review #8 of 202f40e, S2-j: Bun also honors jsconfig.json `paths`, so the same aliased side-effect
+// patch through jsconfig must be followed.
+test("production-shape proof rejects S2-j: a jsconfig path-aliased side-effect module patches the prototype", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-station-jsconfig-patch-"));
+  try {
+    await cp(fixture, root, { recursive: true });
+    await writeFile(join(root, "jsconfig.json"), JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@/*": ["src/*"] } } }, null, 2));
+    await writeFile(join(root, "src", "patch.ts"), `import { InterlockingRunner } from "./trains/interlocking.ts";
+
+(InterlockingRunner.prototype as any).execute = async () => (${fakeInterlocked});
+`);
+    const server = join(root, "src", "server.ts");
+    await writeFile(server, `import "@/patch.ts";\n${await readFile(server, "utf8")}`);
+    const found = ruleIds(await both(root));
+    for (const rule of [SMOKE, STATION, JOURNEY]) expect(found, rule).toContain(rule);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
