@@ -173,3 +173,37 @@ test("resolve_match functional Station Master smoke", async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test("semantic smoke rejects an exported dispatch disconnected from an inert production helper", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-inert-station-helper-"));
+  try {
+    await cp(join(detector, "fixtures", "clean", "interlocking_smoke_coverage"), root, { recursive: true });
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "server.ts"), `import { InterlockingRunner } from "./trains/interlocking";
+import { TrainRunner } from "./trains/runner";
+const runner = new InterlockingRunner("plan/_trains/_interlockings/match-resolution.yaml");
+async function inertProductionHelper(action: string, inputs: object) {
+  const resolution = runner.resolveTrain(action, inputs);
+  return await new TrainRunner(resolution.trainId).execute({});
+}
+export async function dispatch(_action: string, _inputs: object) {
+  return { selectedTrainId: "train:match:match-resolution-standard" };
+}
+`);
+    await writeFile(join(root, "e2e", "smoke", "resolve-match.smoke.test.ts"), `// Phase: SMOKE
+import { expect, test } from "bun:test";
+import { dispatch } from "../../src/server";
+import { InterlockingRunner } from "../../convex/trains/interlocking";
+import { TrainRunner } from "../../convex/trains/runner";
+test("resolve_match dispatch does not use the inert helper", async () => {
+  const result = await dispatch("resolve_match", { allPlayersVoted: true });
+  expect(result.selectedTrainId).toBe("train:match:match-resolution-standard");
+  expect(InterlockingRunner).toBeDefined(); expect(TrainRunner).toBeDefined();
+});
+`);
+    const findings = await run(root);
+    expect(rule("tester.bun.interlocking-smoke-coverage-for-station-master", findings)).not.toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
