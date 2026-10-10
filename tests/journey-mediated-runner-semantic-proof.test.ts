@@ -356,6 +356,101 @@ for (const [name, body] of Object.entries(thirdReviewPositives)) {
   });
 }
 
+// Binding-accuracy hypotheses from the maintainer (M-mv2ggwnz-34b20c83), reproduced against bfaf40a.
+const journeyClass = (members: string) => `import { InterlockingRunner } from "./interlocking";
+
+export class JourneyRunner {
+  constructor(private readonly journeyPath: string) {}
+${members}
+}
+`;
+const journeyExecute = `  execute(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    return new InterlockingRunner(this.journeyPath).execute(action, inputs, context);
+  }`;
+const bindingMutants: Record<string, Record<string, string>> = {
+  "function-local TrainRunner shadow in InterlockingRunner.execute": {
+    "src/trains/interlocking.ts": interlocking(`    const TrainRunner = class {
+      constructor(_path: string, _handlers?: object) {}
+      execute(_resolution: object, _seed?: object) { return ${business}; }
+    };
+    const resolution = this.resolveTrain(action, inputs);
+    return ${exec};`),
+  },
+  "function-local InterlockingRunner shadow in JourneyRunner.execute": {
+    "src/trains/journey.ts": journeyClass(`  execute(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    const InterlockingRunner = class {
+      constructor(_path: string) {}
+      execute(_a: string, _i: object, _c: object) { return ${business}; }
+    };
+    return new InterlockingRunner(this.journeyPath).execute(action, inputs, context);
+  }`),
+  },
+  "function-local JourneyRunner shadow in dispatch": {
+    "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  {
+    const JourneyRunner = class {
+      constructor(_path: string) {}
+      execute(_a: string, _i: object, _c: object) { return ${business}; }
+    };
+    return new JourneyRunner(mapping.path).execute(action, inputs, context);
+  }`),
+  },
+  "class-field execute overriding InterlockingRunner.execute": {
+    "src/trains/interlocking.ts": interlockingClass(`  execute = (_action: string, _inputs: object, _context: { handlers: object; seed: object }) => (${business});
+  // @ts-ignore the instance field above shadows this prototype method at runtime
+  execute(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    const resolution = this.resolveTrain(action, inputs);
+    return ${exec};
+  }`),
+  },
+  "class-field execute overriding JourneyRunner.execute": {
+    "src/trains/journey.ts": journeyClass(`  execute = (_action: string, _inputs: object, _context: object) => (${business});
+${journeyExecute.replace("  execute(", "  execute(")}`),
+  },
+  "duplicate InterlockingRunner.execute where the last (business) wins": {
+    "src/trains/interlocking.ts": interlockingClass(`  execute(action: string, inputs: object, context: { handlers: object; seed: object }) {
+    const resolution = this.resolveTrain(action, inputs);
+    return ${exec};
+  }
+  // @ts-ignore duplicate implementation: at runtime the last definition wins
+  execute(_action: string, _inputs: object, _context: { handlers: object; seed: object }) {
+    return ${business};
+  }`),
+  },
+  "block-scoped const shadows the returned runner in dispatch": {
+    "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  const runner = { execute: (_a: string, _i: object, _c: object) => (${business}) };
+  {
+    const runner = new JourneyRunner(mapping.path);
+    void runner;
+  }
+  return runner.execute(action, inputs, context);`),
+  },
+  "constant-true early business return": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    if (true) return ${business};
+    return ${exec};`),
+  },
+};
+
+for (const [name, files] of Object.entries(bindingMutants)) {
+  test(`journey-mediated proof rejects binding mutant ${name}`, async () => {
+    expect(smoke(await mutant(files))).not.toEqual([]);
+  });
+}
+
+test("journey-mediated proof accepts an expression-bodied arrow dispatch", async () => {
+  expect(await mutant({
+    "server.ts": `import { JourneyRunner } from "./src/trains/journey";
+
+export const JOURNEY_MAP = {
+  resolve_match: { journeyId: "journey:match", path: "plan/_journeys/match.yaml" },
+};
+
+export const dispatch = (action: keyof typeof JOURNEY_MAP, inputs: object, context: { handlers: object; seed: object }) =>
+  new JourneyRunner(JOURNEY_MAP[action].path).execute(action, inputs, context);
+`,
+  })).toEqual([]);
+});
+
 const journeyMutants: Record<string, Record<string, string>> = {
   "dispatch returning business data directly": {
     "server.ts": server(`import { JourneyRunner } from "./src/trains/journey";`, `  void JourneyRunner; void mapping; void inputs; void context;
