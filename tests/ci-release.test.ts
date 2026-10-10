@@ -107,6 +107,20 @@ test("ci init rejects duplicate GitHub Packages auth assignments in either order
   }
 });
 
+test("ci init refuses persisted GitHub Packages auth without a declared registry scope", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-private-package-unscope-persisted-token-"));
+  const npmrc = "//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n";
+  try {
+    await writeFile(join(root, ".npmrc"), npmrc);
+    const result = await ciInit(root);
+    expect(result.ok).toBeFalse();
+    expect(result.message).toContain("standard ${NODE_AUTH_TOKEN} interpolation");
+    expect(result.message).not.toContain("not-a-token-to-copy");
+    expect(await readFile(join(root, ".npmrc"), "utf8")).toBe(npmrc);
+    expect(await Bun.file(join(root, ".github/workflows/atdd-bun.yml")).exists()).toBeFalse();
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("ci init refuses a persisted GitHub Packages credential without changing consumer files", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-private-package-persisted-token-"));
   const npmrc = "@forgeonehundred:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n";

@@ -22,12 +22,13 @@ async function githubPackagesNpmrc(repo: string) {
   const path = join(repo, ".npmrc");
   if (!existsSync(path)) return { ok: true, path, content: undefined as string | undefined };
   const content = await readFile(path, "utf8");
-  if (!githubPackagesRegistry.test(content)) return { ok: true, path, content: undefined as string | undefined };
+  // Authentication is sensitive even when no scope currently routes to GitHub Packages: validate every present
+  // assignment before deciding whether the generator should add a missing interpolation for a declared scope.
   const assignments = [...content.matchAll(githubPackagesAuth)].map(match => match[1]);
   if (assignments.length > 1) return { ok: false, path, message: ".npmrc must declare exactly one npm.pkg.github.com _authToken assignment to avoid ambiguous authentication" };
   const current = assignments[0];
   if (current !== undefined && current !== githubPackagesTokenInterpolation) return { ok: false, path, message: ".npmrc already configures npm.pkg.github.com authentication; replace it with the standard ${NODE_AUTH_TOKEN} interpolation instead of storing a credential" };
-  if (current !== undefined) return { ok: true, path, content: undefined as string | undefined };
+  if (!githubPackagesRegistry.test(content) || current !== undefined) return { ok: true, path, content: undefined as string | undefined };
   return { ok: true, path, content: `${content}${content.endsWith("\n") ? "" : "\n"}//npm.pkg.github.com/:_authToken=${githubPackagesTokenInterpolation}\n` };
 }
 
