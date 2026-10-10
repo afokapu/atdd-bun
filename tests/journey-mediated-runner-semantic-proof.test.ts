@@ -235,6 +235,14 @@ const reReviewMutants: Record<string, Record<string, string>> = {
     "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
     return (new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed), { selectedTrainId: "train:match:nominal" });`),
   },
+  "E5 sibling: ternary returns the execution only on a dead branch": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return false ? new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed) : { selectedTrainId: "train:match:nominal" };`),
+  },
+  "E5 sibling: logical operator returns business data after the execution": {
+    "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed) && { selectedTrainId: "train:match:nominal" };`),
+  },
 };
 
 for (const [name, files] of Object.entries(reReviewMutants)) {
