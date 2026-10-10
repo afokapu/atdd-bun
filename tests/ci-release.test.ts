@@ -13,7 +13,8 @@ test("ci init is idempotent, preserves an existing workflow, and emits the requi
 
 test("generated CI grants only read access and supplies the ephemeral Actions token only to frozen package installation", async () => {
   const root = await mkdtemp(join(tmpdir(), "atdd-private-package-"));
-  const npmrc = "@forgeonehundred:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n";
+  const registryScope = "@forgeonehundred:registry=https://npm.pkg.github.com\n";
+  const npmrc = registryScope + "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\n";
   const lock = `{
   "lockfileVersion": 1,
   "packages": {
@@ -23,7 +24,8 @@ test("generated CI grants only read access and supplies the ephemeral Actions to
 `;
   try {
     await writeFile(join(root, "package.json"), JSON.stringify({ dependencies: { "@forgeonehundred/resolver-os": "0.1.0" } }));
-    await writeFile(join(root, ".npmrc"), npmrc);
+    // FRG's tracked scope-only configuration cannot consume the CI token yet.
+    await writeFile(join(root, ".npmrc"), registryScope);
     await writeFile(join(root, "bun.lock"), lock);
     expect((await ciInit(root)).ok).toBeTrue();
     const workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
@@ -37,6 +39,20 @@ test("generated CI grants only read access and supplies the ephemeral Actions to
     expect(workflow.match(/github\.token/g)).toHaveLength(1);
     expect(await readFile(join(root, ".npmrc"), "utf8")).toBe(npmrc);
     expect(await readFile(join(root, "bun.lock"), "utf8")).toBe(lock);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("ci init refuses a persisted GitHub Packages credential without changing consumer files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-private-package-persisted-token-"));
+  const npmrc = "@forgeonehundred:registry=https://npm.pkg.github.com\n//npm.pkg.github.com/:_authToken=not-a-token-to-copy\n";
+  try {
+    await writeFile(join(root, ".npmrc"), npmrc);
+    const result = await ciInit(root);
+    expect(result.ok).toBeFalse();
+    expect(result.message).toContain("standard ${NODE_AUTH_TOKEN} interpolation");
+    expect(result.message).not.toContain("not-a-token-to-copy");
+    expect(await readFile(join(root, ".npmrc"), "utf8")).toBe(npmrc);
+    expect(await Bun.file(join(root, ".github/workflows/atdd-bun.yml")).exists()).toBeFalse();
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 

@@ -25,6 +25,13 @@ without `--replace`, and adding the dependency changes nothing until you run `in
 
 Then require the workflow's job in the GitHub branch ruleset, so it gates merges.
 
+For a declared GitHub Packages scope in `.npmrc` (for example,
+`@forgeonehundred:registry=https://npm.pkg.github.com`), run
+`bun run atdd-bun ci init --replace`. The generator preserves that scope and adds
+only `//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}`; the generated workflow
+supplies the ephemeral Actions token to its frozen install step. It refuses an
+existing stored token rather than reading, copying, or replacing it.
+
 ## Commands
 
 | Command | What it does |
