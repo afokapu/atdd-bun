@@ -1,3 +1,5 @@
+import { relative, resolve } from "node:path";
+
 /** Pure v1 primitives for the opt-in exact-base finding ratchet. No baseline is written or accepted. */
 export type RatchetMode = "report" | "reject-new";
 export type RatchetPolicy = { mode: RatchetMode; profiles: string[] };
@@ -23,6 +25,14 @@ const normalizedPath = (path: string) => {
   if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:\//.test(normalized) || normalized.split("/").includes("..")) throw new Error(`ratchet finding path must be normalized and repository-relative: ${path}`);
   return normalized;
 };
+
+/** Canonicalize a detector location against the root that produced it, refusing traversal and external paths. */
+export function canonicalFindingPath(root: string, path: string): string {
+  const supplied = path.replaceAll("\\", "/");
+  if (supplied.split("/").includes("..")) throw new Error(`ratchet finding path must be normalized and repository-relative: ${path}`);
+  const rootPath = resolve(root), target = resolve(rootPath, path), fromRoot = relative(rootPath, target).replaceAll("\\", "/");
+  return normalizedPath(fromRoot);
+}
 
 /** Stable semantic identity: presentation position and rendered evidence deliberately do not participate. */
 export function findingFingerprint(finding: FindingIdentity): string {

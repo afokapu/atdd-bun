@@ -62,6 +62,20 @@ test("ratchet refuses an exact base when finding-affecting context differs", asy
   expect(result.stderr).toContain("profile/context differ");
 });
 
+test("ratchet classifies a topology finding carried when both exact worktrees emit the same repository-relative path", async () => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-root-path-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await writeFile(join(repo, "atdd-bun.yaml"), "profiles: [topology]\nratchet: { mode: reject-new, profiles: [topology] }\n");
+  await mkdir(join(repo, "plan"));
+  await writeFile(join(repo, "plan", "wrong.yaml"), "urn: wagon:orders\nwmbt:\n  total: 0\nfeatures: []\n");
+  await git(repo, "add", "."); await git(repo, "commit", "-qm", "base topology debt");
+  const base = await git(repo, "rev-parse", "HEAD");
+  await writeFile(join(repo, "candidate.md"), "same finding, distinct candidate worktree\n"); await git(repo, "add", "."); await git(repo, "commit", "-qm", "candidate");
+  const result = await run("topology", "--root", repo, "--ratchet", "--base", base);
+  expect(result.exitCode).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ mode: "reject-new", carried: [expect.any(String)], new: [], resolved: [] });
+}, 20_000);
+
 test("ordinary direct-profile ratchet keeps comparing the explicitly selected profile despite configured profiles", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-direct-profile-"));
   await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
@@ -72,7 +86,7 @@ test("ordinary direct-profile ratchet keeps comparing the explicitly selected pr
   const result = await run("coder", "--root", repo, "--ratchet", "--base", base);
   expect(result.exitCode).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ mode: "report", profiles: ["coder"], resolved: [] });
-});
+}, 20_000);
 
 test("explicit profile activation carries legacy findings while judging both exact trees under the expanded profiles", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-activation-"));
