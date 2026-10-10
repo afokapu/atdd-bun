@@ -21,10 +21,12 @@ import {
   PROD_INTERLOCKING,
   PROD_TRAIN,
   stationMasterExecutionProof,
+  stationModuleExecutionProof,
   rel,
   mk,
   writeReport,
 } from "../_shared/interlocking.mjs";
+import { join } from "node:path";
 
 const RULE = "tester.bun.interlocking-smoke-coverage-for-station-master";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -34,10 +36,11 @@ const violations = [];
 // it under the smoke rules (no substituted collaborators, observable outcome). A local E2E that names the action beside
 // the runners is not a smoke and no longer clears the rule (FWS #TzSCGS5ajYhP).
 const SMOKE_PHASE = /^\s*\/\/\s*Phase:\s*SMOKE\b/m;
-function actionSmokeCovered(action, e2eFiles) {
+function actionSmokeCovered(action, e2eFiles, stationModule) {
   return e2eFiles.some(
     ({ raw, text: t }) =>
-      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) && stationMasterExecutionProof(t, action),
+      SMOKE_PHASE.test(raw) && tokenCovered(action, t) && STATION_MASTER.test(t) && t.includes(PROD_INTERLOCKING) && t.includes(PROD_TRAIN) &&
+        (stationMasterExecutionProof(t, action) || stationModuleExecutionProof(t, stationModule)),
   );
 }
 
@@ -47,11 +50,14 @@ for (const scanRoot of roots) {
       .map((f) => ({ file: f, rec: parseInterlocking(readText(f)) }))
       .filter((x) => x.rec);
     const e2eTexts = e2eFiles(croot).map((f) => { const raw = readText(f); return { raw, text: maskComments(raw) }; });
+    const stationModule = ["server.ts", join("src", "server.ts")]
+      .map((name) => readText(join(croot, name)))
+      .find((text) => text && text.includes(PROD_INTERLOCKING) && text.includes(PROD_TRAIN));
 
     for (const { file, rec } of records) {
       if (!rec.exposed) continue;
       for (const action of rec.actions) {
-        if (actionSmokeCovered(action, e2eTexts)) continue;
+        if (actionSmokeCovered(action, e2eTexts, stationModule)) continue;
         const [line, src] = lineOf(rec.rawText, new RegExp("^\\s*-\\s*['\"]?" + action + "['\"]?\\s*$"));
         violations.push(
           mk(
