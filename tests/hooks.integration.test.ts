@@ -176,6 +176,84 @@ test("a commit is never refused for the work still left uncommitted: committing 
   } finally { await cleanup(root); }
 }, 20_000);
 
+test("pre-push reject-new compares the exact remote range and accepts carried-only findings", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "base with carried traceability finding", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    await writeFile(join(root, "readme.md"), "safe candidate change\n");
+    await git(root, ["add", "readme.md"]); await git(root, ["commit", "-qm", "safe candidate", "--no-verify"]);
+    const candidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    // The checkout moves on with a bad commit; only the advertised ref is valid for this push.
+    await writeFile(join(root, "plan", "unadvertised.yaml"), "urn: wmbt:unadvertised:E001\nacceptances:\n  - identity: { urn: acc:unadvertised:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "unadvertised finding", "--no-verify"]);
+    const result = await runHook("pre-push", root, [], `refs/heads/feature ${candidate} refs/heads/feature ${base}\n`);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ mode: "reject-new", base, candidate, profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("pre-push does not let a carried-only ratchet ref mask an ordinary failing ref", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "ratchet base with debt", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    await writeFile(join(root, "readme.md"), "safe ratchet candidate\n"); await git(root, ["add", "readme.md"]); await git(root, ["commit", "-qm", "safe ratchet candidate", "--no-verify"]);
+    const ratchetCandidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    await git(root, ["checkout", "-qb", "ordinary", base]);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [planner]\n");
+    await mkdir(join(root, "plan", "_trains"), { recursive: true });
+    await writeFile(join(root, "plan", "_trains", "orders.yaml"), "train_id: 1001-checkout\ntitle: Checkout journey\ndescription: A deliberately invalid train identity.\nthemes: [orders]\nparticipants: [wagon:orders]\nsequence:\n  - step: 1\n    intent: Place the order\n    from: wagon:orders\n    to: wagon:orders\n    artifact: orders:placed\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "ordinary strict candidate", "--no-verify"]);
+    const ordinaryCandidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    const result = await runHook("pre-push", root, [], `refs/heads/ratchet ${ratchetCandidate} refs/heads/ratchet ${base}\nrefs/heads/ordinary ${ordinaryCandidate} refs/heads/ordinary ${base}\n`);
+    expect(result.ok, result.message).toBeFalse();
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("pre-push reject-new rejects new findings and immutable-range ambiguity", async () => {
+  const root = await repo(); try {
+    const writePolicy = (extra = "") => writeFile(join(root, "atdd-bun.yaml"), `profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n${extra}`);
+    await writePolicy(); await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "ratchet base", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    await writeFile(join(root, "plan", "payments.yaml"), "urn: wmbt:payments:E001\nacceptances:\n  - identity: { urn: acc:payments:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "new finding", "--no-verify"]);
+    const withNewFinding = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    const newFinding = await runHook("pre-push", root, [], `refs/heads/feature ${withNewFinding} refs/heads/feature ${base}\n`);
+    expect(newFinding.ok).toBeFalse(); expect(JSON.parse(newFinding.message)).toMatchObject({ new: [expect.any(String)] });
+
+    await writePolicy("topology: { plan_root: contracts }\n"); await git(root, ["add", "atdd-bun.yaml"]); await git(root, ["commit", "-qm", "context drift", "--no-verify"]);
+    const contextDrift = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    expect((await runHook("pre-push", root, [], `refs/heads/feature ${contextDrift} refs/heads/feature ${withNewFinding}\n`)).message).toContain("profile/context differ");
+
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [workflow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await git(root, ["add", "atdd-bun.yaml"]); await git(root, ["commit", "-qm", "legacy profile", "--no-verify"]);
+    const legacyProfile = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    expect((await runHook("pre-push", root, [], `refs/heads/feature ${legacyProfile} refs/heads/feature ${contextDrift}\n`)).message).toContain("profile state is invalid");
+
+    await git(root, ["checkout", "-qb", "unrelated", base]); await writeFile(join(root, "unrelated.md"), "unrelated\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "unrelated", "--no-verify"]);
+    const unrelated = (await git(root, ["rev-parse", "HEAD"])).out.trim(); await git(root, ["checkout", "feature"]);
+    expect((await runHook("pre-push", root, [], `refs/heads/feature ${legacyProfile} refs/heads/feature ${unrelated}\n`)).message).toContain("must be an ancestor");
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-push retains protected-destination and commit-count gates", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "readme.md"), "second commit\n"); await git(root, ["add", "readme.md"]); await git(root, ["commit", "-qm", "second", "--no-verify"]);
+    const head = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse();
+    await writeFile(join(root, "atdd-bun.yaml"), "max_commits_per_push: 0\n");
+    const parent = (await git(root, ["rev-parse", "HEAD~1"])).out.trim();
+    expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/feature ${parent}\n`)).message).toContain("commits per push 1 exceed 0");
+  } finally { await cleanup(root); }
+}, 20_000);
+
 test("pre-push fails closed on a protected destination and post-commit remains advisory without network or ATDD", async () => {
   const root = await repo(); try { await installHooks(root); const head = (await git(root, ["rev-parse", "HEAD"])).out.trim(); expect((await runHook("pre-push", root, [], `refs/heads/feature ${head} refs/heads/main 0000000000000000000000000000000000000000\n`)).ok).toBeFalse(); expect((await runHook("post-commit", root)).ok).toBeTrue(); const dispatcher = await readFile(join(root, ".githooks", "pre-commit"), "utf8"); expect(dispatcher).not.toContain("http"); expect(dispatcher).not.toContain("bunx"); expect(dispatcher).not.toContain("atdd "); }
   finally { await cleanup(root); }
