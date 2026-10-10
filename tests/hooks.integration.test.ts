@@ -205,13 +205,19 @@ test("pre-push does not let a carried-only ratchet ref mask an ordinary failing 
     await writeFile(join(root, "readme.md"), "safe ratchet candidate\n"); await git(root, ["add", "readme.md"]); await git(root, ["commit", "-qm", "safe ratchet candidate", "--no-verify"]);
     const ratchetCandidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
     await git(root, ["checkout", "-qb", "ordinary", base]);
-    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [planner]\n");
-    await mkdir(join(root, "plan", "_trains"), { recursive: true });
-    await writeFile(join(root, "plan", "_trains", "orders.yaml"), "train_id: 1001-checkout\ntitle: Checkout journey\ndescription: A deliberately invalid train identity.\nthemes: [orders]\nparticipants: [wagon:orders]\nsequence:\n  - step: 1\n    intent: Place the order\n    from: wagon:orders\n    to: wagon:orders\n    artifact: orders:placed\n");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [unknown]\n");
     await git(root, ["add", "."]); await git(root, ["commit", "-qm", "ordinary strict candidate", "--no-verify"]);
     const ordinaryCandidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    const ordinary = await runHook("pre-push", root, [], `refs/heads/ordinary ${ordinaryCandidate} refs/heads/ordinary ${base}\n`);
+    expect(ordinary.ok, ordinary.message).toBeFalse(); expect(ordinary.message).toContain("Bun enforcer resolution failed");
     const result = await runHook("pre-push", root, [], `refs/heads/ratchet ${ratchetCandidate} refs/heads/ratchet ${base}\nrefs/heads/ordinary ${ordinaryCandidate} refs/heads/ordinary ${base}\n`);
-    expect(result.ok, result.message).toBeFalse();
+    expect(result.ok, result.message).toBeFalse(); expect(result.message).toContain("Bun enforcer resolution failed");
+    const tag = await runHook("pre-push", root, [], `refs/tags/v1 ${ordinaryCandidate} refs/tags/v1 ${base}\n`);
+    expect(tag.ok, tag.message).toBeFalse(); expect(tag.message).toContain("Bun enforcer resolution failed");
+    const zero = "0".repeat(40);
+    expect((await runHook("pre-push", root, [], `refs/heads/ordinary ${zero} refs/heads/ordinary ${ordinaryCandidate}\n`)).ok).toBeTrue();
+    expect((await runHook("pre-push", root, [], `refs/heads/ordinary ${zero} refs/heads/ordinary ${"f".repeat(40)}\n`)).ok).toBeFalse();
+    expect((await runHook("pre-push", root, [], `refs/heads/main ${zero} refs/heads/main ${ordinaryCandidate}\n`)).ok).toBeFalse();
   } finally { await cleanup(root); }
 }, 30_000);
 
