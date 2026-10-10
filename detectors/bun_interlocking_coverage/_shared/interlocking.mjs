@@ -361,14 +361,21 @@ export function hasResolvedProductionRunnerImports(text, file, croot) {
 }
 
 function resolutionTrainExecution(after, resolution) {
-  const selected = `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`;
+  const r = escaped(resolution);
+  const selected = `${r}\\.(?:trainId|selectedTrainId)`;
   const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${selected}\\s*\\)\\s*\\.execute\\s*\\(`;
-  // The declaration-driven runner form carries the path selected by THIS resolution
-  // into the constructor, then passes its id and arbitrary handler/context values to execute.
-  const declaration = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${escaped(resolution)}\\.trainPath\\s*\\)\\s*\\.execute\\s*\\(\\s*${selected}(?=\\s*(?:,|\\)))`;
-  const call = `(?:${legacy}|${declaration})`;
-  const assigned = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${call}`).exec(after);
-  return { execution: assigned?.[1] ?? null, found: Boolean(assigned || new RegExp(call).test(after)) };
+  // The declaration-driven runner form constructs from THIS resolution's trainPath (optionally
+  // followed by handler/context args) and executes that same resolution object. It only holds
+  // until the name is redeclared or it, or its path, is reassigned.
+  const declaration = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*${r}\\s*(?:,|\\))`;
+  const rebound = new RegExp(`\\b(?:const|let|var)\\s+${r}\\b|(?<![\\w$.])${r}(?:\\.trainPath)?\\s*=(?![=>])`).exec(after);
+  const bound = rebound ? after.slice(0, rebound.index) : after;
+  const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
+  const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
+  return {
+    execution: assigned?.[1] ?? null,
+    found: Boolean(assigned || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
+  };
 }
 
 export function productionExecutionProofs(text, file, croot) {
@@ -467,10 +474,26 @@ function exportedActionBody(text, name) {
   return null;
 }
 
+// Inside the production module, `this.resolveTrain()` is recognized only within the
+// InterlockingRunner class body; any other receiver must be a recognized InterlockingRunner.
+function recognizedInterlockingReceiver(text, receiver, index) {
+  const target = receiver.trim().replace(/^await\s+/, "");
+  if (target === "this") {
+    const header = new RegExp(`\\bclass\\s+${PROD_INTERLOCKING}\\b[^{]*\\{`).exec(text);
+    if (!header) return false;
+    const open = (header.index ?? 0) + header[0].length - 1;
+    const body = balancedBlock(text, open);
+    return body !== null && index > open && index < open + body.length + 1;
+  }
+  return new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(target) ||
+    [...productionReceivers(text)].some((name) => target.endsWith(name));
+}
+
 function hasDeclarationBoundTrainExecution(text, file, croot) {
   if (!resolvedLocalNamedImport(text, file, croot, PROD_TRAIN)) return false;
-  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*[^=;{}\\n]{0,240}?\\.resolveTrain\\s*\\(`, "g");
+  const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   return [...text.matchAll(resolutions)].some(match =>
+    recognizedInterlockingReceiver(text, match[2], match.index ?? 0) &&
     resolutionTrainExecution(text.slice((match.index ?? 0) + match[0].length), match[1]).found,
   );
 }

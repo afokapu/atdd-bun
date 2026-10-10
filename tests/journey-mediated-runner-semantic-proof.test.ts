@@ -162,8 +162,26 @@ for (const [name, files] of Object.entries(journeyMutants)) {
   });
 }
 
-test("each persisted dirty journey fixture fails the smoke rule on its own", async () => {
-  for (const fixture of ["journey_mediated_direct_business", "journey_test_local_lookalike"]) {
-    expect(smoke(await run(join(fixtures, "dirty", fixture))), fixture).not.toEqual([]);
-  }
-});
+// The dirty corpus is scanned as one root, where any fixture's gap keeps it non-empty. Each persisted
+// journey fixture must instead fail on its own, and repairing only its named defect must clear it.
+const dirtyJourneyRepairs: Record<string, (root: string) => Promise<void>> = {
+  journey_mediated_direct_business: root => cp(join(positive, "server.ts"), join(root, "server.ts")),
+  journey_test_local_lookalike: async root => {
+    await cp(join(positive, "src", "trains", "journey.ts"), join(root, "src", "trains", "journey.ts"));
+    await cp(join(positive, "server.ts"), join(root, "server.ts"));
+  },
+};
+
+for (const [fixture, repair] of Object.entries(dirtyJourneyRepairs)) {
+  test(`persisted dirty ${fixture} fails only for its named defect`, async () => {
+    expect(smoke(await run(join(fixtures, "dirty", fixture)))).not.toEqual([]);
+    const root = await mkdtemp(join(tmpdir(), "atdd-journey-dirty-repair-"));
+    try {
+      await cp(join(fixtures, "dirty", fixture), root, { recursive: true });
+      await repair(root);
+      expect(await run(root)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}

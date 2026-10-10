@@ -5,9 +5,8 @@ export class InterlockingRunner {
   resolveTrain(_action: string, _inputs: object) {
     return { routeId: "nominal", trainId: "train:match:nominal", trainPath: "plan/_trains/train:match:nominal.yaml" };
   }
-  execute(action: string, inputs: object, context: object) {
+  execute(action: string, inputs: object, context: { handlers: object; seed: object }) {
     const resolution = this.resolveTrain(action, inputs);
-    const handlers = { interlockingPath: this.interlockingPath };
-    return new TrainRunner(resolution.trainPath).execute(resolution.trainId, handlers, context);
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
   }
 }
