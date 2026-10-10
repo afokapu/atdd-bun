@@ -74,6 +74,21 @@ test("the persisted positive also clears when execute arguments span lines and a
   })).toEqual([]);
 });
 
+test("the persisted positive also clears when InterlockingRunner returns the execution inside a frozen record", async () => {
+  for (const record of ["resolution: resolution", "resolution"]) {
+    expect(await mutant({
+      "src/trains/interlocking.ts": interlocking(`    const resolution = this.resolveTrain(action, inputs);
+    return Object.freeze({
+      ${record},
+      executed: await new TrainRunner(resolution.trainPath, context.handlers).execute(
+        resolution,
+        context.seed,
+      ),
+    });`).replace("  execute(action", "  async execute(action"),
+    }), record).toEqual([]);
+  }
+});
+
 const trainPathMutants: Record<string, string> = {
   "fabricated path object": `    const resolution = this.resolveTrain(action, inputs);
     const fabricated = { trainPath: "plan/_trains/train:match:nominal.yaml" };
@@ -94,6 +109,14 @@ const trainPathMutants: Record<string, string> = {
     return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
   "resolution variable reassigned before construction": `    let resolution = this.resolveTrain(action, inputs);
     resolution = { ...resolution, trainPath: "plan/_trains/train:unrelated.yaml" };
+    return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
+  "assigned execution discarded for business data": `    const resolution = this.resolveTrain(action, inputs);
+    const executed = new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);
+    void executed;
+    return { selectedTrainId: "train:match:nominal" };`,
+  "resolution aliased and mutated before construction": `    const resolution = this.resolveTrain(action, inputs);
+    const alias = resolution;
+    alias.trainPath = "plan/_trains/train:unrelated.yaml";
     return new TrainRunner(resolution.trainPath, context.handlers).execute(resolution, context.seed);`,
   "resolveTrain on an unrecognized receiver": `    const fake = { resolveTrain: (_a: string, _i: object) => ({ trainId: "train:match:nominal", trainPath: "plan/_trains/train:match:nominal.yaml" }) };
     const resolution = fake.resolveTrain(action, inputs);

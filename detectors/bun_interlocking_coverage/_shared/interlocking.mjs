@@ -360,23 +360,128 @@ export function hasResolvedProductionRunnerImports(text, file, croot) {
   );
 }
 
+// Index just past a string or comment starting at `i`, or `i` itself when `i` starts code.
+function skipLiteral(text, i) {
+  const c = text[i], next = text[i + 1];
+  if (c === "/" && next === "/") { const end = text.indexOf("\n", i + 2); return end < 0 ? text.length : end; }
+  if (c === "/" && next === "*") { const end = text.indexOf("*/", i + 2); return end < 0 ? text.length : end + 2; }
+  if (c === "'" || c === '"' || c === "`") {
+    for (let j = i + 1; j < text.length; j++) {
+      if (text[j] === "\\") { j++; continue; }
+      if (text[j] === c) return j + 1;
+    }
+    return text.length;
+  }
+  return i;
+}
+
+// Index of the first bracket that closes a scope opened before `text` begins.
+function enclosingEnd(text) {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    if ("([{".includes(text[i])) depth++;
+    else if (")]}".includes(text[i]) && --depth < 0) return i;
+  }
+  return text.length;
+}
+
+// A `return` statement ends at `;`, at the scope's closing bracket, or at a newline that cannot continue it.
+function returnStatementEnd(text, start) {
+  let depth = 0;
+  for (let i = start + "return".length; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) { if (--depth < 0) return i; }
+    else if (depth === 0 && c === ";") return i;
+    else if (depth === 0 && c === "\n") {
+      const head = text.slice(start + "return".length, i).trim();
+      const next = text.slice(i + 1).trimStart()[0] ?? "";
+      if (!head || (!/[=+\-*/%&|^?:,.!<>]$/.test(head) && !/^[.?:+\-*/%&|^,=<>)\]]/.test(next))) return i;
+    }
+  }
+  return text.length;
+}
+
+// [start, end] of each `return` statement at the top level of `text` (nested blocks and callbacks excluded).
+function topLevelReturns(text) {
+  const ranges = [];
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const skip = skipLiteral(text, i);
+    if (skip !== i) { i = skip - 1; continue; }
+    const c = text[i];
+    if ("([{".includes(c)) depth++;
+    else if (")]}".includes(c)) { if (--depth < 0) break; }
+    else if (depth === 0 && text.startsWith("return", i) && !/[\w$.]/.test(text[i - 1] ?? "") && !/[\w$]/.test(text[i + 6] ?? "")) {
+      const end = returnStatementEnd(text, i);
+      ranges.push([i, end]);
+      i = end - 1;
+    }
+  }
+  return ranges;
+}
+
+// True when a match of `pattern` starting before `limit` is returned at the top level of `text`, inline
+// or through a variable assigned from it.
+function returnsMatch(text, pattern, limit = text.length) {
+  const ranges = topLevelReturns(text);
+  const returned = (index) => ranges.some(([start, end]) => index > start && index < end);
+  for (const m of text.matchAll(new RegExp(pattern, "g"))) if ((m.index ?? 0) < limit && returned(m.index ?? 0)) return true;
+  const assigned = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${pattern}`, "g");
+  for (const m of text.matchAll(assigned)) {
+    if ((m.index ?? 0) >= limit) continue;
+    const after = (m.index ?? 0) + m[0].length;
+    for (const ref of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(m[1])}(?![\\w$])`, "g"))) {
+      if ((ref.index ?? 0) >= after && returned(ref.index ?? 0)) return true;
+    }
+  }
+  return false;
+}
+
+// Index of the first use of `name` that could rebind or mutate it: anything other than a member read,
+// a `key: name` or shorthand object value, `void name`, or the resolution argument of the declaration-path execute.
+function firstRebinding(text, name, executeArgument) {
+  for (const m of text.matchAll(new RegExp(`(?<![\\w$.])${escaped(name)}(?![\\w$])`, "g"))) {
+    const before = text.slice(0, m.index), rest = text.slice((m.index ?? 0) + m[0].length);
+    const member = /^\s*\??\.\s*[A-Za-z_$][\w$]*/.exec(rest);
+    if (member) {
+      if (/^\s*(?:=(?![=>])|\+\+|--|(?:\*\*|[-+*/%&|^]|<<|>>>?|\?\?|&&|\|\|)=|[([.])/.test(rest.slice(member[0].length))) return m.index ?? 0;
+      continue;
+    }
+    if (new RegExp(`${executeArgument}$`).test(before)) continue;
+    if (/[{,]\s*(?:[A-Za-z_$][\w$]*\s*:\s*)?$/.test(before) && /^\s*[,}]/.test(rest)) continue;
+    if (/[{,]\s*$/.test(before) && /^\s*:/.test(rest)) continue; // an object key, not a reference
+    if (/\bvoid\s+$/.test(before)) continue;
+    return m.index ?? 0;
+  }
+  return text.length;
+}
+
+// `after` starts inside the `resolveTrain(` call that produced `resolution`.
 function resolutionTrainExecution(after, resolution) {
   const r = escaped(resolution);
   const selected = `${r}\\.(?:trainId|selectedTrainId)`;
   const legacy = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${selected}\\s*\\)\\s*\\.execute\\s*\\(`;
   // The declaration-driven runner form constructs from THIS resolution's trainPath (optionally
-  // followed by handler/context args) and executes that same resolution object. It only holds
-  // until the name is redeclared or it, or its path, is reassigned.
-  const declaration = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*${r}\\s*(?:,|\\))`;
-  const rebound = new RegExp(`\\b(?:const|let|var)\\s+${r}\\b|(?<![\\w$.])${r}(?:\\.trainPath)?\\s*=(?![=>])`).exec(after);
-  const bound = rebound ? after.slice(0, rebound.index) : after;
+  // followed by handler/context args) and executes that same resolution object. It holds only
+  // inside the block that declared the resolution, and only until the resolution is passed,
+  // assigned, or mutated anywhere other than this call.
+  const constructed = `new\\s+${PROD_TRAIN}\\s*\\(\\s*${r}\\.trainPath\\s*(?:,[^()]*)?\\)\\s*\\.execute\\s*\\(\\s*`;
+  const declaration = `${constructed}${r}\\s*(?:,|\\))`;
+  const statement = after.slice(enclosingEnd(after) + 1);
+  const scope = statement.slice(0, enclosingEnd(statement));
+  const bound = scope.slice(0, firstRebinding(scope, resolution, constructed));
   const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
   const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
   const returns = `\\breturn\\s+(?:await\\s+)?`;
   return {
     execution: assigned?.[1] ?? null,
     found: Boolean(assigned || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
-    returned: new RegExp(`${returns}${legacy}`).test(after) || new RegExp(`${returns}${declaration}`).test(bound) ||
+    returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
       Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
   };
 }
@@ -497,7 +602,7 @@ function hasDeclarationBoundTrainExecution(text, file, croot) {
   const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   return [...text.matchAll(resolutions)].some(match =>
     recognizedInterlockingReceiver(text, match[2], match.index ?? 0) &&
-    resolutionTrainExecution(text.slice((match.index ?? 0) + match[0].length), match[1]).found,
+    resolutionTrainExecution(text.slice((match.index ?? 0) + match[0].length), match[1]).returned,
   );
 }
 
@@ -514,9 +619,29 @@ function directProductionModuleExecution(body, moduleText = body) {
   });
 }
 
+function classBody(text, name) {
+  const header = new RegExp(`\\bclass\\s+${escaped(name)}\\b[^{]*\\{`).exec(text);
+  return header ? balancedBlock(text, (header.index ?? 0) + header[0].length - 1) : null;
+}
+
+function methodBody(body, name) {
+  if (!body) return null;
+  const header = new RegExp(`(?:^|[\\s;{}])(?:(?:public|private|protected|static|override)\\s+)*(?:async\\s+)?${escaped(name)}\\s*\\(`, "g");
+  for (const match of body.matchAll(header)) {
+    const params = (match.index ?? 0) + match[0].length;
+    const close = params + enclosingEnd(body.slice(params));
+    const open = /^\s*(?::\s*[^{;=]+)?\{/.exec(body.slice(close + 1));
+    if (open) return balancedBlock(body, close + open[0].length);
+  }
+  return null;
+}
+
+// JourneyRunner.execute itself must return the InterlockingRunner execution; a traversal elsewhere in
+// the module (an uncalled method or helper) is not evidence.
 function journeyRunnerTraversesProductionRunners(text, file, croot) {
   const interlocking = resolvedLocalNamedImport(text, file, croot, PROD_INTERLOCKING);
-  if (!interlocking || !new RegExp(`new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(`).test(text)) return false;
+  const execute = methodBody(classBody(text, "JourneyRunner"), "execute");
+  if (!interlocking || !execute || !returnsMatch(execute, `new\\s+${PROD_INTERLOCKING}\\s*\\([^)]*\\)\\s*\\.execute\\s*\\(`)) return false;
   return hasDeclarationBoundTrainExecution(readText(interlocking), interlocking, croot);
 }
 
