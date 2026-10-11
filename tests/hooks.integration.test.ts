@@ -644,3 +644,57 @@ test("pre-push keeps the plain range count with no protected remote tip and neve
     expect(fresh.ok, fresh.message).toBeTrue();
   } finally { await cleanup(root); }
 }, 60_000);
+
+async function withBareRemote(max = 2) {
+  const root = await repo(); await writeFile(join(root, "atdd-bun.yaml"), `max_commits_per_push: ${max}\n`); const base = await commitAll(root, "config");
+  const bare = await mkdtemp(join(tmpdir(), "atdd-bun-bare-")); await git(bare, ["init", "-q", "--bare", "-b", "main"]); await git(root, ["remote", "add", "origin", bare]);
+  await pushAndTrack(root, "main", base);
+  return { root, bare, base };
+}
+async function pushAndTrack(root: string, branch: string, sha: string) { expect((await git(root, ["push", "-q", "--no-verify", "origin", `${sha}:refs/heads/${branch}`])).code).toBe(0); expect((await git(root, ["fetch", "-q", "origin"])).code).toBe(0); }
+
+test("pre-push counts only commits new to the push remote when a new branch carries commits already on another remote branch", async () => {
+  const { root, bare, base } = await withBareRemote(); try {
+    await git(root, ["checkout", "-q", "-b", "umbrella"]); const umbrella = await commitsOn(root, 5, "umbrella"); await pushAndTrack(root, "umbrella", umbrella);
+    const reused = await runHook("pre-push", root, ["origin"], `refs/heads/integration ${umbrella} refs/heads/integration ${zeroSha}\n`);
+    expect(reused.ok, reused.message).toBeTrue();
+    const extra = await commitsOn(root, 3, "extra");
+    const over = await runHook("pre-push", root, ["origin"], `refs/heads/integration ${extra} refs/heads/integration ${zeroSha}\n`);
+    expect(over.ok).toBeFalse(); expect(over.message).toContain("commits per push 3 exceed 2");
+    const ordinary = await runHook("pre-push", root, ["origin"], `refs/heads/umbrella ${extra} refs/heads/umbrella ${umbrella}\n`);
+    expect(ordinary.ok).toBeFalse(); expect(ordinary.message).toContain("commits per push 3 exceed 2");
+    expect(base).toHaveLength(40);
+  } finally { await cleanup(root); await cleanup(bare); }
+}, 60_000);
+
+test("pre-push ignores a stale remote-tracking ref the remote no longer advertises, never local branches, and fails closed to protected-only when ls-remote fails", async () => {
+  const { root, bare } = await withBareRemote(); try {
+    await git(root, ["checkout", "-q", "-b", "umbrella"]); const umbrella = await commitsOn(root, 5, "umbrella"); await pushAndTrack(root, "umbrella", umbrella);
+    const push = `refs/heads/integration ${umbrella} refs/heads/integration ${zeroSha}\n`;
+    expect((await runHook("pre-push", root, ["origin"], push)).ok).toBeTrue();
+    expect((await git(bare, ["branch", "-q", "-D", "umbrella"])).code).toBe(0);
+    const stale = await runHook("pre-push", root, ["origin"], push);
+    expect(stale.ok).toBeFalse(); expect(stale.message).toContain("commits per push 5 exceed 2");
+    expect((await git(root, ["fetch", "-q", "origin"])).code).toBe(0);
+    await git(root, ["checkout", "-q", "-b", "local-only", umbrella]);
+    const local = await runHook("pre-push", root, ["origin"], push);
+    expect(local.ok).toBeFalse(); expect(local.message).toContain("commits per push 5 exceed 2");
+    await pushAndTrack(root, "umbrella", umbrella);
+    await git(root, ["remote", "set-url", "origin", join(bare, "missing")]);
+    const unreadable = await runHook("pre-push", root, ["origin"], push);
+    expect(unreadable.ok).toBeFalse(); expect(unreadable.message).toContain("commits per push 5 exceed 2");
+  } finally { await cleanup(root); await cleanup(bare); }
+}, 60_000);
+
+test("pre-push exempts only the SHAs the remote advertises: a remote branch rewound since the last fetch no longer exempts the newer local tracking commits", async () => {
+  const { root, bare } = await withBareRemote(); try {
+    await git(root, ["checkout", "-q", "-b", "umbrella"]); const umbrella = await commitsOn(root, 5, "umbrella"); await pushAndTrack(root, "umbrella", umbrella);
+    const push = `refs/heads/integration ${umbrella} refs/heads/integration ${zeroSha}\n`;
+    expect((await runHook("pre-push", root, ["origin"], push)).ok).toBeTrue();
+    const older = (await git(root, ["rev-parse", `${umbrella}~3`])).out.trim();
+    expect((await git(bare, ["update-ref", "refs/heads/umbrella", older])).code).toBe(0);
+    expect((await git(root, ["rev-parse", "refs/remotes/origin/umbrella"])).out.trim()).toBe(umbrella);
+    const rewound = await runHook("pre-push", root, ["origin"], push);
+    expect(rewound.ok).toBeFalse(); expect(rewound.message).toContain("commits per push 3 exceed 2");
+  } finally { await cleanup(root); await cleanup(bare); }
+}, 60_000);
