@@ -4,7 +4,7 @@
 // RAW v1.1 reports into one — one implementation realizing a family of rule_ids.
 // Files whose name begins with `_` are skipped: they are shared helpers.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, mkdtempSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,31 +20,37 @@ const checks = readdirSync(join(here, "checks"))
   .sort();
 const td = mkdtempSync(join(tmpdir(), "atdd-bun-fam-"));
 const out = [];
-let crashed = false;
-for (const c of checks) {
-  const rep = join(td, c + ".json");
-  let exitedCleanly = true;
-  try {
-    execFileSync(process.execPath, [join(here, "checks", c)], {
-      env: { ...process.env, ATDD_VIOLATIONS_REPORT: rep },
-      stdio: ["ignore", "ignore", "inherit"],
-    });
-  } catch {
-    exitedCleanly = false; /* a member may exit non-zero after writing its report */
+// FAIL CLOSED. A member that cannot run (crash, non-zero exit) or leaves no usable report is a detector
+// failure, never "zero findings": in a ratchet a silent zero on the candidate side reads as resolved debt and
+// masks genuinely new findings. A member that ran and found nothing writes {"violations": []} and passes.
+const failures = [];
+try {
+  for (const c of checks) {
+    const rep = join(td, c + ".json");
+    try {
+      execFileSync(process.execPath, [join(here, "checks", c)], {
+        env: { ...process.env, ATDD_VIOLATIONS_REPORT: rep },
+        stdio: ["ignore", "ignore", "inherit"],
+      });
+    } catch (error) {
+      failures.push(`member ${c} failed to run: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      continue;
+    }
+    try {
+      const report = JSON.parse(readFileSync(rep, "utf8"));
+      if (!report || !Array.isArray(report.violations)) throw new Error("report has no violations array");
+      out.push(...report.violations);
+    } catch (error) {
+      failures.push(`member ${c} left no usable violation report: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
-  let read = false;
-  try {
-    out.push(...JSON.parse(readFileSync(rep, "utf8")).violations);
-    read = true;
-  } catch {}
-  // A member that crashed WITHOUT a report is a detector bug, and swallowing it here is a silent
-  // pass — the exact failure that once hid a broken regex behind zero findings. Fail loudly.
-  if (!exitedCleanly && !read) {
-    process.stderr.write(`family bun_telemetry_test: member ${c} crashed without a violation report\n`);
-    crashed = true;
-  }
+} finally {
+  rmSync(td, { recursive: true, force: true });
 }
-if (crashed) process.exit(2); // a crashed member is a detector bug: fail loudly, not silently
+if (failures.length) {
+  for (const failure of failures) process.stderr.write("family bun_telemetry_test: " + failure + "\n");
+  process.exit(2); // the run failed: the caller must report a failure, not a verdict
+}
 writeFileSync(reportPath, JSON.stringify({ violations: out }, null, 2), "utf8");
 process.stderr.write("family bun_telemetry_test: " + out.length + " violation(s)\n");
 process.exit(0);
