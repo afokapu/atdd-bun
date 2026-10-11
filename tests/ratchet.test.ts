@@ -1,4 +1,9 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { concreteProfiles, defaultProfiles, enabledProfiles } from "../src/enforce";
 import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy } from "../src/ratchet";
 
 const finding = (overrides: Record<string, unknown> = {}) => ({
@@ -78,4 +83,42 @@ test("exact-base comparison classifies carried/new/resolved findings", () => {
     new: [findingFingerprint(introduced)],
     resolved: [findingFingerprint(resolved)],
   });
+});
+
+// Canonical all-profile reject-new activation. The governed base is the clean canonical main lineage commit; it has no
+// atdd-bun.yaml, so it runs the 14 implicit defaults (no optional flow) under no ratchet. The frozen candidate context
+// is exactly the 15 supported profiles, in registry order, with an identical reject-new ratchet.
+const BASE = "a13a6fec85186dfa81211d8005aad9461ba6f568";
+const PROFILES = ["traceability", "topology", "docs", "planner", "telemetry", "coder", "tester", "security", "architecture", "metrics", "runtime", "interlocking", "htmx", "design", "flow"];
+const PROFILE_LIST_DIGEST = "933b2570af48eecce1c01294d7a61b1c71f80949205cc1b8ec3af13516e4bd53";
+const repositoryRoot = resolve(import.meta.dir, "..");
+
+async function git(...args: string[]) {
+  const child = Bun.spawn({ cmd: ["git", ...args], cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" });
+  return { code: await child.exited, out: (await new Response(child.stdout).text()).trim() };
+}
+
+test("the supported registry order and newline-delimited digest are the frozen all-15 profile list", () => {
+  expect(concreteProfiles).toEqual(PROFILES as never);
+  expect(createHash("sha256").update(PROFILES.map(profile => `${profile}\n`).join("")).digest("hex")).toBe(PROFILE_LIST_DIGEST);
+});
+
+test("the exact governed base is an ancestor with implicit 14 defaults, no flow, and no ratchet configuration", async () => {
+  expect((await git("cat-file", "-t", BASE)).out).toBe("commit");
+  expect((await git("merge-base", "--is-ancestor", BASE, "HEAD")).code).toBe(0);
+  expect((await git("cat-file", "-e", `${BASE}:atdd-bun.yaml`)).code).not.toBe(0);
+  expect(defaultProfiles).toHaveLength(14);
+  expect(defaultProfiles).not.toContain("flow" as never);
+});
+
+test("the candidate declares the explicit ordered all-15 profiles and an identical reject-new ratchet as its only context", async () => {
+  const file = resolve(repositoryRoot, "atdd-bun.yaml");
+  expect(existsSync(file)).toBeTrue();
+  const config = Bun.YAML.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+  expect(config.profiles).toEqual(PROFILES);
+  expect(config.ratchet).toEqual({ mode: "reject-new", profiles: PROFILES });
+  expect(parseRatchetPolicy(config)?.mode).toBe("reject-new");
+  expect(await enabledProfiles(repositoryRoot)).toEqual(PROFILES as never);
+  expect(Object.keys(config).sort()).toEqual(["profiles", "ratchet"]);
+  expect(contextDigest(config, PROFILES)).toBe(contextDigest({ profiles: PROFILES }, PROFILES));
 });
