@@ -114,13 +114,13 @@ async function strictPushGate(root: string, candidate: string, range: string) {
   try {
     await checkoutCommit(root, candidateRoot, candidate, "strict pre-push candidate");
     const changed = await files(candidateRoot, ["diff", "--name-only", range]);
-    return validation(candidateRoot, changed, true);
+    return await validation(candidateRoot, changed, true);
   } catch (error) { return bad(`strict pre-push gate failed closed: ${String(error)}`); }
   finally { await git(root, ["worktree", "remove", "--force", candidateRoot]); await rm(candidateRoot, { recursive: true, force: true }); }
 }
 
 /** A brand-new remote branch is ratcheted against the one protected remote-tracking tip that is an exact ancestor of the candidate. */
-async function newBranchBase(root: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ base: string } | { error: string }> {
+async function protectedAncestors(root: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ ancestors: string[] } | { error: string }> {
   const listed = await git(root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes/"]);
   if (listed.code) return { error: `could not list protected branch tips for the new remote branch: ${listed.err || listed.out}` };
   const remotes = (await git(root, ["remote"])).out.split("\n").filter(Boolean), pushRemote = remote && remotes.includes(remote) ? remote : undefined;
@@ -130,9 +130,24 @@ async function newBranchBase(root: string, candidate: string, protectedBranches:
   });
   const ancestors = new Set<string>();
   for (const tip of new Set(tips)) if ((await git(root, ["merge-base", "--is-ancestor", tip, candidate])).code === 0) ancestors.add(tip);
-  if (!ancestors.size) return { error: "ratchet new remote branch requires a protected branch tip that is an exact ancestor of the pushed candidate; none found" };
-  if (ancestors.size > 1) return { error: `ratchet new remote branch base is ambiguous: ${ancestors.size} protected branch tips qualify with different commits` };
-  return { base: [...ancestors][0]! };
+  return { ancestors: [...ancestors] };
+}
+
+async function newBranchBase(root: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ base: string } | { error: string }> {
+  const found = await protectedAncestors(root, candidate, protectedBranches, remote);
+  if ("error" in found) return found;
+  if (!found.ancestors.length) return { error: "ratchet new remote branch requires a protected branch tip that is an exact ancestor of the pushed candidate; none found" };
+  if (found.ancestors.length > 1) return { error: `ratchet new remote branch base is ambiguous: ${found.ancestors.length} protected branch tips qualify with different commits` };
+  return { base: found.ancestors[0]! };
+}
+
+/** For an existing remote branch the protected ancestor tip also counts as carried: CI judges against the protected base. */
+async function existingBranchProtectedBase(root: string, candidate: string, remoteBase: string, protectedBranches: string[], remote: string | undefined): Promise<{ base: string | null } | { error: string }> {
+  const found = await protectedAncestors(root, candidate, protectedBranches, remote);
+  if ("error" in found) return found;
+  if (found.ancestors.length > 1) return { error: `ratchet existing remote branch protected base is ambiguous: ${found.ancestors.length} protected branch tips qualify with different commits` };
+  const tip = found.ancestors[0];
+  return { base: tip && tip !== remoteBase.toLowerCase() ? tip : null };
 }
 
 async function ratchetPushGate(root: string, remoteBase: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ ok: boolean; message: string } | null> {
@@ -140,7 +155,7 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
   if (!/^[0-9a-f]{40}$/i.test(candidate)) return bad("ratchet reject-new requires an exact local candidate commit");
   const resolvedCandidate = await git(root, ["rev-parse", "--verify", `${candidate}^{commit}`]);
   if (resolvedCandidate.code || resolvedCandidate.out.toLowerCase() !== candidate.toLowerCase()) return bad(`ratchet candidate ${candidate} is unavailable or not a full exact commit`);
-  const baseRoot = await mkdtemp(join(tmpdir(), "atdd-ratchet-push-base-")), candidateRoot = await mkdtemp(join(tmpdir(), "atdd-ratchet-push-candidate-"));
+  const baseRoot = await mkdtemp(join(tmpdir(), "atdd-ratchet-push-base-")), protectedRoot = await mkdtemp(join(tmpdir(), "atdd-ratchet-push-protected-")), candidateRoot = await mkdtemp(join(tmpdir(), "atdd-ratchet-push-candidate-"));
   try {
     await checkoutCommit(root, candidateRoot, candidate, "ratchet candidate");
     const candidateConfig = await configAt(candidateRoot);
@@ -148,6 +163,8 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
     try { policy = parseRatchetPolicy(candidateConfig); }
     catch (error) { return bad(`ratchet pushed candidate policy is invalid: ${String(error)}`); }
     if (!policy || policy.mode !== "reject-new") return null;
+    let protectedBase: string | null = null;
+    if (!/^0+$/.test(remoteBase)) { const found = await existingBranchProtectedBase(root, candidate, remoteBase, protectedBranches, remote); if ("error" in found) return bad(found.error); protectedBase = found.base; }
     if (/^0+$/.test(remoteBase)) { const found = await newBranchBase(root, candidate, protectedBranches, remote); if ("error" in found) return bad(found.error); base = found.base; }
     if (!/^[0-9a-f]{40}$/i.test(base)) return bad("ratchet reject-new requires an exact non-zero remote commit base");
     const resolvedBase = await git(root, ["rev-parse", "--verify", `${base}^{commit}`]);
@@ -169,17 +186,27 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
     const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && (!basePolicyProfiles || basePolicyProfiles.join(",") === baseProfiles.join(",")) && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (policyProfiles.join(",") !== candidateProfiles.join(",") || (!activation && !unchanged)) return bad("ratchet remote base and pushed candidate profile/context differ");
     const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(directory, finding.file) }));
-    const [baseFindings, candidateFindings] = await Promise.all([
+    let protectedUsed: string | null = null;
+    if (protectedBase) {
+      await checkoutCommit(root, protectedRoot, protectedBase, "ratchet protected base");
+      const protectedConfig = await configAt(protectedRoot);
+      // Only a protected tip judged under the same profile/context as the candidate is comparable; otherwise the remote tip alone decides.
+      if (contextDigest(protectedConfig, candidateProfiles) === contextDigest(candidateConfig, candidateProfiles)) protectedUsed = protectedBase;
+    }
+    const [baseFindings, candidateFindings, protectedFindings] = await Promise.all([
       enforce({ root: baseRoot, profiles: candidateProfiles as any }),
       enforce({ root: candidateRoot, profiles: candidateProfiles as any }),
+      protectedUsed ? enforce({ root: protectedRoot, profiles: candidateProfiles as any }) : Promise.resolve([]),
     ]);
-    const delta = compareFindings(normalize(baseFindings, baseRoot), normalize(candidateFindings, candidateRoot));
-    return { ok: delta.new.length === 0, message: JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, candidate, profiles: candidateProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta }) };
+    const carriedBase = [...normalize(baseFindings, baseRoot), ...normalize(protectedFindings, protectedRoot)];
+    const delta = compareFindings(carriedBase, normalize(candidateFindings, candidateRoot));
+    return { ok: delta.new.length === 0, message: JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, ...(protectedUsed ? { protected_base: protectedUsed } : {}), candidate, profiles: candidateProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta }) };
   } catch (error) { return bad(`ratchet pre-push gate failed closed: ${String(error)}`); }
   finally {
     await git(root, ["worktree", "remove", "--force", baseRoot]);
+    await git(root, ["worktree", "remove", "--force", protectedRoot]);
     await git(root, ["worktree", "remove", "--force", candidateRoot]);
-    await Promise.all([rm(baseRoot, { recursive: true, force: true }), rm(candidateRoot, { recursive: true, force: true })]);
+    await Promise.all([rm(baseRoot, { recursive: true, force: true }), rm(protectedRoot, { recursive: true, force: true }), rm(candidateRoot, { recursive: true, force: true })]);
   }
 }
 
