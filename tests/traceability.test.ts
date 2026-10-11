@@ -98,6 +98,18 @@ test("station support", () => {});
 `);
     const mutant = await runImplementation("bun_ts_metrics_detector", { scanRoots: [root], excludes });
     expect(mutant.some(item => item.rule_id === "coder.bun.dead-code-reachability" && item.file.endsWith("e2e/support.ts"))).toBe(true);
+
+    // Paired mutant: a production module imported only by a test is still dead code.
+    await mkdir(join(root, "src"), { recursive: true });
+    await writeFile(join(root, "src", "domain.ts"), "export const domain = () => 1;\n");
+    await writeFile(smoke, `import { test } from "bun:test";
+import { trainContext } from "../support.ts";
+import { domain } from "../../src/domain.ts";
+test("station support", () => { trainContext(); domain(); });
+`);
+    const production = await runImplementation("bun_ts_metrics_detector", { scanRoots: [root], excludes });
+    const dead = production.filter(item => item.rule_id === "coder.bun.dead-code-reachability").map(item => item.file.slice(root.length + 1));
+    expect(dead).toEqual(["src/domain.ts"]);
   });
 });
 
@@ -146,6 +158,27 @@ export class JourneyRunner {
     ));
     const mutant = await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes });
     expect(mutant.some(item => item.evidence.includes("journey-runtime-transcription"))).toBe(true);
+
+    // Paired mutants: the helper must read its own parameter, and routing must use the helper's result.
+    const accepted = await readFile(journey, "utf8").then(text => text.replace(
+      "return { entrypoint: {}, continuations: [], terminals: [] };",
+      'return Bun.YAML.parse(readFileSync(path, "utf8"));',
+    ));
+    expect(accepted).toContain('readFileSync(path, "utf8")');
+    await writeFile(journey, accepted);
+    expect((await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes }))
+      .filter(item => item.rule_id === "coder.bun.journey-runner-boundary")).toEqual([]);
+
+    await writeFile(journey, accepted.replace('readFileSync(path, "utf8")', 'readFileSync("plan/fixed.yaml", "utf8")'));
+    const fixedPath = await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes });
+    expect(fixedPath.some(item => item.rule_id === "coder.bun.journey-runner-boundary")).toBe(true);
+
+    const routed = "const declared = declaration(this.journeyYamlPath);";
+    expect(accepted).toContain(routed);
+    await writeFile(journey, accepted.replace(routed, "const declared = hardcoded();\n    void declaration(this.journeyYamlPath);") +
+      'function hardcoded(): any { return { entrypoint: { interlocking_id: "a" }, continuations: [], terminals: [] }; }\n');
+    const hardcoded = await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes });
+    expect(hardcoded.some(item => item.rule_id === "coder.bun.journey-runner-boundary")).toBe(true);
   });
 });
 
@@ -171,6 +204,17 @@ test("Station Master proof accepts a caught single JourneyRunner assignment and 
     const config = { scanRoots: [root], excludes };
     expect(await runImplementation("bun_interlocking_coverage", config)).toEqual([]);
     expect(await runImplementation("bun_interlocking_infrastructure", config)).toEqual([]);
+
+    // Paired mutant: a catch that swallows the error lets the post-try code see an unassigned run.
+    const swallowed = caught.replace("        throw error;", "        // swallowed");
+    expect(swallowed).not.toBe(caught);
+    await writeFile(journey, source.replace(original, swallowed));
+    const swallowedFindings = [
+      ...await runImplementation("bun_interlocking_coverage", config),
+      ...await runImplementation("bun_interlocking_infrastructure", config),
+    ];
+    expect(swallowedFindings.length).toBeGreaterThan(0);
+    await writeFile(journey, source.replace(original, caught));
 
     // Paired mutant: the caught shape must still fail when the continuation is never followed.
     const accepted = await readFile(journey, "utf8");
