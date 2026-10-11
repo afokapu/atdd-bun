@@ -159,7 +159,7 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
     catch (error) { return bad(`ratchet remote base policy is invalid: ${String(error)}`); }
     let baseProfiles: string[], candidateProfiles: string[], policyProfiles: string[], basePolicyProfiles: string[] | null;
     try {
-      baseProfiles = exactProfiles(baseConfig, "ratchet remote base");
+      baseProfiles = baseConfig.profiles === undefined ? stable(await enabledProfiles(baseRoot)) : exactProfiles(baseConfig, "ratchet remote base");
       candidateProfiles = exactProfiles(candidateConfig, "ratchet pushed candidate");
       policyProfiles = exactProfiles({ profiles: policy.profiles }, "ratchet policy");
       basePolicyProfiles = basePolicy ? exactProfiles({ profiles: basePolicy.profiles }, "ratchet remote base policy") : null;
