@@ -10,10 +10,10 @@ const git = async (root: string, args: string[]) => { const child = Bun.spawn({ 
 async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); await writeFile(join(root, ".git", "info", "exclude"), "node_modules/\n"); await mkdir(join(root, "node_modules", "@afokapu"), { recursive: true }); await symlink(resolve(import.meta.dir, ".."), join(root, "node_modules", "@afokapu", "atdd-bun"), "dir"); return root; }
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
 
-async function worktreeLayout() {
+async function worktreeLayout(policyInFirstCommit = true) {
   const container = await mkdtemp(join(tmpdir(), "atdd-bun-layout-")), main = join(container, "repository");
   await mkdir(main); for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "worktree@test"], ["config", "user.name", "Worktree"]]) await git(main, args);
-  await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n");
+  if (policyInFirstCommit) await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n");
   await writeFile(join(main, "readme.md"), "init\n"); await git(main, ["add", "."]); await git(main, ["commit", "-qm", "init"]);
   return { container, main, worktrees: join(container, "worktrees", "repository") };
 }
@@ -288,6 +288,47 @@ test("worktree policy requires a main primary checkout and linked feature worktr
     await git(layout.main, ["merge", "--no-ff", "feature/x", "-m", "merge feature"]);
     expect((await finishWorktree(feature, true)).ok).toBeTrue();
     expect(existsSync(feature)).toBeFalse();
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish and status read worktree policy from the primary checkout, not a pre-policy linked worktree", async () => {
+  const layout = await worktreeLayout(false), old = join(layout.worktrees, "old"), dirty = join(layout.worktrees, "dirty"), unmerged = join(layout.worktrees, "unmerged"), outside = join(layout.container, "outside"), protectedTree = join(layout.worktrees, "protected");
+  try {
+    await mkdir(layout.worktrees, { recursive: true });
+    for (const [path, branch] of [[old, "old"], [dirty, "dirty"], [unmerged, "unmerged"], [outside, "outside"], [protectedTree, "release"]] as const) expect((await git(layout.main, ["worktree", "add", "-q", "-b", branch, path])).code).toBe(0);
+    await writeFile(join(layout.main, "atdd-bun.yaml"), "protected_branches: [release]\nworktrees:\n  enabled: true\n"); await git(layout.main, ["add", "."]); await git(layout.main, ["commit", "-qm", "policy"]);
+    expect(existsSync(join(old, "atdd-bun.yaml"))).toBeFalse();
+
+    // The policy lives only in the primary checkout's committed HEAD; the linked worktree's own tree predates it.
+    expect((await worktreeStatus(old)).message).toContain("worktree ");
+
+    await writeFile(join(unmerged, "unmerged.md"), "work\n"); await git(unmerged, ["add", "."]); await git(unmerged, ["commit", "-qm", "unmerged", "--no-verify"]);
+    await writeFile(join(dirty, "scratch.md"), "dirty\n");
+    expect((await finishWorktree(unmerged)).message).toContain("not merged");
+    expect((await finishWorktree(dirty)).message).toContain("dirty");
+    expect((await finishWorktree(outside)).message).toContain("finish must run from a linked worktree beneath");
+    expect((await finishWorktree(protectedTree)).message).toContain("non-protected");
+    expect((await finishWorktree(layout.main)).message).toContain("finish must run from a linked worktree beneath");
+    for (const path of [unmerged, dirty, outside, protectedTree]) expect(existsSync(path)).toBeTrue();
+
+    const result = await finishWorktree(old, true);
+    expect(result.message).toContain("removed merged worktree");
+    expect(result.ok).toBeTrue();
+    expect(existsSync(old)).toBeFalse();
+    expect((await git(layout.main, ["branch", "--list", "old"])).out.trim()).toBe("");
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish and status stay disabled when the primary checkout's committed HEAD lacks the worktree policy", async () => {
+  const layout = await worktreeLayout(false), old = join(layout.worktrees, "old");
+  try {
+    await mkdir(layout.worktrees, { recursive: true });
+    expect((await git(layout.main, ["worktree", "add", "-q", "-b", "old", old])).code).toBe(0);
+    await writeFile(join(layout.main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n"); // uncommitted
+    expect((await worktreeStatus(old)).ok).toBeFalse();
+    const refused = await finishWorktree(old);
+    expect(refused.ok).toBeFalse(); expect(refused.message).toContain("worktree policy is disabled");
+    expect(existsSync(old)).toBeTrue();
   } finally { await cleanup(layout.container); }
 }, 30_000);
 
