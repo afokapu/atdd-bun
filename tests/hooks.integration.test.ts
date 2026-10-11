@@ -197,6 +197,37 @@ test("pre-push reject-new compares the exact remote range and accepts carried-on
   } finally { await cleanup(root); }
 }, 30_000);
 
+test("pre-push chooses the ratchet from the pushed remote ref, not the local ref", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan", "orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "base with carried traceability finding", "--no-verify"]);
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    // Touching the file that carries the debt makes the strict gate see the carried finding.
+    await writeFile(join(root, "plan", "orders.yaml"), "# touched\nurn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "safe candidate", "--no-verify"]);
+    const candidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    for (const localRef of ["HEAD", candidate]) {
+      const accepted = await runHook("pre-push", root, [], `${localRef} ${candidate} refs/heads/x ${base}\n`);
+      expect(accepted.ok, accepted.message).toBeTrue();
+      expect(JSON.parse(accepted.message)).toMatchObject({ mode: "reject-new", base, candidate, carried: [expect.any(String)], new: [] });
+    }
+    await writeFile(join(root, "plan", "added.yaml"), "urn: wmbt:added:E001\nacceptances:\n  - identity: { urn: acc:added:E001-UNIT-001 }\n");
+    await git(root, ["add", "."]); await git(root, ["commit", "-qm", "new finding", "--no-verify"]);
+    const withNew = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    for (const localRef of ["HEAD", withNew]) {
+      const refused = await runHook("pre-push", root, [], `${localRef} ${withNew} refs/heads/x ${base}\n`);
+      expect(refused.ok, refused.message).toBeFalse(); expect(refused.message).toContain("new");
+    }
+    // Non-branch remote refs stay strict even when the local ref is a branch.
+    for (const localRef of ["HEAD", "refs/heads/feature"]) {
+      const tag = await runHook("pre-push", root, [], `${localRef} ${candidate} refs/tags/v1 ${base}\n`);
+      expect(tag.ok, tag.message).toBeFalse();
+    }
+  } finally { await cleanup(root); }
+}, 30_000);
+
 test("pre-push does not let a carried-only ratchet ref mask an ordinary failing ref", async () => {
   const root = await repo(); try {
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
