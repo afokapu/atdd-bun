@@ -33,7 +33,11 @@ try {
         stdio: ["ignore", "ignore", "inherit"],
       });
     } catch (error) {
-      failures.push(`member ${c} failed to run: ${error instanceof Error ? error.message.split("\n")[0] : String(error)}`);
+      const why = error instanceof Error ? error.message.split("\n")[0] : String(error);
+      // Keep the established wording for the crash-without-a-report case (tests/telemetry-review.test.ts #6).
+      let reported = true;
+      try { readFileSync(rep, "utf8"); } catch { reported = false; }
+      failures.push(reported ? `member ${c} failed to run: ${why}` : `member ${c} crashed without a violation report: ${why}`);
       continue;
     }
     try {
