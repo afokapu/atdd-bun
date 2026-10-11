@@ -34,14 +34,14 @@ const MEMBERS = {
   wrongShapeReport: `import { writeFileSync } from "node:fs"; writeFileSync(process.env.ATDD_VIOLATIONS_REPORT, JSON.stringify({ findings: [] }));\n`,
 };
 
-async function runWrapper(family: string, members: Record<string, string>) {
+async function runWrapper(family: string, members: Record<string, string>, scratchTmp?: string) {
   const dir = await mkdtemp(join(tmpdir(), "atdd-wrapper-"));
   try {
     await mkdir(join(dir, "checks"));
     copyFileSync(join(detectors, family, "detect.mjs"), join(dir, "detect.mjs"));
     for (const [name, source] of Object.entries(members)) await writeFile(join(dir, "checks", `${name}.mjs`), source);
     const report = join(dir, "report.json");
-    const child = Bun.spawn({ cmd: [bun, join(dir, "detect.mjs")], cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ATDD_VIOLATIONS_REPORT: report } });
+    const child = Bun.spawn({ cmd: [bun, join(dir, "detect.mjs")], cwd: dir, stdout: "pipe", stderr: "pipe", env: { ...process.env, ATDD_VIOLATIONS_REPORT: report, ...(scratchTmp ? { TMPDIR: scratchTmp } : {}) } });
     const exitCode = await child.exited;
     return { exitCode, stderr: await new Response(child.stderr).text(), report: existsSync(report) ? readFileSync(report, "utf8") : null };
   } finally { await rm(dir, { recursive: true, force: true }); }
@@ -55,6 +55,15 @@ for (const family of AFFECTED) {
     const found = await runWrapper(family, { a_clean: MEMBERS.clean, b_finding: MEMBERS.finding });
     expect(found.exitCode).toBe(0);
     expect(JSON.parse(found.report!).violations).toHaveLength(1);
+  });
+
+  test(`${family}: a run, successful or failed, leaves no temp directory behind`, async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "atdd-wrapper-tmp-"));
+    try {
+      await runWrapper(family, { a_clean: MEMBERS.clean }, scratch);
+      await runWrapper(family, { a_clean: MEMBERS.clean, b_bad: MEMBERS.crash }, scratch);
+      expect(readdirSync(scratch)).toEqual([]);
+    } finally { await rm(scratch, { recursive: true, force: true }); }
   });
 
   for (const [label, source] of [["crashes", MEMBERS.crash], ["exits non-zero even after writing a report", MEMBERS.nonZeroAfterReport], ["exits cleanly without a report", MEMBERS.noReport], ["writes an unparseable report", MEMBERS.garbageReport], ["writes a report without a violations array", MEMBERS.wrongShapeReport]] as const) {
