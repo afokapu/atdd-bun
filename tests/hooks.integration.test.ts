@@ -4,7 +4,8 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { concreteProfiles } from "../src/enforce";
-import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
+import { finishWorktree, hookEvents, hooksStatus, installHooks, policy, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
+import { activationContextDigest, contextDigest } from "../src/ratchet";
 
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()), err: (await new Response(child.stderr).text()) }; };
 async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); await writeFile(join(root, ".git", "info", "exclude"), "node_modules/\n"); await mkdir(join(root, "node_modules", "@afokapu"), { recursive: true }); await symlink(resolve(import.meta.dir, ".."), join(root, "node_modules", "@afokapu", "atdd-bun"), "dir"); return root; }
@@ -373,6 +374,44 @@ test("the generated journey view is exempt from the size caps but never from the
     expect(generated.message).not.toContain("planner.docs.journey-view-current");
   } finally { await cleanup(root); }
 }, 60_000);
+
+// The source repo's own atdd-bun.yaml is the system under test: its worktrees key must enable the linked-worktree
+// policy for the real layout (primary ~/Github/<repo> on main, seats beneath ~/Github/.worktrees/<repo>).
+const repoRoot = resolve(import.meta.dir, "..");
+const frozenContext = "372404875390a2ec884398af38fde20792029bfb6412885dd5f7b37028a0daaf";
+
+test("the source repo enables the linked-worktree policy with the .worktrees/{repo} layout and primary main", async () => {
+  const { worktrees } = await policy(repoRoot);
+  expect(worktrees).toEqual({ enabled: true, root: "../.worktrees/{repo}", primary_directory: ".", primary_branch: "main", require_linked_worktree: true });
+});
+
+test("the configured layout accepts a seat worktree and rejects commits from the primary checkout and outside the root", async () => {
+  const container = await mkdtemp(join(tmpdir(), "atdd-bun-enable-worktrees-")), primary = join(container, "atdd-bun"), seat = join(container, ".worktrees", "atdd-bun", "seat"), outside = join(container, "elsewhere");
+  try {
+    await mkdir(primary);
+    for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "wt@test"], ["config", "user.name", "Wt"]]) await git(primary, args);
+    // Only the real worktrees key is carried over (plus an unrelated protected branch, so main's own protection does not
+    // mask the worktree decision) and the ratchet gate stays out of the way.
+    const configured = (Bun.YAML.parse(await readFile(join(repoRoot, "atdd-bun.yaml"), "utf8")) as Record<string, unknown>).worktrees;
+    await writeFile(join(primary, "atdd-bun.yaml"), configured === undefined ? "protected_branches: [release]\n" : Bun.YAML.stringify({ protected_branches: ["release"], worktrees: configured }));
+    await writeFile(join(primary, "readme.md"), "init\n"); await git(primary, ["add", "."]); await git(primary, ["commit", "-qm", "init", "--no-verify"]);
+    expect((await git(primary, ["worktree", "add", "-q", "-b", "seat", seat])).code).toBe(0);
+    expect((await git(primary, ["worktree", "add", "-q", "-b", "elsewhere", outside])).code).toBe(0);
+    expect((await runHook("pre-commit", seat)).ok).toBeTrue();
+    const direct = await runHook("pre-commit", primary);
+    expect(direct.ok).toBeFalse(); expect(direct.message).toContain("linked worktree");
+    const stray = await runHook("pre-commit", outside);
+    expect(stray.ok).toBeFalse(); expect(stray.message).toContain("outside required root");
+  } finally { await rm(container, { recursive: true, force: true }); }
+}, 30_000);
+
+test("the worktrees key leaves the frozen all-profile ratchet context digest unchanged", async () => {
+  const config = Bun.YAML.parse(await readFile(join(repoRoot, "atdd-bun.yaml"), "utf8")) as Record<string, unknown>;
+  expect(contextDigest(config, config.profiles as string[])).toBe(frozenContext);
+  const { worktrees: _worktrees, ...withoutWorktrees } = config;
+  expect(activationContextDigest(config)).toBe(activationContextDigest(withoutWorktrees));
+  expect(Object.keys(config).filter(key => key !== "worktrees").sort()).toEqual(["profiles", "ratchet"]);
+});
 
 const zeroSha = "0".repeat(40);
 const debt = "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n";

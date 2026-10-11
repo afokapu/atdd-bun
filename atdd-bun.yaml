@@ -2,3 +2,9 @@ profiles: [traceability, topology, docs, planner, telemetry, coder, tester, secu
 ratchet:
   mode: reject-new
   profiles: ["traceability","topology","docs","planner","telemetry","coder","tester","security","architecture","metrics","runtime","interlocking","htmx","design","flow"]
+worktrees:
+  enabled: true
+  root: "../.worktrees/{repo}"
+  primary_directory: "."
+  primary_branch: main
+  require_linked_worktree: true

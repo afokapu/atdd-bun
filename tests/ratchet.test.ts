@@ -119,6 +119,7 @@ test("the candidate declares the explicit ordered all-15 profiles and an identic
   expect(config.ratchet).toEqual({ mode: "reject-new", profiles: PROFILES });
   expect(parseRatchetPolicy(config)?.mode).toBe("reject-new");
   expect(await enabledProfiles(repositoryRoot)).toEqual(PROFILES as never);
-  expect(Object.keys(config).sort()).toEqual(["profiles", "ratchet"]);
+  // `worktrees` is finding-inert and excluded from the context digest, so it is the only key allowed beside the context.
+  expect(Object.keys(config).sort()).toEqual(["profiles", "ratchet", "worktrees"]);
   expect(contextDigest(config, PROFILES)).toBe(contextDigest({ profiles: PROFILES }, PROFILES));
 });
