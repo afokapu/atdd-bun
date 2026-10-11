@@ -6,6 +6,17 @@ import { policy } from "./hooks";
 const root = resolve(import.meta.dir, "..");
 const template = join(root, "templates/github/atdd-bun.yml");
 const version = (await Bun.file(join(root, "package.json")).json() as { version: string }).version;
+/** A repository that depends on Playwright needs its browser binary on the runner, or `bun test` fails with a missing
+ * executable. The step is emitted only for a direct dependency; an unreadable package.json yields no step. */
+async function usesPlaywright(repo: string) {
+  const path = join(repo, "package.json");
+  if (!existsSync(path)) return false;
+  try {
+    const manifest = JSON.parse(await readFile(path, "utf8")) as { dependencies?: unknown; devDependencies?: unknown } | null;
+    return [manifest?.dependencies, manifest?.devDependencies].some(group => group !== null && typeof group === "object" && ["@playwright/test", "playwright"].some(name => Object.hasOwn(group, name)));
+  } catch { return false; }
+}
+const playwrightStep = "      - run: ./node_modules/.bin/playwright install --with-deps chromium\n";
 /** The workflow for this repository: pushes to its protected branches run the post-merge checks, so a repository
  * whose base branch is not main or master is covered too. The integrity check compares against this same rendering.
  * Each branch is written as a JSON string, a YAML scalar a branch name can never break out of. */
@@ -16,7 +27,7 @@ export async function renderWorkflow(repo = process.cwd()) {
     const config = Bun.YAML.parse(await readFile(configPath, "utf8"));
     rejectNew = Boolean(config && typeof config === "object" && !Array.isArray(config) && (config as { ratchet?: { mode?: unknown } }).ratchet?.mode === "reject-new");
   } catch { /* policy(repo) below gives its existing parse diagnostic */ }
-  return (await readFile(template, "utf8")).replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", ")).replace("{{ENFORCEMENT}}", rejectNew ? 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles' : "bun run atdd-bun all");
+  return (await readFile(template, "utf8")).replace("{{PLAYWRIGHT}}\n", await usesPlaywright(repo) ? playwrightStep : "").replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", ")).replace("{{ENFORCEMENT}}", rejectNew ? 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles' : "bun run atdd-bun all");
 }
 const githubPackagesRegistry = /^\s*@[\w.-]+:registry\s*=\s*https:\/\/npm\.pkg\.github\.com\/?\s*$/im;
 const githubPackagesAuth = /^\s*\/\/npm\.pkg\.github\.com\/:_authToken\s*=\s*(.*?)\s*$/gim;

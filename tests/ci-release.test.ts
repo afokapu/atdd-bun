@@ -259,3 +259,22 @@ test("release check is local, deterministic, and validates SemVer, intent, and r
   const root = await mkdtemp(join(tmpdir(), "atdd-release-")); const git = async (...args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); await child.exited; };
   try { await git("init", "-q"); await git("config", "user.email", "release@test"); await git("config", "user.name", "Release"); await writeFile(join(root, "package.json"), '{"version":"1.0.1"}\n'); await writeFile(join(root, "atdd-bun.yaml"), "release:\n  enabled: true\n  require_release_intent: true\n"); await mkdir(join(root, ".changeset")); await writeFile(join(root, ".changeset/decision.md"), "patch\n"); await git("add", "."); await git("commit", "-qm", "release"); await git("tag", "v1.0.0"); expect((await releaseCheck(root)).ok).toBeTrue(); await writeFile(join(root, "package.json"), '{"version":"broken"}\n'); expect((await releaseCheck(root)).ok).toBeFalse(); await writeFile(join(root, "package.json"), '{"version":"1.0.0"}\n'); expect((await releaseCheck(root)).ok).toBeFalse(); await writeFile(join(root, ".changeset/decision.md"), "invalid\n"); expect((await releaseCheck(root)).ok).toBeFalse(); } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test("generated CI installs Playwright Chromium after the frozen install only when the repository depends on Playwright", async () => {
+  const render = async (manifest: object | null) => {
+    const root = await mkdtemp(join(tmpdir(), "atdd-ci-playwright-"));
+    try { if (manifest !== null) await writeFile(join(root, "package.json"), JSON.stringify(manifest)); expect((await ciInit(root)).ok).toBeTrue(); return await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8"); } finally { await rm(root, { recursive: true, force: true }); }
+  };
+  const install = "run: ./node_modules/.bin/playwright install --with-deps chromium\n";
+  for (const manifest of [{ devDependencies: { "@playwright/test": "^1.63.0" } }, { dependencies: { playwright: "^1.63.0" } }]) {
+    const workflow = await render(manifest);
+    expect(workflow.match(/playwright install/g)).toHaveLength(1);
+    expect(workflow.indexOf("bun install --frozen-lockfile")).toBeLessThan(workflow.indexOf(install));
+    expect(workflow.indexOf(install)).toBeLessThan(workflow.indexOf("run: bun test"));
+    expect(workflow).toContain("persist-credentials: false");
+    expect((Bun.YAML.parse(workflow) as { permissions: unknown }).permissions).toEqual({ contents: "read", packages: "read" });
+  }
+  const unchanged = await render(null);
+  for (const manifest of [{ devDependencies: { "@axe-core/playwright": "^4.13.0" } }, { dependencies: { typescript: "6.0.3" } }]) expect(await render(manifest)).toBe(unchanged);
+  expect(unchanged).not.toContain("playwright");
+});
