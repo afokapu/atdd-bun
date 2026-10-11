@@ -45,6 +45,22 @@ test("activation permits only a strict profile expansion and keeps every non-pro
   expect(activationContextDigest(base)).not.toBe(activationContextDigest({ ...base, profiles: ["flow", "traceability"], topology: { plan_root: "contracts" } }));
 });
 
+test("finding-inert worktrees policy is excluded from both context digests while every other key still participates", () => {
+  const base = { profiles: ["flow", "traceability"], topology: { plan_root: "plan" }, max_staged_files: 20, protected_branches: ["main"], ratchet: { mode: "reject-new", profiles: ["flow", "traceability"] } };
+  const profiles = ["flow", "traceability"];
+  // Pinned v1 digests for a config without `worktrees`: existing frozen contexts must stay byte-identical.
+  expect(contextDigest(base, profiles)).toBe("158dfae64ea298051a8e903268a90a06a0d206c344be0b26bd9d4672c0bf8bd8");
+  expect(activationContextDigest(base)).toBe("5690c1aefa82050f69eb3b395e52cb448eb182d9ebfca0df2789b6b8c32d1b3a");
+  for (const worktrees of [{ enabled: true }, { enabled: true, require_linked_worktree: true, root: "../.worktrees" }, { enabled: false }]) {
+    expect(contextDigest({ ...base, worktrees }, profiles)).toBe(contextDigest(base, profiles));
+    expect(activationContextDigest({ ...base, worktrees })).toBe(activationContextDigest(base));
+  }
+  for (const changed of [{ topology: { plan_root: "contracts" } }, { max_staged_files: 5 }, { protected_branches: ["develop"] }, { require_traceability: false }]) {
+    expect(contextDigest({ ...base, ...changed, worktrees: { enabled: true } }, profiles)).not.toBe(contextDigest(base, profiles));
+    expect(activationContextDigest({ ...base, ...changed, worktrees: { enabled: true } })).not.toBe(activationContextDigest(base));
+  }
+});
+
 test("explicit consumer policy distinguishes report-only from reject-new and never stores a baseline", () => {
   expect(parseRatchetPolicy({ ratchet: { mode: "report", profiles: ["coder"] } })).toEqual({ mode: "report", profiles: ["coder"] });
   expect(parseRatchetPolicy({ ratchet: { mode: "reject-new", profiles: ["coder"] } })).toEqual({ mode: "reject-new", profiles: ["coder"] });

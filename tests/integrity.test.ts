@@ -78,6 +78,8 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
     expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
+    // Excluding `worktrees` from ratchet context digests must not hide its loosening from integrity.
+    expect(loosenedPolicy({ worktrees: { enabled: true, require_linked_worktree: true } } as never, { worktrees: { enabled: false, require_linked_worktree: false } } as never)).toEqual(["worktrees.enabled true → false", "worktrees.require_linked_worktree true → false"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 }, 30_000);
 
