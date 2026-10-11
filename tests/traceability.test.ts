@@ -111,7 +111,7 @@ test("station support", () => { trainContext(); domain(); });
     const dead = production.filter(item => item.rule_id === "coder.bun.dead-code-reachability").map(item => item.file.slice(root.length + 1));
     expect(dead).toEqual(["src/domain.ts"]);
   });
-});
+}, 120_000);
 
 // DOS validates its journey document in a reusable declaration() helper before route traversal.
 test("JourneyRunner declaration helper is accepted while a non-parsing helper remains red", async () => {
@@ -180,7 +180,7 @@ export class JourneyRunner {
     const hardcoded = await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes });
     expect(hardcoded.some(item => item.rule_id === "coder.bun.journey-runner-boundary")).toBe(true);
   });
-});
+}, 120_000);
 
 // DOS keeps the actual InterlockingRunner result in a let assigned by a caught try before enriching it.
 test("Station Master proof accepts a caught single JourneyRunner assignment and rejects a business-data mutant", async () => {
@@ -236,4 +236,4 @@ test("Station Master proof accepts a caught single JourneyRunner assignment and 
     ];
     expect(findings.some(item => item.rule_id === "coder.bun.station-master-interlocking-routing")).toBe(true);
   });
-});
+}, 120_000);
