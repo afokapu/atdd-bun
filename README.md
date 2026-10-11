@@ -165,7 +165,7 @@ When an existing exact main has debt under a smaller explicit profile list, a se
 bun run atdd-bun --profile flow,traceability --ratchet --ratchet-activate-profiles --base <40-character-reviewed-main-sha>
 ```
 
-This is an activation-only exception to the ordinary equal-context rule, not a baseline migration. It requires an explicit candidate `profiles:` list, an explicit base list that is a strict subset of it, and identical non-profile policy/configuration. A removal, implicit/default-list adoption, unrelated configuration change, dirty tree, unavailable/non-ancestor base, or omission of `--ratchet-activate-profiles` fails closed. The command stores no activation state or accepted findings; after the governed expansion lands, use ordinary `--ratchet` with exact matching context. Strict non-ratchet enforcement remains unchanged.
+This is an activation-only exception to the ordinary equal-context rule, not a baseline migration. It requires an explicit candidate `profiles:` list, a base whose effective profile set (its explicit list, or the implicit default set when it has none) is a strict subset of it, and identical non-profile policy/configuration. A removal, implicit/default-list candidate adoption, unrelated configuration change, dirty tree, unavailable/non-ancestor base, or omission of `--ratchet-activate-profiles` fails closed. The command stores no activation state or accepted findings; after the governed expansion lands, use ordinary `--ratchet` with exact matching context. Strict non-ratchet enforcement remains unchanged.
 
 ### Generated exact-base commit gate
 

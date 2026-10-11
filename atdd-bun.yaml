@@ -1,0 +1,4 @@
+profiles: [traceability, topology, docs, planner, telemetry, coder, tester, security, architecture, metrics, runtime, interlocking, htmx, design, flow]
+ratchet:
+  mode: reject-new
+  profiles: ["traceability","topology","docs","planner","telemetry","coder","tester","security","architecture","metrics","runtime","interlocking","htmx","design","flow"]
