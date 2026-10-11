@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { concreteProfiles } from "../src/enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, policy, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 import { activationContextDigest, contextDigest } from "../src/ratchet";
 
@@ -10,10 +11,10 @@ const git = async (root: string, args: string[]) => { const child = Bun.spawn({ 
 async function repo(branch = "feature") { const root = await mkdtemp(join(tmpdir(), "atdd-bun-hooks-")); for (const args of [["init", "-q", "-b", branch], ["config", "user.email", "hook@test"], ["config", "user.name", "Hook"]]) await git(root, args); await writeFile(join(root, "readme.md"), "init\n"); await git(root, ["add", "."]); await git(root, ["commit", "-qm", "init"]); await writeFile(join(root, ".git", "info", "exclude"), "node_modules/\n"); await mkdir(join(root, "node_modules", "@afokapu"), { recursive: true }); await symlink(resolve(import.meta.dir, ".."), join(root, "node_modules", "@afokapu", "atdd-bun"), "dir"); return root; }
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
 
-async function worktreeLayout() {
+async function worktreeLayout(policyInFirstCommit = true) {
   const container = await mkdtemp(join(tmpdir(), "atdd-bun-layout-")), main = join(container, "repository");
   await mkdir(main); for (const args of [["init", "-q", "-b", "main"], ["config", "user.email", "worktree@test"], ["config", "user.name", "Worktree"]]) await git(main, args);
-  await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n");
+  if (policyInFirstCommit) await writeFile(join(main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n");
   await writeFile(join(main, "readme.md"), "init\n"); await git(main, ["add", "."]); await git(main, ["commit", "-qm", "init"]);
   return { container, main, worktrees: join(container, "worktrees", "repository") };
 }
@@ -291,6 +292,47 @@ test("worktree policy requires a main primary checkout and linked feature worktr
   } finally { await cleanup(layout.container); }
 }, 30_000);
 
+test("finish and status read worktree policy from the primary checkout, not a pre-policy linked worktree", async () => {
+  const layout = await worktreeLayout(false), old = join(layout.worktrees, "old"), dirty = join(layout.worktrees, "dirty"), unmerged = join(layout.worktrees, "unmerged"), outside = join(layout.container, "outside"), protectedTree = join(layout.worktrees, "protected");
+  try {
+    await mkdir(layout.worktrees, { recursive: true });
+    for (const [path, branch] of [[old, "old"], [dirty, "dirty"], [unmerged, "unmerged"], [outside, "outside"], [protectedTree, "release"]] as const) expect((await git(layout.main, ["worktree", "add", "-q", "-b", branch, path])).code).toBe(0);
+    await writeFile(join(layout.main, "atdd-bun.yaml"), "protected_branches: [release]\nworktrees:\n  enabled: true\n"); await git(layout.main, ["add", "."]); await git(layout.main, ["commit", "-qm", "policy"]);
+    expect(existsSync(join(old, "atdd-bun.yaml"))).toBeFalse();
+
+    // The policy lives only in the primary checkout's committed HEAD; the linked worktree's own tree predates it.
+    expect((await worktreeStatus(old)).message).toContain("worktree ");
+
+    await writeFile(join(unmerged, "unmerged.md"), "work\n"); await git(unmerged, ["add", "."]); await git(unmerged, ["commit", "-qm", "unmerged", "--no-verify"]);
+    await writeFile(join(dirty, "scratch.md"), "dirty\n");
+    expect((await finishWorktree(unmerged)).message).toContain("not merged");
+    expect((await finishWorktree(dirty)).message).toContain("dirty");
+    expect((await finishWorktree(outside)).message).toContain("finish must run from a linked worktree beneath");
+    expect((await finishWorktree(protectedTree)).message).toContain("non-protected");
+    expect((await finishWorktree(layout.main)).message).toContain("finish must run from a linked worktree beneath");
+    for (const path of [unmerged, dirty, outside, protectedTree]) expect(existsSync(path)).toBeTrue();
+
+    const result = await finishWorktree(old, true);
+    expect(result.message).toContain("removed merged worktree");
+    expect(result.ok).toBeTrue();
+    expect(existsSync(old)).toBeFalse();
+    expect((await git(layout.main, ["branch", "--list", "old"])).out.trim()).toBe("");
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish and status stay disabled when the primary checkout's committed HEAD lacks the worktree policy", async () => {
+  const layout = await worktreeLayout(false), old = join(layout.worktrees, "old");
+  try {
+    await mkdir(layout.worktrees, { recursive: true });
+    expect((await git(layout.main, ["worktree", "add", "-q", "-b", "old", old])).code).toBe(0);
+    await writeFile(join(layout.main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n"); // uncommitted
+    expect((await worktreeStatus(old)).ok).toBeFalse();
+    const refused = await finishWorktree(old);
+    expect(refused.ok).toBeFalse(); expect(refused.message).toContain("worktree policy is disabled");
+    expect(existsSync(old)).toBeTrue();
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
 test("the line cap counts a moved file by the edits it carries, not by its whole body twice", async () => {
   const root = await repo(); try {
     await installHooks(root);
@@ -370,3 +412,87 @@ test("the worktrees key leaves the frozen all-profile ratchet context digest unc
   expect(activationContextDigest(config)).toBe(activationContextDigest(withoutWorktrees));
   expect(Object.keys(config).filter(key => key !== "worktrees").sort()).toEqual(["profiles", "ratchet"]);
 });
+
+const zeroSha = "0".repeat(40);
+const debt = "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n";
+const rejectNew = (profiles = "flow, traceability", extra = "") => `profiles: [${profiles}]\nratchet: { mode: reject-new, profiles: [${profiles.split(", ").join(", ")}] }\n${extra}`;
+const commitAll = async (root: string, message: string) => { await git(root, ["add", "-A"]); await git(root, ["commit", "-qm", message, "--no-verify"]); return (await git(root, ["rev-parse", "HEAD"])).out.trim(); };
+const trackRemote = (root: string, name: string, sha: string) => git(root, ["update-ref", `refs/remotes/${name}`, sha]);
+
+async function ratchetedMain() {
+  const root = await repo();
+  await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+  const base = await commitAll(root, "protected tip with carried debt"); await trackRemote(root, "origin/main", base);
+  return { root, base };
+}
+
+test("pre-push ratchets a new remote branch against the one protected tip it descends from", async () => {
+  const { root, base } = await ratchetedMain(); try {
+    await writeFile(join(root, "readme.md"), "safe\n"); const safe = await commitAll(root, "safe candidate");
+    const accepted = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${safe} refs/heads/feature ${zeroSha}\n`);
+    expect(accepted.ok, accepted.message).toBeTrue();
+    expect(JSON.parse(accepted.message)).toMatchObject({ mode: "reject-new", base, candidate: safe, carried: [expect.any(String)], new: [] });
+    await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const bad = await commitAll(root, "new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${bad} refs/heads/feature ${zeroSha}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ base, new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-push new-branch base fails closed with no, non-ancestor, or ambiguous protected tips", async () => {
+  const { root, base } = await ratchetedMain(); try {
+    await git(root, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    await writeFile(join(root, "readme.md"), "safe\n"); const safe = await commitAll(root, "safe candidate");
+    const push = `refs/heads/feature ${safe} refs/heads/feature ${zeroSha}\n`;
+    const none = await runHook("pre-push", root, ["origin"], push);
+    expect(none.ok).toBeFalse(); expect(none.message).toContain("protected branch tip");
+    await git(root, ["checkout", "-q", "-b", "unrelated", "HEAD~2"]); await writeFile(join(root, "other.md"), "x\n"); const other = await commitAll(root, "unrelated"); await git(root, ["checkout", "-q", "feature"]);
+    await trackRemote(root, "origin/main", other);
+    const unrelated = await runHook("pre-push", root, ["origin"], push);
+    expect(unrelated.ok).toBeFalse(); expect(unrelated.message).toContain("protected branch tip");
+    await trackRemote(root, "origin/main", base); await trackRemote(root, "origin/master", base);
+    expect((await runHook("pre-push", root, ["origin"], push)).ok).toBeTrue();
+    await trackRemote(root, "origin/master", (await git(root, ["rev-parse", "HEAD~2"])).out.trim());
+    const ambiguous = await runHook("pre-push", root, ["origin"], push);
+    expect(ambiguous.ok).toBeFalse(); expect(ambiguous.message).toContain("ambiguous");
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-push accepts one-time strict profile activation with identical context and rejects every other drift", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\n"); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    const base = await commitAll(root, "six-profile style base");
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); const activated = await commitAll(root, "activate");
+    const existing = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${activated} refs/heads/feature ${base}\n`);
+    expect(existing.ok, existing.message).toBeTrue();
+    expect(JSON.parse(existing.message)).toMatchObject({ base, candidate: activated, profiles: ["flow", "traceability"], new: [] });
+    await trackRemote(root, "origin/main", base);
+    const created = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${activated} refs/heads/feature ${zeroSha}\n`);
+    expect(created.ok, created.message).toBeTrue(); expect(JSON.parse(created.message)).toMatchObject({ base, new: [] });
+
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("flow, traceability", "topology: { plan_root: contracts }\n")); const drift = await commitAll(root, "activation with context drift");
+    expect((await runHook("pre-push", root, ["origin"], `refs/heads/feature ${drift} refs/heads/feature ${base}\n`)).message).toContain("profile/context differ");
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability")); const swapped = await commitAll(root, "non-monotonic swap");
+    expect((await runHook("pre-push", root, ["origin"], `refs/heads/feature ${swapped} refs/heads/feature ${base}\n`)).message).toContain("profile/context differ");
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const withNew = await commitAll(root, "activation plus new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${withNew} refs/heads/feature ${base}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 90_000);
+
+test("pre-push activation accepts an implicit-default base and still rejects new findings and context drift", async () => {
+  const root = await repo(); try {
+    const all = `[${concreteProfiles.join(", ")}]`, policy = (extra = "") => `profiles: ${all}\nratchet: { mode: reject-new, profiles: ${all} }\n${extra}`;
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    const base = await commitAll(root, "implicit default base with carried debt");
+    await writeFile(join(root, "atdd-bun.yaml"), policy()); const activated = await commitAll(root, "explicit full activation");
+    const accepted = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${activated} refs/heads/feature ${base}\n`);
+    expect(accepted.ok, accepted.message).toBeTrue();
+    expect(JSON.parse(accepted.message)).toMatchObject({ base, candidate: activated, new: [] });
+    expect(JSON.parse(accepted.message).carried.length).toBeGreaterThan(0);
+    await writeFile(join(root, "atdd-bun.yaml"), policy("topology: { plan_root: contracts }\n")); const drift = await commitAll(root, "implicit base activation with context drift");
+    expect((await runHook("pre-push", root, ["origin"], `refs/heads/feature ${drift} refs/heads/feature ${base}\n`)).message).toContain("profile/context differ");
+    await writeFile(join(root, "atdd-bun.yaml"), policy()); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const withNew = await commitAll(root, "implicit activation plus new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${withNew} refs/heads/feature ${base}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message).new.length).toBeGreaterThan(0);
+  } finally { await cleanup(root); }
+}, 240_000);
