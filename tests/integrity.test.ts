@@ -67,6 +67,8 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
   const root = await consumer();
   try {
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 300\n");
+    // This policy has no reject-new ratchet, so its generated workflow is the strict rendering.
+    expect((await (await import("../src/ci")).ciInit(root, true)).ok).toBeTrue();
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
     expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
