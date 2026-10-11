@@ -1,3 +1,4 @@
+// URN: test:atdd-bun:detector-wrapper-fail-closed
 import { expect, test } from "bun:test";
 import { copyFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
