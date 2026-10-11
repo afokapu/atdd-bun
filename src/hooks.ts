@@ -131,7 +131,7 @@ async function protectedRemoteTips(root: string, protectedBranches: string[], re
   return { tips: [...new Set(tips)] };
 }
 
-/** Commits already on the push remote do not count: protected tips plus every remote-tracking tip whose branch the remote still advertises (one ls-remote per push). Stale tracking refs and local branches never exempt; an unreadable remote falls back to protected tips only. */
+/** Commits already on the push remote do not count: protected tips plus the SHAs the remote itself advertises for refs/heads/* (one ls-remote per push) whose commit exists locally. Local tracking SHAs, stale refs and local branches never exempt; an unreadable remote falls back to protected tips only. */
 async function countExclusionTips(root: string, protectedBranches: string[], remote: string | undefined): Promise<{ tips: string[] } | { error: string }> {
   const protectedTips = await protectedRemoteTips(root, protectedBranches, remote);
   if ("error" in protectedTips) return protectedTips;
@@ -139,14 +139,9 @@ async function countExclusionTips(root: string, protectedBranches: string[], rem
   if (!remote || !remotes.includes(remote)) return protectedTips;
   const advertised = await git(root, ["ls-remote", "--heads", remote]);
   if (advertised.code) return protectedTips;
-  const live = new Set(advertised.out.split("\n").filter(Boolean).map(row => row.split(/\s+/)[1]));
-  const listed = await git(root, ["for-each-ref", "--format=%(refname) %(objectname)", `refs/remotes/${remote}/`]);
-  if (listed.code) return protectedTips;
-  const prefix = `refs/remotes/${remote}/`, tips = listed.out.split("\n").filter(Boolean).flatMap(row => {
-    const [ref, sha] = row.split(" "), name = ref!.slice(prefix.length);
-    return name && name !== "HEAD" && live.has(`refs/heads/${name}`) && /^[0-9a-f]{40}$/i.test(sha ?? "") ? [sha!.toLowerCase()] : [];
-  });
-  return { tips: [...new Set([...protectedTips.tips, ...tips])] };
+  const shas = [...new Set(advertised.out.split("\n").filter(Boolean).flatMap(row => { const [sha, ref] = row.split(/\s+/); return ref?.startsWith("refs/heads/") && /^[0-9a-f]{40}$/i.test(sha ?? "") ? [sha!.toLowerCase()] : []; }))];
+  const present = (await Promise.all(shas.map(async sha => (await git(root, ["cat-file", "-e", `${sha}^{commit}`])).code ? [] : [sha]))).flat();
+  return { tips: [...new Set([...protectedTips.tips, ...present])] };
 }
 
 /** A brand-new remote branch is ratcheted against the one protected remote-tracking tip that is an exact ancestor of the candidate. */
