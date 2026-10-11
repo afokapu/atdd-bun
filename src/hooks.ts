@@ -118,7 +118,24 @@ async function strictPushGate(root: string, candidate: string, range: string) {
   finally { await git(root, ["worktree", "remove", "--force", candidateRoot]); await rm(candidateRoot, { recursive: true, force: true }); }
 }
 
-async function ratchetPushGate(root: string, base: string, candidate: string): Promise<{ ok: boolean; message: string } | null> {
+/** A brand-new remote branch is ratcheted against the one protected remote-tracking tip that is an exact ancestor of the candidate. */
+async function newBranchBase(root: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ base: string } | { error: string }> {
+  const listed = await git(root, ["for-each-ref", "--format=%(refname) %(objectname)", "refs/remotes/"]);
+  if (listed.code) return { error: `could not list protected branch tips for the new remote branch: ${listed.err || listed.out}` };
+  const remotes = (await git(root, ["remote"])).out.split("\n").filter(Boolean), pushRemote = remote && remotes.includes(remote) ? remote : undefined;
+  const tips = listed.out.split("\n").filter(Boolean).flatMap(row => {
+    const [ref, sha] = row.split(" "), parts = ref!.split("/");
+    return parts[2] && (!pushRemote || parts[2] === pushRemote) && protectedBranches.includes(parts.slice(3).join("/")) && /^[0-9a-f]{40}$/i.test(sha ?? "") ? [sha!.toLowerCase()] : [];
+  });
+  const ancestors = new Set<string>();
+  for (const tip of new Set(tips)) if ((await git(root, ["merge-base", "--is-ancestor", tip, candidate])).code === 0) ancestors.add(tip);
+  if (!ancestors.size) return { error: "ratchet new remote branch requires a protected branch tip that is an exact ancestor of the pushed candidate; none found" };
+  if (ancestors.size > 1) return { error: `ratchet new remote branch base is ambiguous: ${ancestors.size} protected branch tips qualify with different commits` };
+  return { base: [...ancestors][0]! };
+}
+
+async function ratchetPushGate(root: string, remoteBase: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ ok: boolean; message: string } | null> {
+  let base = remoteBase;
   if (!/^[0-9a-f]{40}$/i.test(candidate)) return bad("ratchet reject-new requires an exact local candidate commit");
   const resolvedCandidate = await git(root, ["rev-parse", "--verify", `${candidate}^{commit}`]);
   if (resolvedCandidate.code || resolvedCandidate.out.toLowerCase() !== candidate.toLowerCase()) return bad(`ratchet candidate ${candidate} is unavailable or not a full exact commit`);
@@ -130,6 +147,7 @@ async function ratchetPushGate(root: string, base: string, candidate: string): P
     try { policy = parseRatchetPolicy(candidateConfig); }
     catch (error) { return bad(`ratchet pushed candidate policy is invalid: ${String(error)}`); }
     if (!policy || policy.mode !== "reject-new") return null;
+    if (/^0+$/.test(remoteBase)) { const found = await newBranchBase(root, candidate, protectedBranches, remote); if ("error" in found) return bad(found.error); base = found.base; }
     if (!/^[0-9a-f]{40}$/i.test(base)) return bad("ratchet reject-new requires an exact non-zero remote commit base");
     const resolvedBase = await git(root, ["rev-parse", "--verify", `${base}^{commit}`]);
     if (resolvedBase.code || resolvedBase.out.toLowerCase() !== base.toLowerCase()) return bad(`ratchet remote base ${base} is unavailable or not a full exact commit`);
@@ -141,12 +159,14 @@ async function ratchetPushGate(root: string, base: string, candidate: string): P
     catch (error) { return bad(`ratchet remote base policy is invalid: ${String(error)}`); }
     let baseProfiles: string[], candidateProfiles: string[], policyProfiles: string[], basePolicyProfiles: string[] | null;
     try {
-      baseProfiles = exactProfiles(baseConfig, "ratchet remote base");
+      baseProfiles = baseConfig.profiles === undefined ? stable(await enabledProfiles(baseRoot)) : exactProfiles(baseConfig, "ratchet remote base");
       candidateProfiles = exactProfiles(candidateConfig, "ratchet pushed candidate");
       policyProfiles = exactProfiles({ profiles: policy.profiles }, "ratchet policy");
       basePolicyProfiles = basePolicy ? exactProfiles({ profiles: basePolicy.profiles }, "ratchet remote base policy") : null;
     } catch (error) { return bad(`ratchet pushed range profile state is invalid: ${String(error)}`); }
-    if (baseProfiles.join(",") !== candidateProfiles.join(",") || policyProfiles.join(",") !== candidateProfiles.join(",") || (basePolicyProfiles && basePolicyProfiles.join(",") !== baseProfiles.join(",")) || contextDigest(baseConfig, baseProfiles) !== contextDigest(candidateConfig, candidateProfiles)) return bad("ratchet remote base and pushed candidate profile/context differ");
+    const activation = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
+    const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && (!basePolicyProfiles || basePolicyProfiles.join(",") === baseProfiles.join(",")) && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
+    if (policyProfiles.join(",") !== candidateProfiles.join(",") || (!activation && !unchanged)) return bad("ratchet remote base and pushed candidate profile/context differ");
     const normalize = (findings: Awaited<ReturnType<typeof enforce>>, directory: string) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(directory, finding.file) }));
     const [baseFindings, candidateFindings] = await Promise.all([
       enforce({ root: baseRoot, profiles: candidateProfiles as any }),
@@ -174,7 +194,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
   if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root); if (ratchet) return ratchet; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
-  if (event === "pre-push") { const reports: string[] = []; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [localRef, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const range = !remoteSha || /^0+$/.test(remoteSha) ? `${local}^..${local}` : `${remoteSha}..${local}`, counted = await git(root, ["rev-list", "--count", range]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = localRef?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha, local) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
+  if (event === "pre-push") { const reports: string[] = []; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [localRef, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const range = !remoteSha || /^0+$/.test(remoteSha) ? `${local}^..${local}` : `${remoteSha}..${local}`, counted = await git(root, ["rev-list", "--count", range]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = localRef?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
   if (event === "post-commit") { const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
   return { ok: true, message: "ok" };
 }
