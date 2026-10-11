@@ -170,7 +170,7 @@ if (!args.includes("--ratchet")) {
       else {
         const baseConfig = await configAt(scratch), baseProfiles = profileActivation ? await enabledProfiles(scratch) : normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
         const ordinaryContextMatches = stable(baseProfiles).join(",") === stable(candidateProfiles).join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
-        const activationIsValid = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
+        const activationIsValid = ordinaryContextMatches || (isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig));
         if (!(profileActivation ? activationIsValid : ordinaryContextMatches)) { console.error(profileActivation ? "ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context" : "ratchet base and candidate profile/context differ; use a separately governed adoption path"); process.exitCode = 1; }
         else {
           const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);

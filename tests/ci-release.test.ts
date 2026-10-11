@@ -2,14 +2,68 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { ciInit } from "../src/ci";
 import { agentInit, agentStatus } from "../src/agent";
 import { releaseCheck } from "../src/release";
 import { initializeRepository } from "../src/setup";
 
 test("ci init is idempotent, preserves an existing workflow, and emits the required local workflow", async () => {
-  const root = await mkdtemp(join(tmpdir(), "atdd-ci-")); try { expect((await ciInit(root)).ok).toBeTrue(); expect((await ciInit(root)).ok).toBeFalse(); const workflow = join(root, ".github/workflows/atdd-bun.yml"), content = await readFile(workflow, "utf8"); for (const term of ["pull_request:", "merge_group:", "actions/checkout@v4", "oven-sh/setup-bun@v2", "bun install --frozen-lockfile", "bun run atdd-bun all"]) expect(content).toContain(term); for (const forbidden of ["bunx", "atdd ", "python", "gh ", "curl", "wget"]) expect(content).not.toContain(forbidden); await writeFile(workflow, "kept\n"); expect((await ciInit(root)).ok).toBeFalse(); expect(await readFile(workflow, "utf8")).toBe("kept\n"); expect((await ciInit(root, true)).ok).toBeTrue(); } finally { await rm(root, { recursive: true, force: true }); }
+  const root = await mkdtemp(join(tmpdir(), "atdd-ci-")); try { expect((await ciInit(root)).ok).toBeTrue(); expect((await ciInit(root)).ok).toBeFalse(); const workflow = join(root, ".github/workflows/atdd-bun.yml"), content = await readFile(workflow, "utf8"); for (const term of ["pull_request:", "merge_group:", "actions/checkout@v4", "oven-sh/setup-bun@v2", "bun install --frozen-lockfile", "bun run atdd-bun all", "fetch-depth: 0"]) expect(content).toContain(term); for (const forbidden of ["bunx", "atdd ", "python", "gh ", "curl", "wget"]) expect(content).not.toContain(forbidden); await writeFile(workflow, "kept\n"); expect((await ciInit(root)).ok).toBeFalse(); expect(await readFile(workflow, "utf8")).toBe("kept\n"); expect((await ciInit(root, true)).ok).toBeTrue(); } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("generated CI emits the exact-base ratchet only for reject-new and keeps strict full-history checkout otherwise", async () => {
+  const render = async (config: string | null) => {
+    const root = await mkdtemp(join(tmpdir(), "atdd-ci-render-"));
+    try { if (config !== null) await writeFile(join(root, "atdd-bun.yaml"), config); expect((await ciInit(root)).ok).toBeTrue(); return await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8"); } finally { await rm(root, { recursive: true, force: true }); }
+  };
+  const ratchetCommand = 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles';
+  const rejectNew = await render("profiles: [traceability]\nratchet: { mode: reject-new, profiles: [traceability] }\n");
+  expect(rejectNew).toContain("github.event.pull_request.base.sha");
+  expect(rejectNew).toContain("github.event.merge_group.base_sha");
+  expect(rejectNew).toContain("github.event.before");
+  expect(rejectNew).toContain("fetch-depth: 0");
+  expect(rejectNew).toContain(ratchetCommand);
+  for (const strict of [null, "profiles: [traceability]\nratchet: { mode: report, profiles: [traceability] }\n"]) {
+    const workflow = await render(strict);
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("run: bun run atdd-bun all\n");
+    expect(workflow).not.toContain("--ratchet");
+  }
+});
+
+test("generated CI preserves carried reject-new findings against each immutable event base", async () => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-ci-ratchet-gate-"));
+  const git = async (...args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); expect(await child.exited).toBe(0); return (await new Response(child.stdout).text()).trim(); };
+  const run = async (...args: string[]) => { const child = Bun.spawn({ cmd: [Bun.which("bun") ?? process.execPath, join(resolve(import.meta.dir, ".."), "src/cli.ts"), ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: await new Response(child.stdout).text(), err: await new Response(child.stderr).text() }; };
+  try {
+    await git("init", "-q", "-b", "main"); await git("config", "user.email", "ci@test"); await git("config", "user.name", "CI");
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability]\nratchet: { mode: reject-new, profiles: [traceability] }\n");
+    await mkdir(join(root, "plan"));
+    await writeFile(join(root, "plan/orders.yaml"), "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n");
+    await git("add", "."); await git("commit", "-qm", "base has carried finding");
+    const base = await git("rev-parse", "HEAD");
+    await writeFile(join(root, "README.md"), "candidate without a new finding\n"); await git("add", "."); await git("commit", "-qm", "candidate");
+
+    expect((await run("all", "--ratchet", "--base", base, "--ratchet-activate-profiles")).code).toBe(0);
+    for (const invalid of ["", "0".repeat(40), "not-a-sha", "f".repeat(40)]) expect((await run("all", "--ratchet", "--base", invalid, "--ratchet-activate-profiles")).code).toBe(1);
+    expect((await run("all", "--ratchet", "--ratchet-activate-profiles")).code).toBe(1);
+
+    expect((await ciInit(root)).ok).toBeTrue();
+    let workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
+    expect(workflow).toContain("github.event.pull_request.base.sha");
+    expect(workflow).toContain("github.event.before");
+    expect(workflow).toContain("github.event.merge_group.base_sha");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain('bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles');
+    // Report is deliberately not a CI waiver: it restores strict checks (full-history checkout is kept).
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability]\nratchet: { mode: report, profiles: [traceability] }\n");
+    expect((await ciInit(root, true)).ok).toBeTrue();
+    workflow = await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8");
+    expect(workflow).toContain("fetch-depth: 0");
+    expect(workflow).toContain("bun run atdd-bun all");
+    expect(workflow).not.toContain("--ratchet");
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("generated CI grants only read access and supplies the ephemeral Actions token only to frozen package installation", async () => {

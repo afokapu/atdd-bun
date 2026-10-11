@@ -10,7 +10,13 @@ const version = (await Bun.file(join(root, "package.json")).json() as { version:
  * whose base branch is not main or master is covered too. The integrity check compares against this same rendering.
  * Each branch is written as a JSON string, a YAML scalar a branch name can never break out of. */
 export async function renderWorkflow(repo = process.cwd()) {
-  return (await readFile(template, "utf8")).replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", "));
+  const configPath = join(repo, "atdd-bun.yaml");
+  let rejectNew = false;
+  if (existsSync(configPath)) try {
+    const config = Bun.YAML.parse(await readFile(configPath, "utf8"));
+    rejectNew = Boolean(config && typeof config === "object" && !Array.isArray(config) && (config as { ratchet?: { mode?: unknown } }).ratchet?.mode === "reject-new");
+  } catch { /* policy(repo) below gives its existing parse diagnostic */ }
+  return (await readFile(template, "utf8")).replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", ")).replace("{{ENFORCEMENT}}", rejectNew ? 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles' : "bun run atdd-bun all");
 }
 const githubPackagesRegistry = /^\s*@[\w.-]+:registry\s*=\s*https:\/\/npm\.pkg\.github\.com\/?\s*$/im;
 const githubPackagesAuth = /^\s*\/\/npm\.pkg\.github\.com\/:_authToken\s*=\s*(.*?)\s*$/gim;
