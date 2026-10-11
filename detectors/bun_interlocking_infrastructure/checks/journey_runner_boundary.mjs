@@ -47,25 +47,56 @@ function journeyRunnerLine(text) {
   return match ? lineOfIndex(text, match.index) : 1;
 }
 
+// Declaration helpers that verifiably read AND parse the file named by their own parameter.
+function declarationHelpers(masked) {
+  const names = [];
+  const helper = /\b(?:async\s+)?function\s+((?=[A-Za-z_$\w]*(?:declaration|journey))[A-Za-z_$][\w$]*)\s*\(\s*([A-Za-z_$][\w$]*)?[^)]*\)\s*(?::[^\{]+)?\{([\s\S]*?)\n\}/gi;
+  for (const match of masked.matchAll(helper)) {
+    const [, name, param, body] = match;
+    if (!param || !/\b(?:Bun\.YAML\.parse|JSON\.parse)\s*\(/.test(body)) continue;
+    // The read argument must reference the helper's own parameter, not a fixed path.
+    const paramName = param.replace(/[$]/g, "\\$");
+    if (!new RegExp(`\\b(?:Bun\\.file|readFile(?:Sync)?)\\s*\\(\\s*[^)]*\\b${paramName}\\b`).test(body)) continue;
+    // JourneyRunner must pass its own declared path to that helper.
+    const callee = name.replace(/[$]/g, "\\$");
+    if (new RegExp(`\\b${callee}\\s*\\(\\s*this\\s*\\.\\s*journeyYamlPath\\s*\\)`).test(masked)) names.push(name);
+  }
+  return names;
+}
+
 function loadsJourneyDeclaration(text) {
   const masked = maskComments(text);
   const readsJourneyPath =
     /Bun\.file\s*\(\s*[^)]*(?:journey|_journeys)/i.test(masked) ||
     /\breadFile(?:Sync)?\s*\(\s*[^,)]*(?:journey|_journeys)/i.test(masked);
   const parsesDeclaration = /Bun\.YAML\.parse\s*\(|JSON\.parse\s*\(/.test(masked);
-  return readsJourneyPath && parsesDeclaration;
+  if (readsJourneyPath && parsesDeclaration) return true;
+  // Production runners may centralize parsing and validation in a declaration helper.
+  return declarationHelpers(masked).length > 0;
 }
 
 function consumesDeclaredTopology(text) {
   const masked = maskComments(text);
-  const declaration = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*Bun\.YAML\.parse\s*\(/.exec(masked);
-  if (!declaration) return false;
-  const name = declaration[1].replace(/[$]/g, "\\$");
+  // The topology variable must come from the original parse or from the one verified helper
+  // called with this.journeyYamlPath; a topology from any other call is not the declaration.
+  const escape = (value) => value.replace(/[$]/g, "\\$");
+  const sources = ["Bun\\.YAML\\.parse\\s*\\(", ...declarationHelpers(masked).map(helper =>
+    `(?:await\\s+)?${escape(helper)}\\s*\\(\\s*this\\s*\\.\\s*journeyYamlPath\\s*\\)`)];
+  const declarations = [...masked.matchAll(new RegExp("\\b(?:const|let)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:" + sources.join("|") + ")", "g"))];
+  return declarations.some(declaration => consumesTopologyFrom(masked, declaration[1]));
+}
+
+function consumesTopologyFrom(masked, variable) {
+  const name = variable.replace(/[$]/g, "\\$");
   const reads = (field) => new RegExp("\\b" + name + "\\s*\\.\\s*" + field + "\\s*\\.\\s*find\\s*\\(").test(masked);
   // A runner must retain the interlocking result long enough to decide whether the
   // declared route continues or terminates. Returning the first execute() directly
   // is the characteristic skipped-continuation mutation.
-  const retainsResolution = /\b(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+(?:new\s+InterlockingRunner\s*\([^)]*\)|[A-Za-z_$][\w$]*)\s*\.\s*execute\s*\(/.test(masked);
+  const execution = "await\\s+(?:new\\s+InterlockingRunner\\s*\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*\\.\\s*execute\\s*\\(";
+  // The result may also be declared first and assigned once inside a try that has a catch:
+  // `let run: T; try { run = await runner.execute(...) } catch { throw error }`.
+  const retainsResolution = new RegExp("\\b(?:const|let)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*" + execution).test(masked) ||
+    new RegExp("\\blet\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=;]+)?;\\s*try\\s*\\{\\s*\\1\\s*=\\s*" + execution + "[\\s\\S]{0,400}?\\}\\s*catch\\s*(?:\\([^)]*\\))?\\s*\\{[^}]*\\b(?:throw|return)\\b").test(masked);
   const readsEntrypoint = new RegExp("\\b" + name + "\\s*\\.\\s*entrypoint\\b").test(masked);
   // Reading both lists is only discovery. A continuation must alter control flow to
   // another declared interlocking and a terminal must decide the returned outcome;
