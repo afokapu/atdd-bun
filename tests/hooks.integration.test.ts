@@ -457,3 +457,54 @@ test("pre-push activation accepts an implicit-default base and still rejects new
     expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message).new.length).toBeGreaterThan(0);
   } finally { await cleanup(root); }
 }, 240_000);
+
+test("strict pre-push runs detectors inside the live candidate snapshot, not a removed directory", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\n"); await mkdir(join(root, "plan"));
+    const base = await commitAll(root, "clean strict base");
+    await writeFile(join(root, "readme.md"), "clean\n"); const clean = await commitAll(root, "clean candidate");
+    const accepted = await runHook("pre-push", root, ["origin"], `refs/tags/v1 ${clean} refs/tags/v1 ${base}\n`);
+    expect(accepted.ok, accepted.message).toBeTrue();
+    await writeFile(join(root, "plan", "orders.yaml"), debt); const withFinding = await commitAll(root, "strict candidate with a finding");
+    for (const stdin of [`refs/tags/v1 ${withFinding} refs/tags/v1 ${clean}\n`, `${withFinding} ${withFinding} refs/heads/x ${zeroSha}\n`]) {
+      const rejected = await runHook("pre-push", root, ["origin"], stdin);
+      expect(rejected.ok, rejected.message).toBeFalse();
+      expect(rejected.message).not.toMatch(/ENOENT|resolution failed|scandir|posix_spawn/);
+      expect(rejected.message).toContain("plan/orders.yaml");
+    }
+  } finally { await cleanup(root); }
+}, 90_000);
+
+async function mergedMain() {
+  const root = await repo();
+  await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); await mkdir(join(root, "plan"));
+  const p0 = await commitAll(root, "ratcheted main without debt"); await git(root, ["checkout", "-q", "-b", "feature"]);
+  await writeFile(join(root, "feature.md"), "feature\n"); const remoteTip = await commitAll(root, "feature remote tip"); await trackRemote(root, "origin/feature", remoteTip);
+  await git(root, ["checkout", "-q", "-B", "main", p0]); await writeFile(join(root, "plan", "orders.yaml"), debt); const mainTip = await commitAll(root, "main gains carried debt"); await trackRemote(root, "origin/main", mainTip);
+  await git(root, ["checkout", "-q", "feature"]); expect((await git(root, ["merge", "-q", "--no-ff", "-m", "merge main", "main"])).code).toBe(0);
+  const candidate = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+  return { root, p0, remoteTip, mainTip, candidate };
+}
+
+test("pre-push on an existing branch carries findings present at the merged protected tip and still rejects new ones", async () => {
+  const { root, remoteTip, mainTip, candidate } = await mergedMain(); try {
+    const accepted = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${candidate} refs/heads/feature ${remoteTip}\n`);
+    expect(accepted.ok, accepted.message).toBeTrue();
+    expect(JSON.parse(accepted.message)).toMatchObject({ base: remoteTip, protected_base: mainTip, candidate, carried: [expect.any(String)], new: [] });
+    await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const bad = await commitAll(root, "new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${bad} refs/heads/feature ${remoteTip}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 90_000);
+
+test("pre-push existing-branch protected base uses the remote tip alone when none qualifies and fails closed when ambiguous", async () => {
+  const { root, p0, remoteTip, mainTip, candidate } = await mergedMain(); try {
+    const push = `refs/heads/feature ${candidate} refs/heads/feature ${remoteTip}\n`;
+    await git(root, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    const none = await runHook("pre-push", root, ["origin"], push);
+    expect(none.ok).toBeFalse(); expect(JSON.parse(none.message)).toMatchObject({ base: remoteTip, new: [expect.any(String)] });
+    await trackRemote(root, "origin/main", mainTip); await trackRemote(root, "origin/master", p0);
+    const ambiguous = await runHook("pre-push", root, ["origin"], push);
+    expect(ambiguous.ok).toBeFalse(); expect(ambiguous.message).toContain("ambiguous");
+  } finally { await cleanup(root); }
+}, 90_000);
