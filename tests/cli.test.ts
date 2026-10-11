@@ -161,3 +161,87 @@ test("ratchet refuses a base outside candidate history", async () => {
   expect(result.exitCode).toBe(1);
   expect(result.stderr).toContain("ancestor of candidate HEAD");
 });
+
+const allProfiles = "[traceability, topology, docs, planner, telemetry, coder, tester, security, architecture, metrics, runtime, interlocking, htmx, design, flow]";
+const debt = (id: string) => `urn: wmbt:orders:${id}\nacceptances:\n  - identity: { urn: acc:orders:${id}-UNIT-001 }\n`;
+/** A base with no atdd-bun.yaml selects the implicit default profiles, exactly as the generated commit gate reads it. */
+const implicitBase = async (candidate: Record<string, string>, baseFiles: Record<string, string> = {}) => {
+  const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-implicit-base-"));
+  await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+  await mkdir(join(repo, "plan"));
+  for (const [path, content] of Object.entries({ "plan/carried.yaml": debt("E001"), "plan/resolved.yaml": debt("E002"), ...baseFiles })) await Bun.write(join(repo, path), content);
+  await git(repo, "add", "-A"); await git(repo, "commit", "-qm", "implicit default base with debt");
+  const base = await git(repo, "rev-parse", "HEAD");
+  for (const [path, content] of Object.entries(candidate)) await Bun.write(join(repo, path), content);
+  await git(repo, "add", "-A"); await git(repo, "commit", "-qm", "explicit candidate", "--allow-empty");
+  return { repo, base };
+};
+const activate = (repo: string, base: string, ...selection: string[]) => run(...(selection.length ? selection : ["all"]), "--root", repo, "--ratchet", "--ratchet-activate-profiles", "--base", base);
+const explicitAll = `profiles: ${allProfiles}\nratchet: { mode: reject-new, profiles: ${allProfiles} }\n`;
+
+test("profile activation accepts an implicit-default base expanding to the explicit full profile set with carried and resolved evidence", async () => {
+  const { repo, base } = await implicitBase({ "atdd-bun.yaml": explicitAll });
+  await git(repo, "rm", "-q", "plan/resolved.yaml"); await git(repo, "commit", "-qm", "resolve debt");
+  const result = await activate(repo, base);
+  expect(result.stderr).not.toContain("explicit monotonic profile expansion");
+  expect(result.exitCode).toBe(0);
+  const report = JSON.parse(result.stdout);
+  expect(report).toMatchObject({ mode: "reject-new", base, new: [] });
+  expect(report.profiles).toHaveLength(15);
+  expect(report.carried.length).toBeGreaterThan(0);
+  expect(report.resolved.length).toBeGreaterThan(0);
+}, 180_000);
+
+test("profile activation from an implicit-default base still rejects new findings", async () => {
+  const { repo, base } = await implicitBase({ "atdd-bun.yaml": explicitAll, "plan/new.yaml": debt("E003") });
+  const result = await activate(repo, base);
+  expect(result.exitCode).toBe(1);
+  const report = JSON.parse(result.stdout);
+  expect(report.new.length).toBeGreaterThan(0);
+}, 180_000);
+
+test("profile activation from an implicit-default base preserves every fail-closed negative", async () => {
+  const unavailable = await implicitBase({ "atdd-bun.yaml": explicitAll });
+  const missing = await activate(unavailable.repo, "0".repeat(40));
+  expect(missing.exitCode).toBe(1); expect(missing.stderr).toContain("unavailable or not a full exact commit");
+
+  const defaults = "[traceability, topology, docs, planner, telemetry, coder, tester, security, architecture, metrics, runtime, interlocking, htmx, design]";
+  const implicitCandidate = await implicitBase({ "atdd-bun.yaml": `ratchet: { mode: reject-new, profiles: ${defaults} }\n` });
+  const noExplicit = await activate(implicitCandidate.repo, implicitCandidate.base);
+  expect(noExplicit.exitCode).toBe(1); expect(noExplicit.stderr).toContain("explicitly configured candidate profile set");
+
+  const mismatch = await implicitBase({ "atdd-bun.yaml": `profiles: ${allProfiles}\nratchet: { mode: reject-new, profiles: [flow] }\n` });
+  const policyMismatch = await activate(mismatch.repo, mismatch.base);
+  expect(policyMismatch.exitCode).toBe(1); expect(policyMismatch.stderr).toContain("ratchet.profiles must exactly equal");
+
+  const shrink = await implicitBase({ "atdd-bun.yaml": "profiles: [traceability, flow]\nratchet: { mode: reject-new, profiles: [traceability, flow] }\n" });
+  const shrinking = await activate(shrink.repo, shrink.base);
+  expect(shrinking.exitCode).toBe(1); expect(shrinking.stderr).toContain("explicit monotonic profile expansion");
+
+  const same = await implicitBase({ "atdd-bun.yaml": `profiles: ${defaults}\nratchet: { mode: reject-new, profiles: ${defaults} }\n` });
+  const unchanged = await activate(same.repo, same.base);
+  expect(unchanged.exitCode).toBe(1); expect(unchanged.stderr).toContain("explicit monotonic profile expansion");
+
+  const drift = await implicitBase({ "atdd-bun.yaml": `${explicitAll}topology: { plan_root: contracts }\n` });
+  const drifted = await activate(drift.repo, drift.base);
+  expect(drifted.exitCode).toBe(1); expect(drifted.stderr).toContain("identical non-profile context");
+
+  const configured = await implicitBase({ "atdd-bun.yaml": `${explicitAll}topology: { plan_root: contracts }\n` }, { "atdd-bun.yaml": "topology: { plan_root: plan }\n" });
+  const configuredDrift = await activate(configured.repo, configured.base);
+  expect(configuredDrift.exitCode).toBe(1); expect(configuredDrift.stderr).toContain("identical non-profile context");
+
+  const dirty = await implicitBase({ "atdd-bun.yaml": explicitAll });
+  await writeFile(join(dirty.repo, "untracked.txt"), "not committed\n");
+  const dirtied = await activate(dirty.repo, dirty.base);
+  expect(dirtied.exitCode).toBe(1); expect(dirtied.stderr).toContain("porcelain-clean");
+
+  const unknown = await implicitBase({ "atdd-bun.yaml": `profiles: [traceability, nope]\nratchet: { mode: reject-new, profiles: [traceability, nope] }\n` });
+  const unknownProfile = await activate(unknown.repo, unknown.base);
+  expect(unknownProfile.exitCode).toBe(1); expect(unknownProfile.stdout).toBe("");
+  const duplicate = await implicitBase({ "atdd-bun.yaml": `profiles: [flow, ${allProfiles.slice(1)}\nratchet: { mode: reject-new, profiles: ${allProfiles} }\n` });
+  const duplicated = await activate(duplicate.repo, duplicate.base);
+  expect(duplicated.exitCode).toBe(1); expect(duplicated.stdout).toBe(""); expect(duplicated.stderr).toContain("explicitly configured candidate profile set");
+  const legacy = await implicitBase({ "atdd-bun.yaml": `profiles: ${allProfiles.replace("flow", "workflow")}\nratchet: { mode: reject-new, profiles: ${allProfiles} }\n` });
+  const legacied = await activate(legacy.repo, legacy.base);
+  expect(legacied.exitCode).toBe(1); expect(legacied.stdout).toBe(""); expect(legacied.stderr).toContain("explicitly configured candidate profile set");
+}, 120_000);

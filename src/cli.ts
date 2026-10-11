@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { enforce, enabledProfiles, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
+import { concreteProfiles, enforce, enabledProfiles, flowCompatibilityDiagnostic, normalizeProfileName, profileNames, type Profile } from "./enforce";
 import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, isStrictProfileExpansion, parseRatchetPolicy } from "./ratchet";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -154,7 +154,8 @@ if (!args.includes("--ratchet")) {
   if (!policy) fail("--ratchet requires an explicit atdd-bun.yaml ratchet policy");
   const candidateProfiles = normalizedRequested.includes("all") ? await enabledProfiles(candidateRoot) : normalizedRequested;
   if (stable(policy.profiles).join(",") !== stable(candidateProfiles).join(",")) fail("ratchet.profiles must exactly equal the selected profiles");
-  if (profileActivation && (!Array.isArray(candidateConfig.profiles) || stable(await enabledProfiles(candidateRoot)).join(",") !== stable(candidateProfiles).join(","))) fail("profile activation requires the explicitly configured candidate profile set to be selected");
+  const explicitCandidateProfiles = Array.isArray(candidateConfig.profiles) && candidateConfig.profiles.every(profile => concreteProfiles.includes(profile as typeof concreteProfiles[number])) && new Set(candidateConfig.profiles).size === candidateConfig.profiles.length;
+  if (profileActivation && (!explicitCandidateProfiles || stable(await enabledProfiles(candidateRoot)).join(",") !== stable(candidateProfiles).join(","))) fail("profile activation requires the explicitly configured candidate profile set to be selected");
   if ((await git(candidateRoot, ["status", "--porcelain"])).out) fail("--ratchet requires a porcelain-clean candidate worktree");
   const resolved = await git(candidateRoot, ["rev-parse", "--verify", `${base}^{commit}`]);
   if (resolved.code || resolved.out.toLowerCase() !== base.toLowerCase()) fail(`ratchet base ${base} is unavailable or not a full exact commit`);
@@ -169,7 +170,7 @@ if (!args.includes("--ratchet")) {
       else {
         const baseConfig = await configAt(scratch), baseProfiles = profileActivation ? await enabledProfiles(scratch) : normalizedRequested.includes("all") ? await enabledProfiles(scratch) : normalizedRequested;
         const ordinaryContextMatches = stable(baseProfiles).join(",") === stable(candidateProfiles).join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
-        const activationIsValid = Array.isArray(baseConfig.profiles) && isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
+        const activationIsValid = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
         if (!(profileActivation ? activationIsValid : ordinaryContextMatches)) { console.error(profileActivation ? "ratchet profile activation requires an explicit monotonic profile expansion and identical non-profile context" : "ratchet base and candidate profile/context differ; use a separately governed adoption path"); process.exitCode = 1; }
         else {
           const [baseFindings, candidateFindings] = await Promise.all([enforce({ root: scratch, profiles: candidateProfiles as Profile[] }), enforce({ root: candidateRoot, profiles: candidateProfiles as Profile[] })]);
