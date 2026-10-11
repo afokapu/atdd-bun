@@ -12,7 +12,7 @@
 // obligation, measured correctly, and only possible because the runtime is Bun.
 import { walk, readRoots, readExcludes, readText, emit } from "../../../lib/scan.mjs";
 import * as M from "../ts_metrics.mjs";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { existsSync } from "node:fs";
 
 const RULE = "coder.bun.dead-code-reachability";
@@ -64,6 +64,16 @@ for (const root of readRoots()) {
   if (!roots.size) continue;
 
   const forward = M.reachableFrom(roots, graph);
+  // Tests are executable entrypoints, but only for test-support modules (e2e/, tests/ ...). A
+  // production module imported solely by a test is still dead production code.
+  const SUPPORT_SEGMENTS = new Set(["e2e", "test", "tests", "__tests__", "spec", "fixtures"]);
+  const isSupport = (f) => relative(root, f).split(/[\\/]/).slice(0, -1).some(segment => SUPPORT_SEGMENTS.has(segment));
+  const queue = files.filter(M.isTestFile);
+  while (queue.length) {
+    for (const next of graph.get(queue.pop()) || []) {
+      if (isSupport(next) && !forward.has(next)) { forward.add(next); queue.push(next); }
+    }
+  }
   const backward = M.reachableFrom(roots, M.reverseGraph(graph));
 
   for (const f of files) {

@@ -62,7 +62,11 @@ for (const root of roots) {
       // EVERY binding header is judged, not only the first: a valid Acceptance: must not carry an unresolved Train:.
       const headers = [...head.matchAll(/^[ \t]*\/\/[ \t]*(Acceptance|WMBT|Train):[ \t]*(\S*)/gm)].map((m) => ({ kind: m[1], id: m[2], raw: m[0].trim(), line: lineAt(head, m.index) }));
       const bindings = headers.filter((h) => h.id.startsWith(PREFIX[h.kind]));
-      tests.set(urn[1], { path, bindings });
+      // A test identity may be reused by equivalent smoke harnesses. Preserve every
+      // independently declared binding: replacing the earlier record made a valid
+      // acceptance disappear solely because a later file had the same test URN.
+      const prior = tests.get(urn[1]);
+      tests.set(urn[1], { path, bindings: [...(prior?.bindings ?? []), ...bindings] });
       if (!headers.length) add("traceability.test.binding-resolves", path, lineOf(head, urn[0]), "test has a URN but no Acceptance:, WMBT:, or Train: binding", urn[0]);
       for (const h of headers) if (!bindings.includes(h)) add("traceability.test.binding-resolves", path, h.line, `${h.kind}: ${h.id || "<empty>"} is not a ${PREFIX[h.kind]} identity`, h.raw);
       return;
