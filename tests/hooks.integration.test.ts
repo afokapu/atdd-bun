@@ -685,3 +685,16 @@ test("pre-push ignores a stale remote-tracking ref the remote no longer advertis
     expect(unreadable.ok).toBeFalse(); expect(unreadable.message).toContain("commits per push 5 exceed 2");
   } finally { await cleanup(root); await cleanup(bare); }
 }, 60_000);
+
+test("pre-push exempts only the SHAs the remote advertises: a remote branch rewound since the last fetch no longer exempts the newer local tracking commits", async () => {
+  const { root, bare } = await withBareRemote(); try {
+    await git(root, ["checkout", "-q", "-b", "umbrella"]); const umbrella = await commitsOn(root, 5, "umbrella"); await pushAndTrack(root, "umbrella", umbrella);
+    const push = `refs/heads/integration ${umbrella} refs/heads/integration ${zeroSha}\n`;
+    expect((await runHook("pre-push", root, ["origin"], push)).ok).toBeTrue();
+    const older = (await git(root, ["rev-parse", `${umbrella}~3`])).out.trim();
+    expect((await git(bare, ["update-ref", "refs/heads/umbrella", older])).code).toBe(0);
+    expect((await git(root, ["rev-parse", "refs/remotes/origin/umbrella"])).out.trim()).toBe(umbrella);
+    const rewound = await runHook("pre-push", root, ["origin"], push);
+    expect(rewound.ok).toBeFalse(); expect(rewound.message).toContain("commits per push 3 exceed 2");
+  } finally { await cleanup(root); await cleanup(bare); }
+}, 60_000);
