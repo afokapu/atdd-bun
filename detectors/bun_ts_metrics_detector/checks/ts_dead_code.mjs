@@ -57,7 +57,9 @@ for (const root of readRoots()) {
     graph.set(f, targets);
   }
 
-  const roots = new Set([...files.filter(M.isRootFile), ...scriptRoots(root, all)]);
+  // Tests are executable entrypoints too. A support module reached only from Bun tests is
+  // live even when production roots do not import it.
+  const roots = new Set([...files.filter(M.isRootFile), ...files.filter(M.isTestFile), ...scriptRoots(root, all)]);
   // No structural root means no anchor to measure reachability FROM; reporting
   // every file as dead would be noise, not a finding. The Python sibling bails
   // the same way.

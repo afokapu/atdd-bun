@@ -53,19 +53,35 @@ function loadsJourneyDeclaration(text) {
     /Bun\.file\s*\(\s*[^)]*(?:journey|_journeys)/i.test(masked) ||
     /\breadFile(?:Sync)?\s*\(\s*[^,)]*(?:journey|_journeys)/i.test(masked);
   const parsesDeclaration = /Bun\.YAML\.parse\s*\(|JSON\.parse\s*\(/.test(masked);
-  return readsJourneyPath && parsesDeclaration;
+  if (readsJourneyPath && parsesDeclaration) return true;
+
+  // Production runners may centralize parsing and validation in a declaration helper.
+  // Accept it only when JourneyRunner passes its own declared path to that helper and
+  // the helper itself performs the read-and-parse boundary.
+  const helper = /\b(?:async\s+)?function\s+((?=[A-Za-z_$\w]*(?:declaration|journey))[A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^\{]+)?\{([\s\S]*?)\n\}/gi;
+  for (const match of masked.matchAll(helper)) {
+    if (!/\b(?:Bun\.file|readFile(?:Sync)?)\s*\(/.test(match[2]) ||
+      !/\b(?:Bun\.YAML\.parse|JSON\.parse)\s*\(/.test(match[2])) continue;
+    const name = match[1].replace(/[$]/g, "\\$");
+    if (new RegExp(`\\b${name}\\s*\\(\\s*this\\s*\\.\\s*journeyYamlPath\\s*\\)`).test(masked)) return true;
+  }
+  return false;
 }
 
 function consumesDeclaredTopology(text) {
   const masked = maskComments(text);
-  const declaration = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*Bun\.YAML\.parse\s*\(/.exec(masked);
+  const declaration = /\b(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:Bun\.YAML\.parse\s*\(|(?:await\s+)?[A-Za-z_$][\w$]*\s*\()/.exec(masked);
   if (!declaration) return false;
   const name = declaration[1].replace(/[$]/g, "\\$");
   const reads = (field) => new RegExp("\\b" + name + "\\s*\\.\\s*" + field + "\\s*\\.\\s*find\\s*\\(").test(masked);
   // A runner must retain the interlocking result long enough to decide whether the
   // declared route continues or terminates. Returning the first execute() directly
   // is the characteristic skipped-continuation mutation.
-  const retainsResolution = /\b(?:const|let)\s+[A-Za-z_$][\w$]*\s*=\s*await\s+(?:new\s+InterlockingRunner\s*\([^)]*\)|[A-Za-z_$][\w$]*)\s*\.\s*execute\s*\(/.test(masked);
+  const execution = "await\\s+(?:new\\s+InterlockingRunner\\s*\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*\\.\\s*execute\\s*\\(";
+  // The result may also be declared first and assigned once inside a try that has a catch:
+  // `let run: T; try { run = await runner.execute(...) } catch { throw error }`.
+  const retainsResolution = new RegExp("\\b(?:const|let)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*" + execution).test(masked) ||
+    new RegExp("\\blet\\s+([A-Za-z_$][\\w$]*)\\s*(?::[^=;]+)?;\\s*try\\s*\\{\\s*\\1\\s*=\\s*" + execution).test(masked);
   const readsEntrypoint = new RegExp("\\b" + name + "\\s*\\.\\s*entrypoint\\b").test(masked);
   // Reading both lists is only discovery. A continuation must alter control flow to
   // another declared interlocking and a terminal must decide the returned outcome;
