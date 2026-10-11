@@ -123,6 +123,37 @@ test("profile activation rejects removal, unrelated policy edits, and an absent 
   expect(absent.exitCode).toBe(1); expect(absent.stderr).toContain("profile/context differ");
 });
 
+test("a worktrees-only policy change keeps ordinary and activation ratchet contexts while other policy changes still fail", async () => {
+  const debt = "urn: wmbt:orders:E001\nacceptances:\n  - identity: { urn: acc:orders:E001-UNIT-001 }\n";
+  const setup = async (baseConfig: string, candidateConfig: string) => {
+    const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-worktrees-"));
+    await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");
+    await writeFile(join(repo, "atdd-bun.yaml"), baseConfig); await mkdir(join(repo, "plan")); await Bun.write(join(repo, "plan", "orders.yaml"), debt);
+    await git(repo, "add", "."); await git(repo, "commit", "-qm", "base with traceability debt");
+    const base = await git(repo, "rev-parse", "HEAD");
+    await writeFile(join(repo, "atdd-bun.yaml"), candidateConfig); await git(repo, "commit", "-am", "candidate", "-q");
+    return { repo, base };
+  };
+  const frozen = "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n";
+  const worktrees = "worktrees:\n  enabled: true\n  require_linked_worktree: true\n";
+  const ordinary = await setup(frozen, `${frozen}${worktrees}`);
+  const ordinaryResult = await run("--profile", "flow,traceability", "--root", ordinary.repo, "--ratchet", "--base", ordinary.base);
+  expect(ordinaryResult.stderr).not.toContain("profile/context differ");
+  expect(ordinaryResult.exitCode).toBe(0);
+  expect(JSON.parse(ordinaryResult.stdout)).toMatchObject({ mode: "reject-new", profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+  const activation = await setup("profiles: [flow]\n", `${frozen}${worktrees}`);
+  const activationResult = await run("--profile", "flow,traceability", "--root", activation.repo, "--ratchet", "--ratchet-activate-profiles", "--base", activation.base);
+  expect(activationResult.stderr).not.toContain("identical non-profile context");
+  expect(activationResult.exitCode).toBe(0);
+  expect(JSON.parse(activationResult.stdout)).toMatchObject({ mode: "reject-new", profiles: ["flow", "traceability"], carried: [expect.any(String)], new: [], resolved: [] });
+  const drift = await setup(frozen, `${frozen}${worktrees}topology: { plan_root: contracts }\n`);
+  const driftResult = await run("--profile", "flow,traceability", "--root", drift.repo, "--ratchet", "--base", drift.base);
+  expect(driftResult.exitCode).toBe(1); expect(driftResult.stderr).toContain("profile/context differ");
+  const activationDrift = await setup("profiles: [flow]\n", `${frozen}${worktrees}max_staged_files: 5\n`);
+  const activationDriftResult = await run("--profile", "flow,traceability", "--root", activationDrift.repo, "--ratchet", "--ratchet-activate-profiles", "--base", activationDrift.base);
+  expect(activationDriftResult.exitCode).toBe(1); expect(activationDriftResult.stderr).toContain("identical non-profile context");
+}, 60_000);
+
 test("ratchet reject-new fails only candidate findings and emits a delta report", async () => {
   const repo = await mkdtemp(join(tmpdir(), "atdd-ratchet-delta-"));
   await git(repo, "init", "-q", "-b", "main"); await git(repo, "config", "user.email", "ratchet@test"); await git(repo, "config", "user.name", "Ratchet");

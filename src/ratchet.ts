@@ -41,15 +41,17 @@ export function findingFingerprint(finding: FindingIdentity): string {
   return sha256({ format: "atdd-bun.finding-fingerprint/v1", rule_id: finding.rule_id, path, subject });
 }
 
-/** The selected profiles and every policy key except ratchet itself must agree across exact base and candidate. */
+/** The selected profiles and every policy key except ratchet itself must agree across exact base and candidate.
+ * `worktrees` is finding-inert (read only by the hook worktree gate and worktree commands) and is omitted; configs
+ * without it keep byte-identical v1 digests. Integrity still reports its loosening. */
 export function contextDigest(config: Record<string, unknown>, profiles: string[]): string {
-  const { ratchet: _ratchet, ...policy } = config;
+  const { ratchet: _ratchet, worktrees: _worktrees, ...policy } = config;
   return sha256({ format: "atdd-bun.ratchet-context/v1", profiles: [...profiles].sort(), policy });
 }
 
 /** Activation is a one-time, explicitly requested profile-list expansion; every other policy input remains identical. */
 export function activationContextDigest(config: Record<string, unknown>): string {
-  const { ratchet: _ratchet, profiles: _profiles, ...policy } = config;
+  const { ratchet: _ratchet, profiles: _profiles, worktrees: _worktrees, ...policy } = config;
   return sha256({ format: "atdd-bun.ratchet-activation-context/v1", policy });
 }
 
