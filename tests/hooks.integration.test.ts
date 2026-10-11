@@ -602,3 +602,45 @@ test("pre-push existing-branch protected base uses the remote tip alone when non
     expect(ambiguous.ok).toBeFalse(); expect(ambiguous.message).toContain("ambiguous");
   } finally { await cleanup(root); }
 }, 90_000);
+
+async function commitsOn(root: string, count: number, label: string) { let tip = ""; for (let i = 0; i < count; i++) { await writeFile(join(root, `${label}-${i}.md`), `${label} ${i}\n`); tip = await commitAll(root, `${label} ${i}`); } return tip; }
+async function protectedMain() {
+  const root = await repo(); await writeFile(join(root, "atdd-bun.yaml"), "max_commits_per_push: 2\n"); const base = await commitAll(root, "config");
+  await git(root, ["checkout", "-q", "-b", "feature"]); const remoteTip = await commitsOn(root, 1, "feature-remote"); await trackRemote(root, "origin/feature", remoteTip);
+  await git(root, ["checkout", "-q", "main"]).then(() => git(root, ["checkout", "-q", "-B", "main", base])); const mainTip = await commitsOn(root, 3, "protected"); await trackRemote(root, "origin/main", mainTip);
+  return { root, base, remoteTip, mainTip };
+}
+
+test("pre-push counts only commits not already on a protected remote tip when a branch merged protected main", async () => {
+  const { root, remoteTip } = await protectedMain(); try {
+    await git(root, ["checkout", "-q", "feature"]); expect((await git(root, ["merge", "-q", "--no-ff", "-m", "merge main", "main"])).code).toBe(0);
+    const merged = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    const result = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${merged} refs/heads/feature ${remoteTip}\n`);
+    expect(result.ok, result.message).toBeTrue();
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-push judges a new remote branch by its real unshared commits, and an ordinary over-limit push is still refused", async () => {
+  const { root, mainTip } = await protectedMain(); try {
+    await git(root, ["checkout", "-q", "-B", "fresh", mainTip]); const fresh = await commitsOn(root, 3, "fresh");
+    const refused = await runHook("pre-push", root, ["origin"], `refs/heads/fresh ${fresh} refs/heads/fresh ${zeroSha}\n`);
+    expect(refused.ok).toBeFalse(); expect(refused.message).toContain("commits per push 3 exceed 2");
+    const firstOwn = (await git(root, ["rev-parse", `${fresh}~2`])).out.trim();
+    const small = await runHook("pre-push", root, ["origin"], `refs/heads/fresh ${firstOwn} refs/heads/fresh ${zeroSha}\n`);
+    expect(small.ok, small.message).toBeTrue();
+    const ordinary = await runHook("pre-push", root, ["origin"], `refs/heads/fresh ${fresh} refs/heads/fresh ${mainTip}\n`);
+    expect(ordinary.ok).toBeFalse(); expect(ordinary.message).toContain("commits per push 3 exceed 2");
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-push keeps the plain range count with no protected remote tip and never excludes local-only protected commits", async () => {
+  const { root, remoteTip } = await protectedMain(); try {
+    await git(root, ["update-ref", "-d", "refs/remotes/origin/main"]);
+    await git(root, ["checkout", "-q", "feature"]); expect((await git(root, ["merge", "-q", "--no-ff", "-m", "merge main", "main"])).code).toBe(0);
+    const merged = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+    const local = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${merged} refs/heads/feature ${remoteTip}\n`);
+    expect(local.ok).toBeFalse(); expect(local.message).toContain("commits per push 4 exceed 2");
+    const fresh = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${remoteTip} refs/heads/feature ${zeroSha}\n`);
+    expect(fresh.ok, fresh.message).toBeTrue();
+  } finally { await cleanup(root); }
+}, 60_000);
