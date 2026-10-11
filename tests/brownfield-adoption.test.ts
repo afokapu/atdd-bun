@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { defaultProfiles, enabledProfiles } from "../src/enforce";
 import { loosenedPolicy } from "../src/integrity";
 import { initializeRepository, policyInit } from "../src/setup";
+import { ciInit } from "../src/ci";
 
 // Brownfield profile adoption. An absent `profiles:` runs every profile (execution) but governs none (policy): the
 // first explicit list establishes the governed set; after it, dropping a profile or removing the list is loosening.
@@ -49,7 +50,8 @@ async function brownfield(config: string | null, body: (root: string) => Promise
     if (config !== null) await writeFile(join(root, "atdd-bun.yaml"), config);
     expect((await initializeRepository(root)).ok).toBeTrue();
     // Before this release, init wrote no atdd-bun.yaml: a repository initialized then has none unless it wrote one.
-    if (config === null) await rm(join(root, "atdd-bun.yaml"));
+    // Re-render after simulating that legacy absence: reject-new is optional, so its generated workflow is strict too.
+    if (config === null) { await rm(join(root, "atdd-bun.yaml")); await ciInit(root, true); }
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "existing repository", "--no-verify");
     await git(root, "checkout", "-qb", "adopt");
     await body(root);
