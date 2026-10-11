@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { concreteProfiles } from "../src/enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); return { code: await child.exited, out: (await new Response(child.stdout).text()), err: (await new Response(child.stderr).text()) }; };
@@ -397,3 +398,21 @@ test("pre-push accepts one-time strict profile activation with identical context
     expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ new: [expect.any(String)] });
   } finally { await cleanup(root); }
 }, 90_000);
+
+test("pre-push activation accepts an implicit-default base and still rejects new findings and context drift", async () => {
+  const root = await repo(); try {
+    const all = `[${concreteProfiles.join(", ")}]`, policy = (extra = "") => `profiles: ${all}\nratchet: { mode: reject-new, profiles: ${all} }\n${extra}`;
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    const base = await commitAll(root, "implicit default base with carried debt");
+    await writeFile(join(root, "atdd-bun.yaml"), policy()); const activated = await commitAll(root, "explicit full activation");
+    const accepted = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${activated} refs/heads/feature ${base}\n`);
+    expect(accepted.ok, accepted.message).toBeTrue();
+    expect(JSON.parse(accepted.message)).toMatchObject({ base, candidate: activated, new: [] });
+    expect(JSON.parse(accepted.message).carried.length).toBeGreaterThan(0);
+    await writeFile(join(root, "atdd-bun.yaml"), policy("topology: { plan_root: contracts }\n")); const drift = await commitAll(root, "implicit base activation with context drift");
+    expect((await runHook("pre-push", root, ["origin"], `refs/heads/feature ${drift} refs/heads/feature ${base}\n`)).message).toContain("profile/context differ");
+    await writeFile(join(root, "atdd-bun.yaml"), policy()); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const withNew = await commitAll(root, "implicit activation plus new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${withNew} refs/heads/feature ${base}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message).new.length).toBeGreaterThan(0);
+  } finally { await cleanup(root); }
+}, 240_000);
