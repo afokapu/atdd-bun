@@ -320,6 +320,30 @@ test("finish and status read worktree policy from the primary checkout, not a pr
   } finally { await cleanup(layout.container); }
 }, 30_000);
 
+test("finish --delete-branch removes worktree and branch when the merged branch is ahead of its upstream", async () => {
+  const layout = await worktreeLayout(), ahead = join(layout.worktrees, "ahead"), unmerged = join(layout.worktrees, "unmerged");
+  try {
+    await mkdir(layout.worktrees, { recursive: true });
+    await git(layout.main, ["branch", "stale-upstream"]);
+    for (const [path, branch] of [[ahead, "ahead"], [unmerged, "unmerged"]] as const) expect((await git(layout.main, ["worktree", "add", "-q", "-b", branch, path])).code).toBe(0);
+    expect((await git(ahead, ["branch", "--set-upstream-to=stale-upstream"])).code).toBe(0);
+    expect((await git(unmerged, ["branch", "--set-upstream-to=stale-upstream"])).code).toBe(0);
+    for (const path of [ahead, unmerged]) { await writeFile(join(path, "work.md"), `${path}\n`); await git(path, ["add", "work.md"]); await git(path, ["commit", "-qm", "work", "--no-verify"]); }
+    await git(layout.main, ["merge", "--no-ff", "ahead", "-m", "merge ahead"]);
+
+    const refused = await finishWorktree(unmerged, true);
+    expect(refused.ok).toBeFalse(); expect(refused.message).toContain("not merged");
+    expect(existsSync(unmerged)).toBeTrue();
+    expect((await git(layout.main, ["branch", "--list", "unmerged"])).out.trim()).not.toBe("");
+
+    const result = await finishWorktree(ahead, true);
+    expect(result.message).toContain("removed merged worktree");
+    expect(result.ok).toBeTrue();
+    expect(existsSync(ahead)).toBeFalse();
+    expect((await git(layout.main, ["branch", "--list", "ahead"])).out.trim()).toBe("");
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
 test("finish and status stay disabled when the primary checkout's committed HEAD lacks the worktree policy", async () => {
   const layout = await worktreeLayout(false), old = join(layout.worktrees, "old");
   try {
