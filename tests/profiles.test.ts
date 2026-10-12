@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { mkdtemp, mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { defaultProfiles, enabledProfiles, enforce, profileNames } from "../src/enforce";
@@ -92,13 +92,13 @@ const withEnv = async <T>(vars: Record<string, string | undefined>, run: () => P
 };
 /** Replace detector processes with counted fakes. A fake exits once more children are live than `cap` allows (the
  * overflow is recorded) or after a short hold; the hold only yields, nothing asserts on elapsed time. */
-const countDetectors = (cap: number) => {
+const countDetectors = (cap: number, hold = 15) => {
   const live = { now: 0, peak: 0, started: 0 }, held: Array<() => void> = [];
   const spy = spyOn(Bun, "spawn").mockImplementation(((options: Parameters<typeof Bun.spawn>[0]) => {
     const { cmd, env } = options as { cmd: string[]; env: Record<string, string> };
     if (!cmd.at(-1)?.endsWith("detect.mjs")) return realSpawn(options as never);
     live.now++; live.started++; live.peak = Math.max(live.peak, live.now);
-    const release = new Promise<void>(done => { held.push(done); setTimeout(done, 15); });
+    const release = new Promise<void>(done => { held.push(done); setTimeout(done, hold); });
     if (live.now > cap) held.splice(0).forEach(done => done());
     const exited = (async () => {
       await writeFile(env.ATDD_VIOLATIONS_REPORT, JSON.stringify({ violations: [] }));
@@ -143,6 +143,30 @@ test("a host slot held by a dead process is reclaimed", async () => {
   expect(counted.live.started).toBe(7);
   expect(await readdir(slots)).toEqual([]);
 });
+
+test("a slot whose lease has expired is reclaimed even when its pid now belongs to a live process", async () => {
+  const root = await repo({ ...CODER }), slots = await slotsDir(), past = new Date(Date.now() - 3_600_000);
+  for (const slot of [0, 1]) { await writeFile(join(slots, `slot-${slot}`), String(process.ppid)); await utimes(join(slots, `slot-${slot}`), past, past); }
+  const counted = countDetectors(2);
+  try {
+    await withEnv({ ATDD_BUN_MAX_DETECTORS: "2", ATDD_BUN_HOST_DETECTORS: "2", ATDD_BUN_DETECTOR_LEASE_MS: "20", ATDD_BUN_DETECTOR_STALE_MS: "200", ATDD_BUN_DETECTOR_SLOTS_DIR: slots }, () => enforce({ root, profiles: ["coder"] }));
+  } finally { counted.restore(); }
+  expect(counted.live.started).toBe(7);
+  expect(await readdir(slots)).toEqual([]);
+}, 5_000);
+
+test("a live holder keeps its lease past the stale age by refreshing it, so its slot is not reclaimed", async () => {
+  const root = await repo({ ...CODER }), slots = await slotsDir();
+  // Each fake detector holds its slot for longer than the stale age; only lease refreshes keep a waiter out.
+  const counted = countDetectors(1, 600);
+  try {
+    await withEnv({ ATDD_BUN_MAX_DETECTORS: "1", ATDD_BUN_HOST_DETECTORS: "1", ATDD_BUN_DETECTOR_LEASE_MS: "20", ATDD_BUN_DETECTOR_STALE_MS: "200", ATDD_BUN_DETECTOR_SLOTS_DIR: slots }, () =>
+      Promise.all([enforce({ root, profiles: ["security"] }), enforce({ root, profiles: ["security"] })]));
+  } finally { counted.restore(); }
+  expect(counted.live.started).toBe(2);
+  expect(counted.live.peak).toBe(1);
+  expect(await readdir(slots)).toEqual([]);
+}, 10_000);
 
 test("an unusable slot directory falls back to the per-run cap and says so on stderr", async () => {
   const root = await repo({ ...CODER }), notADirectory = join(await slotsDir(), "file");
