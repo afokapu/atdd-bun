@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { link, mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { availableParallelism, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
 
@@ -125,6 +125,119 @@ export async function undeclaredEmissions(implementation: string, violations: Pi
   return [...new Set(violations.map(v => v.rule_id).filter(id => !declared.has(id)))].sort();
 }
 
+// Detector concurrency is resource control, never verification: it changes when detectors run, not what they find.
+
+/** A positive integer from the environment, else `fallback`. Any other value fails closed. */
+function detectorLimit(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  if (!/^[1-9]\d*$/.test(raw)) throw new Error(`${name} must be a positive integer, got ${JSON.stringify(raw)}`);
+  return Number(raw);
+}
+
+/** How many detectors one run may have in flight. */
+const runDetectorLimit = () => detectorLimit("ATDD_BUN_MAX_DETECTORS", Math.max(2, Math.floor(availableParallelism() / 2)));
+/** How many detectors all atdd-bun runs on this host may have in flight together. */
+const hostDetectorLimit = () => detectorLimit("ATDD_BUN_HOST_DETECTORS", availableParallelism());
+/** A held slot is a lease: its holder refreshes it every lease interval, and one not refreshed for the stale age is
+ * free whatever pid it names, since a killed holder's pid can be reused by an unrelated live process. */
+function slotLease(): { leaseMs: number; staleMs: number } {
+  const leaseMs = detectorLimit("ATDD_BUN_DETECTOR_LEASE_MS", 5_000), staleMs = detectorLimit("ATDD_BUN_DETECTOR_STALE_MS", 60_000);
+  if (staleMs <= leaseMs) throw new Error(`ATDD_BUN_DETECTOR_STALE_MS (${staleMs}) must exceed ATDD_BUN_DETECTOR_LEASE_MS (${leaseMs})`);
+  return { leaseMs, staleMs };
+}
+const slotDirectory = () => process.env.ATDD_BUN_DETECTOR_SLOTS_DIR ?? join(tmpdir(), "atdd-bun-detector-slots");
+
+/** Map `work` over `items` with at most `limit` in flight; results keep the order of `items`. */
+async function pooled<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const index = next++; results[index] = await work(items[index]); } };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+const errorCode = (error: unknown) => (error as NodeJS.ErrnoException).code;
+const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch (error) { return errorCode(error) === "EPERM"; } };
+const ownerPid = async (path: string) => Number((await readFile(path, "utf8").catch(() => "")).split(" ")[0]) || undefined;
+
+/** Hard-link the fully written claim to the slot path: atomic and exclusive, like O_EXCL, so a reader never sees a half-written owner. */
+async function claim(staging: string, slot: string): Promise<boolean> {
+  try { await link(staging, slot); return true; } catch (error) { if (errorCode(error) === "EEXIST") return false; throw error; }
+}
+
+/** Whether a slot file is a live lease: its owner runs and refreshed it within the stale age. Undefined when absent. */
+async function leaseHeld(path: string, staleMs: number): Promise<boolean | undefined> {
+  const info = await stat(path).catch(() => undefined);
+  if (!info) return undefined;
+  const owner = await ownerPid(path);
+  return owner !== undefined && alive(owner) && Date.now() - info.mtimeMs < staleMs;
+}
+
+/** Free a slot whose owner is gone or whose lease expired. Moving it aside first means two reclaimers cannot both
+ * delete it; a live lease claimed in the meantime is put back. */
+async function reclaimIfStale(slot: string, token: string, staleMs: number): Promise<void> {
+  if (await leaseHeld(slot, staleMs) !== false) return;
+  const aside = `${slot}.reclaim-${token.replace(" ", "-")}`;
+  try { await rename(slot, aside); } catch { return; }
+  if (await leaseHeld(aside, staleMs)) await link(aside, slot).catch(() => undefined);
+  await rm(aside, { force: true });
+}
+
+const touch = (path: string) => { const now = new Date(); return utimes(path, now, now); };
+
+/** Keep a claimed slot's lease fresh until it is released. */
+function holdLease(slot: string, token: string, leaseMs: number): () => Promise<void> {
+  const timer = setInterval(() => void touch(slot).catch(() => undefined), leaseMs);
+  timer.unref();
+  return async () => { clearInterval(timer); await release(slot, token); };
+}
+
+const warned = new Set<string>();
+function warnUnusable(directory: string, error: unknown): void {
+  if (warned.has(directory)) return;
+  warned.add(directory);
+  process.stderr.write(`atdd-bun: detector slot directory ${directory} is unusable (${(error as Error).message}); bounding detectors by the per-run cap only\n`);
+}
+
+/** Take one of the host-wide detector slots, waiting with a small backoff while all are leased. Returns the release.
+ * A slot directory that cannot be used at all degrades to the per-run cap, reported on stderr. */
+async function acquireHostSlot(): Promise<() => Promise<void>> {
+  const limit = hostDetectorLimit(), { leaseMs, staleMs } = slotLease(), directory = slotDirectory();
+  const token = `${process.pid} ${crypto.randomUUID()}`, staging = join(directory, `.claim-${token.replace(" ", "-")}`);
+  try {
+    await mkdir(directory, { recursive: true });
+    await writeFile(staging, token);
+    for (let delay = 5; ; delay = Math.min(delay * 2, 200)) {
+      // A claim links this file, so it must be fresh: a waiter's slot starts its lease at the claim.
+      await touch(staging);
+      for (let index = 0; index < limit; index++) {
+        const slot = join(directory, `slot-${index}`);
+        if (await claim(staging, slot)) return holdLease(slot, token, leaseMs);
+        await reclaimIfStale(slot, token, staleMs);
+        if (await claim(staging, slot)) return holdLease(slot, token, leaseMs);
+      }
+      await Bun.sleep(delay);
+    }
+  } catch (error) {
+    warnUnusable(directory, error);
+    return async () => undefined;
+  } finally {
+    await rm(staging, { force: true }).catch(() => undefined);
+  }
+}
+
+/** Release only a slot this claim still owns. */
+async function release(slot: string, token: string): Promise<void> {
+  if (await readFile(slot, "utf8").catch(() => "") === token) await rm(slot, { force: true });
+}
+
+/** Run `work` while holding one host-wide detector slot. */
+async function withHostSlot<T>(work: () => Promise<T>): Promise<T> {
+  const release = await acquireHostSlot();
+  try { return await work(); } finally { await release(); }
+}
+
 export async function runImplementation(
   implementation: string,
   config: Required<Pick<EnforcementConfig, "scanRoots" | "excludes">> & { profiles?: ConcreteProfile[] },
@@ -134,23 +247,26 @@ export async function runImplementation(
   const report = join(scratch, "violations.json");
   try {
     const bun = Bun.which("bun") ?? process.execPath, topology = await topologyFor(config.scanRoots[0] ?? process.cwd());
-    const child = Bun.spawn({
-      cmd: [bun, detector],
-      cwd: config.scanRoots[0] ?? process.cwd(),
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        ATDD_SCAN_ROOTS: JSON.stringify(config.scanRoots),
-        ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
-        ATDD_PLAN_ROOT: topology.planRoot,
-        ATDD_VIOLATIONS_REPORT: report,
-        // The profiles this run selected, so a detector shared by several profiles can tell a planning run from
-        // one that has reached RED or GREEN. Absent on a direct call, where detectors keep their full behaviour.
-        ...(config.profiles ? { ATDD_PROFILES: JSON.stringify(config.profiles) } : {}),
-      },
+    // One host-wide slot per detector process, so concurrent runs cannot together exhaust the machine.
+    const { exitCode, child } = await withHostSlot(async () => {
+      const child = Bun.spawn({
+        cmd: [bun, detector],
+        cwd: config.scanRoots[0] ?? process.cwd(),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          ATDD_SCAN_ROOTS: JSON.stringify(config.scanRoots),
+          ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
+          ATDD_PLAN_ROOT: topology.planRoot,
+          ATDD_VIOLATIONS_REPORT: report,
+          // The profiles this run selected, so a detector shared by several profiles can tell a planning run from
+          // one that has reached RED or GREEN. Absent on a direct call, where detectors keep their full behaviour.
+          ...(config.profiles ? { ATDD_PROFILES: JSON.stringify(config.profiles) } : {}),
+        },
+      });
+      return { exitCode: await child.exited, child };
     });
-    const exitCode = await child.exited;
     if (exitCode !== 0) {
       const stderr = await new Response(child.stderr).text();
       throw new Error(`${implementation} failed to run (exit ${exitCode}): ${stderr.trim()}`);
@@ -175,8 +291,8 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   // is validated on every run, so a misspelled atdd-bun.yaml fails whichever profile is requested.
   const requested = config.profiles ?? ["all"], enabled = await enabledProfiles(root);
   const selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...enabled])] : requested;
-  const results = await Promise.all(
-    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes, profiles: selected as ConcreteProfile[] })),
+  const results = await pooled(implementationsFor(selected), runDetectorLimit(),
+    (implementation) => runImplementation(implementation, { scanRoots, excludes, profiles: selected as ConcreteProfile[] }),
   );
   return results.flat().sort((left, right) =>
     left.rule_id.localeCompare(right.rule_id) || left.file.localeCompare(right.file) || left.line - right.line,
