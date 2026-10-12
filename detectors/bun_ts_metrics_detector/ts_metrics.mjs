@@ -243,6 +243,20 @@ const DECLARATION_END = /\bfrom "S"|^import "S"|\}/;
 const TYPE_BODY = /^(export )?(declare )?(type ID(<[^>]*>)? = \{|interface ID(<.*>)?( extends [^{]*)? \{)$/;
 const MEMBER = /^(readonly )?(ID|"S")\??: (.*[;,]|\{)$|^\}[;,]?$/;
 const braceDelta = (n) => (n.match(/\{/g) ?? []).length - (n.match(/\}/g) ?? []).length;
+// normalizeLine strips a block comment only when it closes on the same line, so a multi-line
+// comment's text (say a JSDoc ` * shape like { a`) would reach braceDelta and keep the body open
+// for the rest of the file. The body is tracked on the code part of each line only; whether the
+// line counts toward a window is unchanged.
+function codePart(n, inComment) {
+  let code = n;
+  if (inComment) {
+    const close = code.indexOf("*/");
+    if (close < 0) return { code: "", inComment: true };
+    code = code.slice(close + 2).trim();
+  }
+  const open = code.indexOf("/*");
+  return open < 0 ? { code, inComment: false } : { code: code.slice(0, open).trim(), inComment: true };
+}
 
 // A 16-hex-char digest of each `minLines` window of non-trivial normalized lines —
 // the same fingerprint shape the Python detector hashes with sha256[:16].
@@ -250,16 +264,19 @@ export function fragments(source, minLines, hasher) {
   const nonTrivial = [];
   let inDeclaration = false;
   let typeDepth = 0;
+  let inComment = false;
   source.split("\n").forEach((line, i) => {
     const n = normalizeLine(line);
+    const part = codePart(n, inComment);
+    inComment = part.inComment;
     if (!inDeclaration && DECLARATION.test(n)) inDeclaration = true;
     if (inDeclaration) {
       if (DECLARATION_END.test(n)) inDeclaration = false;
       return;
     }
-    const member = typeDepth > 0 && MEMBER.test(n);
-    if (typeDepth > 0) typeDepth = Math.max(0, typeDepth + braceDelta(n));
-    else if (TYPE_BODY.test(n)) typeDepth = 1;
+    const member = typeDepth > 0 && MEMBER.test(part.code);
+    if (typeDepth > 0) typeDepth = Math.max(0, typeDepth + braceDelta(part.code));
+    else if (TYPE_BODY.test(part.code)) typeDepth = 1;
     if (!member && !isTrivial(n)) nonTrivial.push([i + 1, n]);
   });
   if (nonTrivial.length < minLines) return [];
