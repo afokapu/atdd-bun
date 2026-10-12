@@ -85,9 +85,9 @@
           },
           "to": {
             "type": "string",
-            "enum": ["internal", "external"],
+            "pattern": "^(internal|external|system:[a-z][a-z0-9-]*)$",
             "default": "external",
-            "description": "Optional visibility: internal (private to this wagon), external (public to all wagons including self). Defaults to external when omitted."
+            "description": "Optional destination: internal (private to this wagon), external (public to all wagons including self), or system:service (written to a platform service, symmetric with consume from: system:service). Defaults to external when omitted."
           },
           "version": {
             "type": "string",

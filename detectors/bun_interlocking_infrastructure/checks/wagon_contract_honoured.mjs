@@ -70,23 +70,35 @@ function consumerRoots(root, excludes) {
   return roots;
 }
 
-// Artifact names under `produce:` / `consume:` in a wagon document. Read line-wise
+// Items under `produce:` / `consume:` in a wagon document: each artifact `name` with its
+// declared consume source (`from:`) or produce destination (`to:`). Read line-wise
 // rather than with a YAML parser so this check carries no dependency the rest of the
 // family does not already have; the shape it reads is the one core's schema requires.
 export function wagonContract(text) {
   if (!/^wagon:\s*\S/m.test(text)) return null;
   const out = { produce: [], consume: [] };
-  let section = null;
+  let section = null, item = null, itemIndent = -1;
   for (const line of text.split(/\r?\n/)) {
     const top = line.match(/^(\w+):\s*$/);
-    if (top) { section = top[1] === "produce" || top[1] === "consume" ? top[1] : null; continue; }
-    if (/^\S/.test(line)) { section = null; continue; }
+    if (top) { section = top[1] === "produce" || top[1] === "consume" ? top[1] : null; item = null; itemIndent = -1; continue; }
+    if (/^\S/.test(line)) { section = null; item = null; continue; }
     if (!section) continue;
-    const name = line.match(/^\s*-?\s*name:\s*["']?([^"'#\s]+)["']?/);
-    if (name) out[section].push(name[1]);
+    const dash = line.match(/^(\s*)-(?:\s|$)/);
+    if (dash && (itemIndent < 0 || dash[1].length === itemIndent)) {
+      itemIndent = dash[1].length;
+      item = { name: null, from: null, to: null };
+      out[section].push(item);
+    }
+    const field = line.match(/^\s*(?:-\s*)?(name|from|to):\s*["']?([^"'#\s]+)["']?/);
+    if (field && item && item[field[1]] === null) item[field[1]] = field[2];
   }
+  for (const kind of ["produce", "consume"]) out[kind] = out[kind].filter((entry) => entry.name);
   return out.produce.length || out.consume.length ? out : null;
 }
+
+// A declared platform-service side: a consume `from: system:<service>` or a produce
+// `to: system:<service>`. That side is storage, not Cargo, so it carries no Cargo move.
+const systemSide = (end) => typeof end === "string" && /^system:[a-z][a-z0-9-]*$/.test(end);
 
 // Blank out COMMENTS, keeping string literals intact.
 //
@@ -213,6 +225,11 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
         for (const step of doc.sequence) for (const end of [step?.from, step?.to]) if (typeof end === "string" && end.startsWith("wagon:")) carried.add(end.slice(6).trim());
     }
     if (!contracts.length) continue;                     // no declared contract
+    // Wagons that declare they put an artifact into Cargo (any produce not written to system:).
+    // A system: consume label cannot relabel one of these: that artifact travels as Cargo.
+    const cargoProducers = new Map();
+    for (const c of contracts) for (const p of c.produce) if (!systemSide(p.to))
+      cargoProducers.set(p.name, [...(cargoProducers.get(p.name) ?? []), c.wagon]);
 
     const sources = walk(croot, (p) => TS.test(p) && !TEST.test(p), excludes)
       .map((file) => ({ file, text: maskComments(read(file)) }));
@@ -234,11 +251,28 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
         for (const artifact of moves.reads) reads.add(artifact);
         for (const artifact of moves.writes) writes.add(artifact);
       }
-      for (const [kind, names] of [["produce", c.produce], ["consume", c.consume]]) {
-        for (const name of names) {
+      const rel = c.file.startsWith(croot + sep) ? c.file.slice(croot.length + 1) : c.file;
+      for (const [kind, items] of [["produce", c.produce], ["consume", c.consume]]) {
+        for (const { name, from, to } of items) {
+          const side = kind === "produce" ? to : from;
+          if (systemSide(side)) {
+            const others = kind === "consume" ? (cargoProducers.get(name) ?? []).filter((w) => w !== c.wagon) : [];
+            if (others.length) {
+              violations.push({
+                rule_id: RULE, file: rel, line: 1, col: 0,
+                evidence:
+                  `the wagon declares it consumes "${name}" from ${side}, but ` +
+                  `${others.map((w) => `wagon:${w}`).join(", ")} produces it into Cargo; a system: ` +
+                  `source cannot relabel Cargo traffic, so declare its wagon: source and read it through Cargo`,
+                source_line: "",
+              });
+              continue;
+            }
+            // Storage, not Cargo: no Cargo move is owed, but the wagon must still be bound to its train step.
+            if (handlers.length) continue;
+          }
           const moved = kind === "produce" ? writes : reads;
           if (moved.has(name)) continue;
-          const rel = c.file.startsWith(croot + sep) ? c.file.slice(croot.length + 1) : c.file;
           violations.push({
             rule_id: RULE, file: rel, line: 1, col: 0,
             evidence:
