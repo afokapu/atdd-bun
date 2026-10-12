@@ -116,7 +116,8 @@ function contractRegistryFindings(root: string, wagons: PlanArtifact[], registry
     const name = text(produced.name), contract = text(produced.contract), producer = text(wagon.data.wagon);
     const consumers = (byName.get(name) ?? []).filter(consumer => consumer && consumer !== producer);
     if (consumers.length && !contract) findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} has contract null but is consumed cross-wagon by ${consumers.sort().join(", ")}`));
-    if (contract && !consumers.length && text(produced.to || "external") !== "external") findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} declares ${contract} but has no cross-wagon consumer and is not marked to: external`));
+    const to = text(produced.to || "external");
+    if (contract && !consumers.length && to !== "external" && !/^system:[a-z][a-z0-9-]*$/.test(to)) findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} declares ${contract} but has no cross-wagon consumer and is not marked to: external`));
   }
   return findings;
 }

@@ -225,11 +225,14 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
         for (const step of doc.sequence) for (const end of [step?.from, step?.to]) if (typeof end === "string" && end.startsWith("wagon:")) carried.add(end.slice(6).trim());
     }
     if (!contracts.length) continue;                     // no declared contract
-    // Wagons that declare they put an artifact into Cargo (any produce not written to system:).
-    // A system: consume label cannot relabel one of these: that artifact travels as Cargo.
-    const cargoProducers = new Map();
-    for (const c of contracts) for (const p of c.produce) if (!systemSide(p.to))
-      cargoProducers.set(p.name, [...(cargoProducers.get(p.name) ?? []), c.wagon]);
+    // Wagons that put an artifact into Cargo (any produce not written to system:) or take one
+    // from Cargo (any consume not read from system:). A system: label on the other side of such
+    // an artifact cannot relabel it: that artifact travels as Cargo.
+    const cargoProducers = new Map(), cargoConsumers = new Map();
+    for (const c of contracts) {
+      for (const p of c.produce) if (!systemSide(p.to)) cargoProducers.set(p.name, [...(cargoProducers.get(p.name) ?? []), c.wagon]);
+      for (const q of c.consume) if (!systemSide(q.from)) cargoConsumers.set(q.name, [...(cargoConsumers.get(q.name) ?? []), c.wagon]);
+    }
 
     const sources = walk(croot, (p) => TS.test(p) && !TEST.test(p), excludes)
       .map((file) => ({ file, text: maskComments(read(file)) }));
@@ -256,14 +259,16 @@ for (const root of parseJsonEnv("ATDD_SCAN_ROOTS", [])) {
         for (const { name, from, to } of items) {
           const side = kind === "produce" ? to : from;
           if (systemSide(side)) {
-            const others = kind === "consume" ? (cargoProducers.get(name) ?? []).filter((w) => w !== c.wagon) : [];
+            const others = ((kind === "consume" ? cargoProducers : cargoConsumers).get(name) ?? []).filter((w) => w !== c.wagon);
             if (others.length) {
+              const wagons = others.map((w) => `wagon:${w}`).join(", ");
               violations.push({
                 rule_id: RULE, file: rel, line: 1, col: 0,
-                evidence:
-                  `the wagon declares it consumes "${name}" from ${side}, but ` +
-                  `${others.map((w) => `wagon:${w}`).join(", ")} produces it into Cargo; a system: ` +
-                  `source cannot relabel Cargo traffic, so declare its wagon: source and read it through Cargo`,
+                evidence: kind === "consume"
+                  ? `the wagon declares it consumes "${name}" from ${side}, but ${wagons} produces it into Cargo; ` +
+                    `a system: source cannot relabel Cargo traffic, so declare its wagon: source and read it through Cargo`
+                  : `the wagon declares it produces "${name}" to ${side}, but ${wagons} consumes it through Cargo; ` +
+                    `a system: destination cannot relabel Cargo traffic, so drop the system: destination and write it through Cargo`,
                 source_line: "",
               });
               continue;
