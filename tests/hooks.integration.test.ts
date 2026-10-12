@@ -1,8 +1,9 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import * as enforcer from "../src/enforce";
 import { concreteProfiles } from "../src/enforce";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, policy, runHook, startWorktree, uninstallHooks, worktreeStatus } from "../src/hooks";
 import { activationContextDigest, contextDigest } from "../src/ratchet";
@@ -698,3 +699,107 @@ test("pre-push exempts only the SHAs the remote advertises: a remote branch rewo
     expect(rewound.ok).toBeFalse(); expect(rewound.message).toContain("commits per push 3 exceed 2");
   } finally { await cleanup(root); await cleanup(bare); }
 }, 60_000);
+
+/** Record every enforce() call by the exact tree it scanned and the profiles it selected; `stub` skips the detectors. */
+function watchEnforce(stub = false) {
+  const original = enforcer.enforce, calls: Array<{ tree: string; profiles: string[] }> = [];
+  const spy = spyOn(enforcer, "enforce").mockImplementation(async (config = {}) => {
+    calls.push({ tree: (await git(config.root!, ["rev-parse", "HEAD^{tree}"])).out.trim(), profiles: [...(config.profiles ?? [])] });
+    return stub ? [] : original(config);
+  });
+  return { calls, restore: () => spy.mockRestore() };
+}
+const treeOf = async (root: string, commit: string) => (await git(root, ["rev-parse", `${commit}^{tree}`])).out.trim();
+const findingsCache = (root: string) => join(root, ".git", "atdd-bun", "findings-cache");
+
+test("strict pre-push selects the pre-commit affected-area profiles for a code-only change, not the full fleet", async () => {
+  const root = await repo(), watch = watchEnforce(true); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, topology, planner, coder, tester, security]\n"); const base = await commitAll(root, "strict base");
+    await mkdir(join(root, "src")); await writeFile(join(root, "src", "orders.ts"), "export const orders = 1;\n"); const code = await commitAll(root, "code-only change");
+    const result = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${code} refs/heads/feature ${base}\n`);
+    expect(result.ok, result.message).toBeTrue();
+    expect(watch.calls.map(call => call.profiles)).toEqual([["coder", "tester"]]);
+  } finally { watch.restore(); await cleanup(root); }
+}, 30_000);
+
+test("strict pre-push still selects planner, traceability and topology when atdd-bun.yaml or a registry path changes", async () => {
+  const root = await repo(), watch = watchEnforce(true); try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [traceability, topology, planner, coder, tester]\n"); const base = await commitAll(root, "strict base");
+    await writeFile(join(root, "atdd-bun.yaml"), "# touched\nprofiles: [traceability, topology, planner, coder, tester]\n"); const config = await commitAll(root, "policy change");
+    await mkdir(join(root, "contracts")); await writeFile(join(root, "contracts", "_orders.yaml"), "contracts: []\n"); const registry = await commitAll(root, "registry change");
+    for (const [from, to] of [[base, config], [config, registry]]) {
+      const result = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${to} refs/heads/feature ${from}\n`);
+      expect(result.ok, result.message).toBeTrue();
+    }
+    expect(watch.calls.map(call => [...call.profiles].sort())).toEqual([["planner", "topology", "traceability"], ["planner", "topology", "traceability"]]);
+  } finally { watch.restore(); await cleanup(root); }
+}, 30_000);
+
+async function ratchetedPush() {
+  const root = await repo();
+  await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+  const base = await commitAll(root, "ratchet base with carried debt");
+  await writeFile(join(root, "readme.md"), "safe\n"); const safe = await commitAll(root, "safe candidate");
+  return { root, base, safe, push: `refs/heads/feature ${safe} refs/heads/feature ${base}\n` };
+}
+
+test("ratchet pre-push run twice on the same base computes base findings once with an identical verdict", async () => {
+  const { root, base, push } = await ratchetedPush(), watch = watchEnforce(); try {
+    const first = await runHook("pre-push", root, ["origin"], push), second = await runHook("pre-push", root, ["origin"], push);
+    expect(first.ok, first.message).toBeTrue(); expect(JSON.parse(first.message)).toMatchObject({ carried: [expect.any(String)], new: [] });
+    expect(second.ok).toBeTrue(); expect(second.message).toBe(first.message);
+    const baseTree = await treeOf(root, base);
+    expect(watch.calls.filter(call => call.tree === baseTree)).toHaveLength(1);
+  } finally { watch.restore(); await cleanup(root); }
+}, 60_000);
+
+test("ratchet pre-push ignores and recomputes a mismatched or corrupt findings cache entry", async () => {
+  const { root, base, push } = await ratchetedPush(), watch = watchEnforce(); try {
+    const first = await runHook("pre-push", root, ["origin"], push);
+    expect(first.ok, first.message).toBeTrue();
+    const entries = (await readdir(findingsCache(root))).map(name => join(findingsCache(root), name));
+    expect(entries.length).toBeGreaterThan(0);
+    for (const entry of entries) { const data = JSON.parse(await readFile(entry, "utf8")); await writeFile(entry, JSON.stringify({ ...data, key: { ...data.key, tree: zeroSha }, findings: [] })); }
+    const mismatched = await runHook("pre-push", root, ["origin"], push);
+    for (const entry of entries) await writeFile(entry, "{ not json");
+    const corrupt = await runHook("pre-push", root, ["origin"], push);
+    expect(mismatched.message).toBe(first.message); expect(corrupt.message).toBe(first.message);
+    const baseTree = await treeOf(root, base);
+    expect(watch.calls.filter(call => call.tree === baseTree)).toHaveLength(3);
+  } finally { watch.restore(); await cleanup(root); }
+}, 90_000);
+
+test("ratchet pre-push still rejects a new candidate finding with a warm base cache", async () => {
+  const { root, base, push } = await ratchetedPush(), watch = watchEnforce(); try {
+    expect((await runHook("pre-push", root, ["origin"], push)).ok).toBeTrue();
+    await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); const bad = await commitAll(root, "new finding");
+    const rejected = await runHook("pre-push", root, ["origin"], `refs/heads/feature ${bad} refs/heads/feature ${base}\n`);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ base, candidate: bad, carried: [expect.any(String)], new: [expect.any(String)] });
+    const baseTree = await treeOf(root, base);
+    expect(watch.calls.filter(call => call.tree === baseTree)).toHaveLength(1);
+  } finally { watch.restore(); await cleanup(root); }
+}, 90_000);
+
+test("ratchet pre-push misses the findings cache when the toolkit version, detector digest or profile list changes", async () => {
+  const { root, base, push } = await ratchetedPush(), watch = watchEnforce(); try {
+    const first = await runHook("pre-push", root, ["origin"], push);
+    expect(first.ok, first.message).toBeTrue();
+    const cache = await import("../src/findings-cache"), real = await cache.toolkitIdentity();
+    for (const changed of [{ ...real, version: `${real.version}-other` }, { ...real, digest: "0".repeat(64) }]) {
+      const identity = spyOn(cache, "toolkitIdentity").mockResolvedValue(changed);
+      try { expect((await runHook("pre-push", root, ["origin"], push)).message).toBe(first.message); } finally { identity.mockRestore(); }
+    }
+    const baseTree = await treeOf(root, base);
+    expect(watch.calls.filter(call => call.tree === baseTree)).toHaveLength(3);
+  } finally { watch.restore(); await cleanup(root); }
+
+  const profiled = await repo(), again = watchEnforce(); try {
+    await writeFile(join(profiled, "atdd-bun.yaml"), "profiles: [traceability]\n"); await mkdir(join(profiled, "plan")); await writeFile(join(profiled, "plan", "orders.yaml"), debt);
+    const profileBase = await commitAll(profiled, "base with one profile");
+    await writeFile(join(profiled, "atdd-bun.yaml"), rejectNew("traceability")); const same = await commitAll(profiled, "ratchet the same profile");
+    await writeFile(join(profiled, "atdd-bun.yaml"), rejectNew("topology, traceability")); const expanded = await commitAll(profiled, "expand the profile list");
+    for (const candidate of [same, same, expanded]) await runHook("pre-push", profiled, ["origin"], `refs/heads/feature ${candidate} refs/heads/feature ${profileBase}\n`);
+    const baseTree = await treeOf(profiled, profileBase);
+    expect(again.calls.filter(call => call.tree === baseTree).map(call => call.profiles)).toEqual([["traceability"], ["topology", "traceability"]]);
+  } finally { again.restore(); await cleanup(profiled); }
+}, 120_000);
