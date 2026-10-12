@@ -784,7 +784,7 @@ test("ratchet pre-push misses the findings cache when the toolkit version, detec
   const { root, base, push } = await ratchetedPush(), watch = watchEnforce(); try {
     const first = await runHook("pre-push", root, ["origin"], push);
     expect(first.ok, first.message).toBeTrue();
-    const cache = await import("../src/findings-cache"), real = await cache.toolkitIdentity();
+    const cache = await import("../src/hooks"), real = await cache.toolkitIdentity();
     for (const changed of [{ ...real, version: `${real.version}-other` }, { ...real, digest: "0".repeat(64) }]) {
       const identity = spyOn(cache, "toolkitIdentity").mockResolvedValue(changed);
       try { expect((await runHook("pre-push", root, ["origin"], push)).message).toBe(first.message); } finally { identity.mockRestore(); }
