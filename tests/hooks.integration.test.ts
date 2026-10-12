@@ -904,3 +904,12 @@ test("pre-commit incremental enforces nothing for a reject-new commit touching n
     expect(JSON.parse(result.message)).toMatchObject({ profiles: [], new: [] });
   } finally { watch.restore(); await cleanup(root); }
 }, 30_000);
+
+test("pre-commit incremental rejects a cold-cache first candidate finding", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability")); await commitAll(root, "clean ratchet base");
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); await git(root, ["add", "plan/payments.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok).toBeFalse(); expect(JSON.parse(result.message)).toMatchObject({ new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 30_000);
