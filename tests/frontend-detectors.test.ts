@@ -405,3 +405,12 @@ test("negative: a duplicated enum body still fires", async () => {
     "shipping/domain/shipment-key.ts": enumOf("ShipmentKey", shipmentNames),
   })).length).toBeGreaterThan(0);
 });
+
+test("negative: an unbalanced brace in a multi-line comment inside a type body does not hide a later duplicated object literal", async () => {
+  const file = (type: string, name: string, names: string[]) =>
+    `export type ${type} = {\n  /* see {\n   */\n  a: string;\n};\nexport const ${name} = {\n${fields(names, (n) => `  ${n}: source,`)}\n};\n`;
+  expect((await duplications({
+    "orders/domain/order-options.ts": file("OrderOptions", "orderOptions", orderNames),
+    "shipping/domain/shipment-options.ts": file("ShipmentOptions", "shipmentOptions", shipmentNames),
+  })).length).toBeGreaterThan(0);
+});
