@@ -148,12 +148,14 @@ test("an unusable slot directory falls back to the per-run cap and says so on st
   const root = await repo({ ...CODER }), notADirectory = join(await slotsDir(), "file");
   await writeFile(notADirectory, "");
   const counted = countDetectors(2), stderr = spyOn(process.stderr, "write").mockImplementation(() => true);
+  let written = "";
   try {
     await withEnv({ ATDD_BUN_MAX_DETECTORS: "2", ATDD_BUN_HOST_DETECTORS: "1", ATDD_BUN_DETECTOR_SLOTS_DIR: notADirectory }, () => enforce({ root, profiles: ["coder"] }));
+    written = stderr.mock.calls.map(([text]) => String(text)).join("");
   } finally { counted.restore(); stderr.mockRestore(); }
   expect(counted.live.started).toBe(7);
   expect(counted.live.peak).toBe(2);
-  expect(stderr.mock.calls.map(([text]) => String(text)).join("")).toContain("per-run cap only");
+  expect(written).toContain("per-run cap only");
 });
 
 test("an invalid detector concurrency setting fails closed", async () => {

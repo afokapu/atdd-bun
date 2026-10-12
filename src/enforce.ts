@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pooled, runDetectorLimit, withHostSlot } from "./detector-slots";
 import { topologyFor } from "./topology";
 
 export type Profile = "traceability" | "topology" | "docs" | "planner" | "telemetry" | "coder" | "tester" | "security" | "architecture" | "metrics" | "runtime" | "interlocking" | "htmx" | "design" | "flow" | "all";
@@ -134,23 +135,26 @@ export async function runImplementation(
   const report = join(scratch, "violations.json");
   try {
     const bun = Bun.which("bun") ?? process.execPath, topology = await topologyFor(config.scanRoots[0] ?? process.cwd());
-    const child = Bun.spawn({
-      cmd: [bun, detector],
-      cwd: config.scanRoots[0] ?? process.cwd(),
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        ATDD_SCAN_ROOTS: JSON.stringify(config.scanRoots),
-        ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
-        ATDD_PLAN_ROOT: topology.planRoot,
-        ATDD_VIOLATIONS_REPORT: report,
-        // The profiles this run selected, so a detector shared by several profiles can tell a planning run from
-        // one that has reached RED or GREEN. Absent on a direct call, where detectors keep their full behaviour.
-        ...(config.profiles ? { ATDD_PROFILES: JSON.stringify(config.profiles) } : {}),
-      },
+    // One host-wide slot per detector process, so concurrent runs cannot together exhaust the machine.
+    const { exitCode, child } = await withHostSlot(async () => {
+      const child = Bun.spawn({
+        cmd: [bun, detector],
+        cwd: config.scanRoots[0] ?? process.cwd(),
+        stdout: "pipe",
+        stderr: "pipe",
+        env: {
+          ...process.env,
+          ATDD_SCAN_ROOTS: JSON.stringify(config.scanRoots),
+          ATDD_SCAN_EXCLUDES: JSON.stringify(config.excludes),
+          ATDD_PLAN_ROOT: topology.planRoot,
+          ATDD_VIOLATIONS_REPORT: report,
+          // The profiles this run selected, so a detector shared by several profiles can tell a planning run from
+          // one that has reached RED or GREEN. Absent on a direct call, where detectors keep their full behaviour.
+          ...(config.profiles ? { ATDD_PROFILES: JSON.stringify(config.profiles) } : {}),
+        },
+      });
+      return { exitCode: await child.exited, child };
     });
-    const exitCode = await child.exited;
     if (exitCode !== 0) {
       const stderr = await new Response(child.stderr).text();
       throw new Error(`${implementation} failed to run (exit ${exitCode}): ${stderr.trim()}`);
@@ -175,8 +179,8 @@ export async function enforce(config: EnforcementConfig = {}): Promise<Violation
   // is validated on every run, so a misspelled atdd-bun.yaml fails whichever profile is requested.
   const requested = config.profiles ?? ["all"], enabled = await enabledProfiles(root);
   const selected = requested.includes("all") ? [...new Set([...requested.filter(p => p !== "all"), ...enabled])] : requested;
-  const results = await Promise.all(
-    implementationsFor(selected).map((implementation) => runImplementation(implementation, { scanRoots, excludes, profiles: selected as ConcreteProfile[] })),
+  const results = await pooled(implementationsFor(selected), runDetectorLimit(),
+    (implementation) => runImplementation(implementation, { scanRoots, excludes, profiles: selected as ConcreteProfile[] }),
   );
   return results.flat().sort((left, right) =>
     left.rule_id.localeCompare(right.rule_id) || left.file.localeCompare(right.file) || left.line - right.line,
