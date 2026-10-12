@@ -234,11 +234,22 @@ export const isTrivial = (n) => TRIVIAL.has(n);
 const DECLARATION = /^(import\b|export (type )?(\{|\*))/;
 const DECLARATION_END = /\bfrom "S"|^import "S"|\}/;
 
+// Property signatures inside a `type X = {` / `interface X {` body are not code either: once
+// identifiers are folded, two unrelated records with seven `readonly id: string;` members match
+// line for line, and neither coupling the records nor a cosmetic edit is a fix. A member line
+// (optional `readonly`, a name, optional `?`, `:` a type, ending `;` or `,`), a member that opens a
+// nested object type, and that nested type's closing line are left out of the windows. The body
+// is tracked by brace depth; anything else inside it (a method signature, say) still counts.
+const TYPE_BODY = /^(export )?(declare )?(type ID(<[^>]*>)? = \{|interface ID(<.*>)?( extends [^{]*)? \{)$/;
+const MEMBER = /^(readonly )?(ID|"S")\??: (.*[;,]|\{)$|^\}[;,]?$/;
+const braceDelta = (n) => (n.match(/\{/g) ?? []).length - (n.match(/\}/g) ?? []).length;
+
 // A 16-hex-char digest of each `minLines` window of non-trivial normalized lines —
 // the same fingerprint shape the Python detector hashes with sha256[:16].
 export function fragments(source, minLines, hasher) {
   const nonTrivial = [];
   let inDeclaration = false;
+  let typeDepth = 0;
   source.split("\n").forEach((line, i) => {
     const n = normalizeLine(line);
     if (!inDeclaration && DECLARATION.test(n)) inDeclaration = true;
@@ -246,7 +257,10 @@ export function fragments(source, minLines, hasher) {
       if (DECLARATION_END.test(n)) inDeclaration = false;
       return;
     }
-    if (!isTrivial(n)) nonTrivial.push([i + 1, n]);
+    const member = typeDepth > 0 && MEMBER.test(n);
+    if (typeDepth > 0) typeDepth = Math.max(0, typeDepth + braceDelta(n));
+    else if (TYPE_BODY.test(n)) typeDepth = 1;
+    if (!member && !isTrivial(n)) nonTrivial.push([i + 1, n]);
   });
   if (nonTrivial.length < minLines) return [];
   const out = [];
