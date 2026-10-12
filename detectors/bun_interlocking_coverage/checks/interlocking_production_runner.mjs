@@ -29,6 +29,7 @@ import {
   mk,
   writeReport,
 } from "../_shared/interlocking.mjs";
+import { assertedJourneyExecution } from "../../../lib/journey-chain.mjs";
 
 const RULE = "tester.bun.interlocking-production-runner-used";
 const roots = parseJsonEnv("ATDD_SCAN_ROOTS", []);
@@ -72,7 +73,9 @@ for (const scanRoot of roots) {
         }
       }
 
-      const semantic = hasProductionExecutionProof(text, file, croot) ||
+      // A journey test drives the runners through the production JourneyRunner: its asserted result counts
+      // when the journey-mediated chain is proven on the AST (lib/journey-chain.mjs), as for the Station Master.
+      const semantic = hasProductionExecutionProof(text, file, croot) || assertedJourneyExecution(raw, file, croot) ||
         records.some((rec) => rec.actions.some((action) => stationMasterExecutionProof(text, action))) ||
         (drivesStationMaster(text) && records.some((rec) => rec.actions.some((action) =>
           stationModuleExecutionProof(text, station.text, action, station.file, croot),
