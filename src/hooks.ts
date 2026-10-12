@@ -1,9 +1,9 @@
-import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { concreteProfiles, enabledProfiles, enforce, normalizeProfileName } from "./enforce";
-import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, isStrictProfileExpansion, parseRatchetPolicy } from "./ratchet";
+import { concreteProfiles, enabledProfiles, enforce, normalizeProfileName, profileConventions } from "./enforce";
+import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy, type FindingIdentity } from "./ratchet";
 import { topologyFor } from "./topology";
 import { JOURNEY_DOCS_DIR } from "./journey-docs";
 
@@ -113,8 +113,9 @@ async function strictPushGate(root: string, candidate: string, range: string) {
   const candidateRoot = await mkdtemp(join(tmpdir(), "atdd-strict-push-candidate-"));
   try {
     await checkoutCommit(root, candidateRoot, candidate, "strict pre-push candidate");
-    const changed = await files(candidateRoot, ["diff", "--name-only", range]);
-    return await validation(candidateRoot, changed, true);
+    // The same affected-area selection as pre-commit, judged against the candidate's own registry policy.
+    const changed = await files(candidateRoot, ["diff", "--name-only", range]), cfg = await policy(candidateRoot);
+    return await validation(candidateRoot, changed, false, changed.some(path => isRegistry(cfg, path)));
   } catch (error) { return bad(`strict pre-push gate failed closed: ${String(error)}`); }
   finally { await git(root, ["worktree", "remove", "--force", candidateRoot]); await rm(candidateRoot, { recursive: true, force: true }); }
 }
@@ -170,6 +171,49 @@ async function existingBranchProtectedBase(root: string, candidate: string, remo
   return { base: tip && tip !== remoteBase.toLowerCase() ? tip : null };
 }
 
+/** Ratchet findings depend only on the scanned tree, the toolkit scanning it and the selected profiles, so they are cached
+ * under the Git common directory. An entry is advisory: unreadable, malformed or differently keyed means recompute, never clean. */
+const packageRoot = resolve(import.meta.dir, ".."), toolkitInputs = ["package.json", "relationships.yaml", "src", "lib", "detectors", "conventions", "planner-nodes", "planner-schemas"];
+export type ToolkitIdentity = { version: string; digest: string };
+async function toolkitFiles() {
+  const found = new Set<string>();
+  for (const input of toolkitInputs) {
+    const path = join(packageRoot, input);
+    if (!existsSync(path)) continue;
+    if ((await stat(path)).isFile()) { found.add(input); continue; }
+    for await (const file of new Bun.Glob("**/*").scan({ cwd: path, onlyFiles: true, dot: true })) found.add(`${input}/${file.replaceAll("\\", "/")}`);
+  }
+  // Companion conventions (the Flow lifecycle) live outside this package but still shape findings.
+  for (const { path } of Object.values(profileConventions).flat()) found.add(path);
+  return [...found].sort();
+}
+async function computeToolkitIdentity(): Promise<ToolkitIdentity> {
+  const hasher = new Bun.CryptoHasher("sha256");
+  for (const file of await toolkitFiles()) { const full = resolve(packageRoot, file); hasher.update(`${file}\0`).update(existsSync(full) ? await readFile(full) : "\0missing").update("\0"); }
+  const version = (JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as { version?: unknown }).version;
+  return { version: typeof version === "string" ? version : "unknown", digest: hasher.digest("hex") };
+}
+let identity: Promise<ToolkitIdentity> | undefined;
+/** The running toolkit's package version and a digest of every detector/convention input, computed once per process. */
+export function toolkitIdentity(): Promise<ToolkitIdentity> { return identity ??= computeToolkitIdentity(); }
+const cachedEntry = (text: string, key: string): FindingIdentity[] | null => {
+  const entry = JSON.parse(text) as { schema?: unknown; key?: unknown; findings?: unknown };
+  if (entry?.schema !== "atdd-bun.findings-cache/v1" || JSON.stringify(entry.key) !== key || !Array.isArray(entry.findings)) return null;
+  const valid = entry.findings.every(finding => finding && typeof finding.rule_id === "string" && typeof finding.file === "string" && findingFingerprint(finding));
+  return valid ? entry.findings : null;
+};
+/** Findings for one exact tree: reuse a valid entry, otherwise compute and record the result for the next push. */
+async function cachedFindings(directory: string | null, tree: string, toolkit: ToolkitIdentity | null, profiles: string[], compute: () => Promise<FindingIdentity[]>): Promise<FindingIdentity[]> {
+  if (!directory || !toolkit || !/^[0-9a-f]{40}$/i.test(tree)) return compute();
+  const key = JSON.stringify({ schema: "atdd-bun.findings-cache-key/v1", tree: tree.toLowerCase(), version: toolkit.version, digest: toolkit.digest, profiles: stable(profiles) });
+  const file = join(directory, `${new Bun.CryptoHasher("sha256").update(key).digest("hex")}.json`);
+  const hit = await readFile(file, "utf8").then(text => cachedEntry(text, key)).catch(() => null);
+  if (hit) return hit;
+  const findings = await compute(), scratch = `${file}.${process.pid}.${crypto.randomUUID()}.tmp`;
+  await mkdir(directory, { recursive: true }).then(() => writeFile(scratch, JSON.stringify({ schema: "atdd-bun.findings-cache/v1", key: JSON.parse(key), findings }))).then(() => rename(scratch, file)).catch(() => rm(scratch, { force: true }));
+  return findings;
+}
+
 async function ratchetPushGate(root: string, remoteBase: string, candidate: string, protectedBranches: string[], remote: string | undefined): Promise<{ ok: boolean; message: string } | null> {
   let base = remoteBase;
   if (!/^[0-9a-f]{40}$/i.test(candidate)) return bad("ratchet reject-new requires an exact local candidate commit");
@@ -213,13 +257,17 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
       // Only a protected tip judged under the same profile/context as the candidate is comparable; otherwise the remote tip alone decides.
       if (contextDigest(protectedConfig, candidateProfiles) === contextDigest(candidateConfig, candidateProfiles)) protectedUsed = protectedBase;
     }
-    const [baseFindings, candidateFindings, protectedFindings] = await Promise.all([
-      enforce({ root: baseRoot, profiles: candidateProfiles as any }),
-      enforce({ root: candidateRoot, profiles: candidateProfiles as any }),
-      protectedUsed ? enforce({ root: protectedRoot, profiles: candidateProfiles as any }) : Promise.resolve([]),
-    ]);
-    const carriedBase = [...normalize(baseFindings, baseRoot), ...normalize(protectedFindings, protectedRoot)];
-    const delta = compareFindings(carriedBase, normalize(candidateFindings, candidateRoot));
+    // Findings of an exact tree are reused across pushes; uncached enforcements run one at a time to cap peak processes.
+    const common = await git(root, ["rev-parse", "--git-common-dir"]), cacheDirectory = common.code || !common.out ? null : join(resolve(root, common.out), "atdd-bun", "findings-cache");
+    const toolkit = await toolkitIdentity().catch(() => null);
+    const findingsAt = async (directory: string, commit: string) => {
+      const tree = await git(root, ["rev-parse", "--verify", `${commit}^{tree}`]);
+      return cachedFindings(cacheDirectory, tree.code ? "" : tree.out, toolkit, candidateProfiles, async () => normalize(await enforce({ root: directory, profiles: candidateProfiles as any }), directory));
+    };
+    const baseFindings = await findingsAt(baseRoot, base);
+    const protectedFindings = protectedUsed ? await findingsAt(protectedRoot, protectedUsed) : [];
+    const candidateFindings = await findingsAt(candidateRoot, candidate);
+    const delta = compareFindings([...baseFindings, ...protectedFindings], candidateFindings);
     return { ok: delta.new.length === 0, message: JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base, ...(protectedUsed ? { protected_base: protectedUsed } : {}), candidate, profiles: candidateProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta }) };
   } catch (error) { return bad(`ratchet pre-push gate failed closed: ${String(error)}`); }
   finally {
