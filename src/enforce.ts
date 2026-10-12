@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { link, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { availableParallelism, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { topologyFor } from "./topology";
@@ -139,6 +139,13 @@ function detectorLimit(name: string, fallback: number): number {
 const runDetectorLimit = () => detectorLimit("ATDD_BUN_MAX_DETECTORS", Math.max(2, Math.floor(availableParallelism() / 2)));
 /** How many detectors all atdd-bun runs on this host may have in flight together. */
 const hostDetectorLimit = () => detectorLimit("ATDD_BUN_HOST_DETECTORS", availableParallelism());
+/** A held slot is a lease: its holder refreshes it every lease interval, and one not refreshed for the stale age is
+ * free whatever pid it names, since a killed holder's pid can be reused by an unrelated live process. */
+function slotLease(): { leaseMs: number; staleMs: number } {
+  const leaseMs = detectorLimit("ATDD_BUN_DETECTOR_LEASE_MS", 5_000), staleMs = detectorLimit("ATDD_BUN_DETECTOR_STALE_MS", 60_000);
+  if (staleMs <= leaseMs) throw new Error(`ATDD_BUN_DETECTOR_STALE_MS (${staleMs}) must exceed ATDD_BUN_DETECTOR_LEASE_MS (${leaseMs})`);
+  return { leaseMs, staleMs };
+}
 const slotDirectory = () => process.env.ATDD_BUN_DETECTOR_SLOTS_DIR ?? join(tmpdir(), "atdd-bun-detector-slots");
 
 /** Map `work` over `items` with at most `limit` in flight; results keep the order of `items`. */
@@ -159,16 +166,31 @@ async function claim(staging: string, slot: string): Promise<boolean> {
   try { await link(staging, slot); return true; } catch (error) { if (errorCode(error) === "EEXIST") return false; throw error; }
 }
 
-/** Free a slot whose owner process is gone. Moving it aside first means two reclaimers cannot both delete it; a slot
- * re-claimed by a live process in the meantime is put back. */
-async function reclaimIfDead(slot: string, token: string): Promise<void> {
-  const owner = await ownerPid(slot);
-  if (owner === undefined || alive(owner)) return;
+/** Whether a slot file is a live lease: its owner runs and refreshed it within the stale age. Undefined when absent. */
+async function leaseHeld(path: string, staleMs: number): Promise<boolean | undefined> {
+  const info = await stat(path).catch(() => undefined);
+  if (!info) return undefined;
+  const owner = await ownerPid(path);
+  return owner !== undefined && alive(owner) && Date.now() - info.mtimeMs < staleMs;
+}
+
+/** Free a slot whose owner is gone or whose lease expired. Moving it aside first means two reclaimers cannot both
+ * delete it; a live lease claimed in the meantime is put back. */
+async function reclaimIfStale(slot: string, token: string, staleMs: number): Promise<void> {
+  if (await leaseHeld(slot, staleMs) !== false) return;
   const aside = `${slot}.reclaim-${token.replace(" ", "-")}`;
   try { await rename(slot, aside); } catch { return; }
-  const moved = await ownerPid(aside);
-  if (moved !== undefined && alive(moved)) await link(aside, slot).catch(() => undefined);
+  if (await leaseHeld(aside, staleMs)) await link(aside, slot).catch(() => undefined);
   await rm(aside, { force: true });
+}
+
+const touch = (path: string) => { const now = new Date(); return utimes(path, now, now); };
+
+/** Keep a claimed slot's lease fresh until it is released. */
+function holdLease(slot: string, token: string, leaseMs: number): () => Promise<void> {
+  const timer = setInterval(() => void touch(slot).catch(() => undefined), leaseMs);
+  timer.unref();
+  return async () => { clearInterval(timer); await release(slot, token); };
 }
 
 const warned = new Set<string>();
@@ -178,20 +200,22 @@ function warnUnusable(directory: string, error: unknown): void {
   process.stderr.write(`atdd-bun: detector slot directory ${directory} is unusable (${(error as Error).message}); bounding detectors by the per-run cap only\n`);
 }
 
-/** Take one of the host-wide detector slots, waiting with a small backoff while all are held. Returns the release.
+/** Take one of the host-wide detector slots, waiting with a small backoff while all are leased. Returns the release.
  * A slot directory that cannot be used at all degrades to the per-run cap, reported on stderr. */
 async function acquireHostSlot(): Promise<() => Promise<void>> {
-  const limit = hostDetectorLimit(), directory = slotDirectory();
+  const limit = hostDetectorLimit(), { leaseMs, staleMs } = slotLease(), directory = slotDirectory();
   const token = `${process.pid} ${crypto.randomUUID()}`, staging = join(directory, `.claim-${token.replace(" ", "-")}`);
   try {
     await mkdir(directory, { recursive: true });
     await writeFile(staging, token);
     for (let delay = 5; ; delay = Math.min(delay * 2, 200)) {
+      // A claim links this file, so it must be fresh: a waiter's slot starts its lease at the claim.
+      await touch(staging);
       for (let index = 0; index < limit; index++) {
         const slot = join(directory, `slot-${index}`);
-        if (await claim(staging, slot)) return () => release(slot, token);
-        await reclaimIfDead(slot, token);
-        if (await claim(staging, slot)) return () => release(slot, token);
+        if (await claim(staging, slot)) return holdLease(slot, token, leaseMs);
+        await reclaimIfStale(slot, token, staleMs);
+        if (await claim(staging, slot)) return holdLease(slot, token, leaseMs);
       }
       await Bun.sleep(delay);
     }

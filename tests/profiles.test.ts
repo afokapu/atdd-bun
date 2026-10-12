@@ -184,9 +184,10 @@ test("an unusable slot directory falls back to the per-run cap and says so on st
 
 test("an invalid detector concurrency setting fails closed", async () => {
   const root = await repo({ ...CODER });
-  for (const [key, value] of [["ATDD_BUN_MAX_DETECTORS", "0"], ["ATDD_BUN_MAX_DETECTORS", "two"], ["ATDD_BUN_HOST_DETECTORS", "-1"], ["ATDD_BUN_HOST_DETECTORS", "1.5"]]) {
+  for (const [key, value] of [["ATDD_BUN_MAX_DETECTORS", "0"], ["ATDD_BUN_MAX_DETECTORS", "two"], ["ATDD_BUN_HOST_DETECTORS", "-1"], ["ATDD_BUN_HOST_DETECTORS", "1.5"], ["ATDD_BUN_DETECTOR_LEASE_MS", "0"], ["ATDD_BUN_DETECTOR_STALE_MS", "1e3"]]) {
     await expect(withEnv({ [key]: value, ATDD_BUN_DETECTOR_SLOTS_DIR: await slotsDir() }, () => enforce({ root, profiles: ["coder"] })), `${key}=${value}`).rejects.toThrow(`${key} must be a positive integer`);
   }
+  await expect(withEnv({ ATDD_BUN_DETECTOR_LEASE_MS: "100", ATDD_BUN_DETECTOR_STALE_MS: "100", ATDD_BUN_DETECTOR_SLOTS_DIR: await slotsDir() }, () => enforce({ root, profiles: ["coder"] }))).rejects.toThrow("must exceed ATDD_BUN_DETECTOR_LEASE_MS");
 });
 
 test("capping detector concurrency leaves the findings of a fixture run unchanged", async () => {
