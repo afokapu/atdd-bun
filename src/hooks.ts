@@ -33,7 +33,19 @@ const stagedStats = async (root: string) => (await git(root, ["diff", "--cached"
 
 export async function policy(root: string): Promise<HookPolicy> { const file = join(root, "atdd-bun.yaml"); if (!existsSync(file)) return defaultHookPolicy; return parsePolicy(await readFile(file, "utf8")); }
 function parsePolicy(text: string): HookPolicy { const data = Bun.YAML.parse(text) as Record<string, unknown>; const configuredWorktrees = data?.worktrees && typeof data.worktrees === "object" && !Array.isArray(data.worktrees) ? data.worktrees as Record<string, unknown> : {}; return { ...defaultHookPolicy, ...Object.fromEntries(Object.entries(data ?? {}).filter(([key, value]) => key in defaultHookPolicy && key !== "worktrees" && typeof value === typeof (defaultHookPolicy as any)[key])), protected_branches: strings(data?.protected_branches) ?? defaultHookPolicy.protected_branches, registry_paths: strings(data?.registry_paths) ?? defaultHookPolicy.registry_paths, worktrees: { ...defaultWorktreePolicy, ...Object.fromEntries(Object.entries(configuredWorktrees).filter(([key, value]) => key in defaultWorktreePolicy && typeof value === typeof (defaultWorktreePolicy as any)[key])) } }; }
-async function validation(root: string, changed: string[], full: boolean, registryChanged = false) { const profiles: any[] = [], topology = await topologyFor(root); if (registryChanged || changed.some(path => path.startsWith(`${topology.planRoot}/`)) || changed.includes("atdd-bun.yaml")) profiles.push("planner", "traceability"); if (changed.some(path => /\.(?:[cm]?[jt]sx?|html)$/.test(path))) profiles.push("coder", "tester"); if (changed.includes("atdd-bun.yaml") || changed.some(path => /\.ya?ml$/.test(path))) profiles.push("topology"); if (changed.some(isGeneratedView)) profiles.push("docs"); if (!profiles.length) return { ok: true, message: "no affected area" }; try { const enabled = await enabledProfiles(root), selected = full ? ["all" as const] : [...new Set(profiles)].filter(profile => enabled.includes(profile)); if (!selected.length) return { ok: true, message: "no activated profile covers the affected area" }; const findings = await enforce({ root, profiles: selected }); return findings.length ? bad(findings.map(f => `${f.rule_id}: ${f.file}`).join("\n")) : { ok: true, message: "validation clean" }; } catch (error) { return bad(`Bun enforcer resolution failed: ${String(error)}`); } }
+/** One mapping serves ordinary validation, strict pre-push, and the commit ratchet gate so their affected-area decisions cannot drift. */
+async function affectedProfiles(root: string, changed: string[], registryChanged = false) {
+  const profiles: string[] = [], topology = await topologyFor(root);
+  if (registryChanged || changed.some(path => path.startsWith(`${topology.planRoot}/`)) || changed.includes("atdd-bun.yaml")) profiles.push("planner", "traceability");
+  if (changed.some(path => /\.(?:[cm]?[jt]sx?|html)$/.test(path))) profiles.push("coder", "tester");
+  if (changed.includes("atdd-bun.yaml") || changed.some(path => /\.ya?ml$/.test(path))) profiles.push("topology");
+  if (changed.some(isGeneratedView)) profiles.push("docs");
+  return [...new Set(profiles)];
+}
+/** Detector inputs that can shift findings outside one changed area must retain the conservative full ratchet profile set. */
+const fullCommitRatchetInputs = ["package.json", "bun.lock", "bun.lockb", "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bunfig.toml"];
+const needsFullCommitRatchetProfiles = (path: string) => path === "atdd-bun.yaml" || fullCommitRatchetInputs.includes(basename(path)) || /^tsconfig.*\.json$/.test(basename(path));
+async function validation(root: string, changed: string[], full: boolean, registryChanged = false) { const profiles = await affectedProfiles(root, changed, registryChanged); if (!profiles.length) return { ok: true, message: "no affected area" }; try { const enabled = await enabledProfiles(root), selected = full ? ["all" as const] : profiles.filter(profile => enabled.includes(profile as any)); if (!selected.length) return { ok: true, message: "no activated profile covers the affected area" }; const findings = await enforce({ root, profiles: selected }); return findings.length ? bad(findings.map(f => `${f.rule_id}: ${f.file}`).join("\n")) : { ok: true, message: "validation clean" }; } catch (error) { return bad(`Bun enforcer resolution failed: ${String(error)}`); } }
 
 const stable = (profiles: string[]) => [...new Set(profiles)].sort();
 const configAt = async (root: string) => {
@@ -42,7 +54,7 @@ const configAt = async (root: string) => {
 };
 
 /** A staged reject-new policy compares its exact HEAD: equal active profiles are ordinary ratchet flow; strict expansion is the one bootstrap exception. */
-async function ratchetCommitGate(root: string): Promise<{ ok: boolean; message: string } | null> {
+async function ratchetCommitGate(root: string, staged: string[], registryChanged: boolean): Promise<{ ok: boolean; message: string } | null> {
   const stagedConfig = await git(root, ["show", ":atdd-bun.yaml"]);
   if (stagedConfig.code) return null;
   let candidateConfig: Record<string, unknown>, policy;
@@ -64,7 +76,16 @@ async function ratchetCommitGate(root: string): Promise<{ ok: boolean; message: 
     const activation = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
     const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || !policyMatches || (!activation && !unchanged)) return bad("ratchet reject-new requires either unchanged explicit profiles/context or an explicit monotonic profile expansion with identical non-profile context");
-    const baseFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
+    const selectedProfiles = activation || staged.some(needsFullCommitRatchetProfiles) ? candidateProfiles : (await affectedProfiles(root, staged, registryChanged)).filter(profile => candidateProfiles.includes(profile));
+    const tree = await git(root, ["write-tree"]);
+    if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
+    const baseTree = await git(root, ["rev-parse", "--verify", `${head.out}^{tree}`]);
+    if (baseTree.code || !/^[0-9a-f]{40}$/i.test(baseTree.out)) return bad(`could not identify ratchet activation base tree: ${baseTree.err || baseTree.out}`);
+    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
+    // Scan and cache the unpatched HEAD before materializing the staged candidate; both keys remain exact Git trees.
+    const cacheDirectory = await findingsCacheDirectory(root), toolkit = await toolkitIdentity().catch(() => null);
+    const findingsAt = async (treeId: string) => cachedFindings(cacheDirectory, treeId, toolkit, selectedProfiles, async () => normalize(await enforce({ root: scratch, profiles: selectedProfiles as any })));
+    const baseFindings = selectedProfiles.length ? await findingsAt(baseTree.out) : [];
     const patch = await git(root, ["diff", "--cached", "--binary"], undefined, true);
     if (patch.code) return bad(`could not read staged ratchet activation candidate: ${patch.err || patch.out}`);
     const applied = await git(scratch, ["apply", "--whitespace=nowarn"], patch.out);
@@ -72,12 +93,9 @@ async function ratchetCommitGate(root: string): Promise<{ ok: boolean; message: 
     const materialized = await configAt(scratch), materializedProfiles = stable(await enabledProfiles(scratch));
     const materializedContext = activation ? activationContextDigest(materialized) === activationContextDigest(candidateConfig) : materializedProfiles.join(",") === candidateProfiles.join(",") && contextDigest(materialized, materializedProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (!materializedContext) return bad("staged ratchet candidate did not materialize exactly");
-    const candidateFindings = await enforce({ root: scratch, profiles: candidateProfiles as any });
-    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
-    const delta = compareFindings(normalize(baseFindings), normalize(candidateFindings));
-    const tree = await git(root, ["write-tree"]);
-    if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
-    const report = JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base: head.out, candidate: tree.out, profiles: candidateProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta });
+    const candidateFindings = selectedProfiles.length ? await findingsAt(tree.out) : [];
+    const delta = compareFindings(baseFindings, candidateFindings);
+    const report = JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base: head.out, candidate: tree.out, profiles: selectedProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta });
     return { ok: delta.new.length === 0, message: report };
   } catch (error) { return bad(`ratchet activation commit gate failed closed: ${String(error)}`); }
   finally { await git(root, ["worktree", "remove", "--force", scratch]); await rm(scratch, { recursive: true, force: true }); }
@@ -203,6 +221,10 @@ const cachedEntry = (text: string, key: string): FindingIdentity[] | null => {
   return valid ? entry.findings : null;
 };
 /** Findings for one exact tree: reuse a valid entry, otherwise compute and record the result for the next push. */
+async function findingsCacheDirectory(root: string): Promise<string | null> {
+  const common = await git(root, ["rev-parse", "--git-common-dir"]);
+  return common.code || !common.out ? null : join(resolve(root, common.out), "atdd-bun", "findings-cache");
+}
 async function cachedFindings(directory: string | null, tree: string, toolkit: ToolkitIdentity | null, profiles: string[], compute: () => Promise<FindingIdentity[]>): Promise<FindingIdentity[]> {
   if (!directory || !toolkit || !/^[0-9a-f]{40}$/i.test(tree)) return compute();
   const key = JSON.stringify({ schema: "atdd-bun.findings-cache-key/v1", tree: tree.toLowerCase(), version: toolkit.version, digest: toolkit.digest, profiles: stable(profiles) });
@@ -258,7 +280,7 @@ async function ratchetPushGate(root: string, remoteBase: string, candidate: stri
       if (contextDigest(protectedConfig, candidateProfiles) === contextDigest(candidateConfig, candidateProfiles)) protectedUsed = protectedBase;
     }
     // Findings of an exact tree are reused across pushes; uncached enforcements run one at a time to cap peak processes.
-    const common = await git(root, ["rev-parse", "--git-common-dir"]), cacheDirectory = common.code || !common.out ? null : join(resolve(root, common.out), "atdd-bun", "findings-cache");
+    const cacheDirectory = await findingsCacheDirectory(root);
     const toolkit = await toolkitIdentity().catch(() => null);
     const findingsAt = async (directory: string, commit: string) => {
       const tree = await git(root, ["rev-parse", "--verify", `${commit}^{tree}`]);
@@ -289,7 +311,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
   if (["pre-commit", "pre-merge-commit"].includes(event) && cfg.protected_branches.includes(branch)) return bad(`protected branch ${branch} is blocked`);
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
-  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root); if (ratchet) return ratchet; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
+  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { const reports: string[] = []; let exclusions: Awaited<ReturnType<typeof countExclusionTips>> | undefined; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const isNew = !remoteSha || /^0+$/.test(remoteSha), range = isNew ? `${local}^..${local}` : `${remoteSha}..${local}`, shared = exclusions ??= await countExclusionTips(root, cfg.protected_branches, args[0]); if ("error" in shared) return bad(`could not list remote branch tips for the pushed range ${range}: ${shared.error}`); const counted = await git(root, ["rev-list", "--count", ...(shared.tips.length ? [isNew ? local : range, "--not", ...shared.tips] : [range])]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = remote?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
   if (event === "post-commit") { const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }

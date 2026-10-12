@@ -803,3 +803,113 @@ test("ratchet pre-push misses the findings cache when the toolkit version, detec
     expect(again.calls.filter(call => call.tree === baseTree).map(call => call.profiles)).toEqual([["traceability"], ["topology", "traceability"]]);
   } finally { again.restore(); await cleanup(profiled); }
 }, 120_000);
+
+const fullCommitRatchetProfiles = ["coder", "planner", "security", "tester", "topology", "traceability"];
+const fullCommitRatchet = () => rejectNew("traceability, topology, planner, coder, tester, security");
+
+async function commitRatchetRoot(profiles = fullCommitRatchet()) {
+  const root = await repo();
+  await writeFile(join(root, "atdd-bun.yaml"), profiles);
+  await commitAll(root, "ratchet base");
+  return root;
+}
+
+test("pre-commit incremental selects only configured affected profiles for a code-only reject-new candidate", async () => {
+  const root = await commitRatchetRoot(), watch = watchEnforce(true); try {
+    await mkdir(join(root, "src")); await writeFile(join(root, "src", "orders.ts"), "export const orders = 1;\n"); await git(root, ["add", "src/orders.ts"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(watch.calls.map(call => call.profiles)).toEqual([["coder", "tester"], ["coder", "tester"]]);
+    expect(JSON.parse(result.message)).toMatchObject({ profiles: ["coder", "tester"], new: [] });
+  } finally { watch.restore(); await cleanup(root); }
+}, 30_000);
+
+test("pre-commit incremental keeps the full profile set for config, activation, and detector-input changes", async () => {
+  const cases: Array<{ label: string; setup: (root: string) => Promise<string[]>; expected: string[] }> = [
+    {
+      label: "atdd-bun.yaml", expected: fullCommitRatchetProfiles,
+      setup: async root => { await writeFile(join(root, "atdd-bun.yaml"), `# touched\n${fullCommitRatchet()}`); return ["atdd-bun.yaml"]; },
+    },
+    {
+      label: "profile activation", expected: ["flow", "traceability"],
+      setup: async root => { await writeFile(join(root, "atdd-bun.yaml"), rejectNew("flow, traceability")); return ["atdd-bun.yaml"]; },
+    },
+    {
+      label: "tsconfig.json", expected: fullCommitRatchetProfiles,
+      setup: async root => { await writeFile(join(root, "tsconfig.json"), "{\"compilerOptions\": {}}\n"); return ["tsconfig.json"]; },
+    },
+  ];
+  for (const { label, setup, expected } of cases) {
+    const root = await repo(), watch = watchEnforce(true); try {
+      await writeFile(join(root, "atdd-bun.yaml"), label === "profile activation" ? "profiles: [flow]\n" : fullCommitRatchet()); await commitAll(root, `${label} base`);
+      await git(root, ["add", ...(await setup(root))]);
+      const result = await runHook("pre-commit", root);
+      expect(result.ok, `${label}: ${result.message}`).toBeTrue();
+      expect(watch.calls.map(call => call.profiles), label).toEqual([expected, expected]);
+      expect(JSON.parse(result.message).profiles, label).toEqual(expected);
+    } finally { watch.restore(); await cleanup(root); }
+  }
+}, 60_000);
+
+test("pre-commit incremental reuses the first candidate cache as the second commit base", async () => {
+  const root = await repo(), watch = watchEnforce(true); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability")); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    await commitAll(root, "ratchet base with debt");
+    await writeFile(join(root, "plan", "orders.yaml"), `${debt}# first candidate\n`); await git(root, ["add", "plan/orders.yaml"]);
+    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    const first = await commitAll(root, "first safe candidate"), firstTree = await treeOf(root, first);
+    await writeFile(join(root, "plan", "orders.yaml"), `${debt}# second candidate\n`); await git(root, ["add", "plan/orders.yaml"]);
+    const second = await runHook("pre-commit", root);
+    expect(second.ok, second.message).toBeTrue();
+    expect(watch.calls.filter(call => call.tree === firstTree)).toHaveLength(1);
+  } finally { watch.restore(); await cleanup(root); }
+}, 60_000);
+
+test("pre-commit incremental rejects a new finding with a warm base cache and recomputes corrupt entries", async () => {
+  const root = await repo(), watch = watchEnforce(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew()); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    await commitAll(root, "ratchet base with debt");
+    await writeFile(join(root, "plan", "orders.yaml"), `${debt}# first candidate\n`); await git(root, ["add", "plan/orders.yaml"]);
+    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    const first = await commitAll(root, "first safe candidate"), firstTree = await treeOf(root, first);
+    await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); await git(root, ["add", "plan/payments.yaml"]);
+    const rejected = await runHook("pre-commit", root);
+    expect(rejected.ok).toBeFalse(); expect(JSON.parse(rejected.message)).toMatchObject({ new: [expect.any(String)] });
+    expect(watch.calls.filter(call => call.tree === firstTree)).toHaveLength(1);
+  } finally { watch.restore(); await cleanup(root); }
+}, 90_000);
+
+test("pre-commit incremental recomputes corrupt findings-cache entries", async () => {
+  const root = await repo(), watch = watchEnforce(true); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability")); await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "orders.yaml"), debt);
+    await commitAll(root, "ratchet base with debt");
+    await writeFile(join(root, "plan", "orders.yaml"), `${debt}# first candidate\n`); await git(root, ["add", "plan/orders.yaml"]);
+    expect((await runHook("pre-commit", root)).ok).toBeTrue();
+    const first = await commitAll(root, "first safe candidate"), firstTree = await treeOf(root, first);
+    const entries = (await readdir(findingsCache(root))).map(name => join(findingsCache(root), name));
+    expect(entries.length).toBeGreaterThan(0); for (const entry of entries) await writeFile(entry, "{ corrupt");
+    await writeFile(join(root, "plan", "orders.yaml"), `${debt}# second candidate\n`); await git(root, ["add", "plan/orders.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(watch.calls.filter(call => call.tree === firstTree)).toHaveLength(2);
+  } finally { watch.restore(); await cleanup(root); }
+}, 60_000);
+
+test("pre-commit incremental enforces nothing for a reject-new commit touching no mapped area", async () => {
+  const root = await commitRatchetRoot(), watch = watchEnforce(true); try {
+    await writeFile(join(root, "readme.md"), "safe documentation-only change\n"); await git(root, ["add", "readme.md"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(watch.calls).toEqual([]);
+    expect(JSON.parse(result.message)).toMatchObject({ profiles: [], new: [] });
+  } finally { watch.restore(); await cleanup(root); }
+}, 30_000);
+
+test("pre-commit incremental rejects a cold-cache first candidate finding", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability")); await commitAll(root, "clean ratchet base");
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments")); await git(root, ["add", "plan/payments.yaml"]);
+    const result = await runHook("pre-commit", root);
+    expect(result.ok).toBeFalse(); expect(JSON.parse(result.message)).toMatchObject({ new: [expect.any(String)] });
+  } finally { await cleanup(root); }
+}, 30_000);
