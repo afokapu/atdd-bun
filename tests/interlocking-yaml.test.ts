@@ -307,3 +307,37 @@ test("the planner still refuses a free-text or empty system produce destination"
     });
   }
 });
+
+// A produce written to system: owes no Cargo.put, so it cannot carry an artifact another wagon still reads
+// through Cargo: the producer's Cargo obligation would vanish while the consumer's expectation stayed.
+const auditWagon = (from: string) =>
+  `wagon: audit\nproduce:\n  - name: audit:entry\n    contract: null\n    telemetry: null\nconsume:\n  - name: governance:model-routing.attempt\n${from ? `    from: ${from}\n` : ""}`;
+
+test("a system: produce of an artifact another wagon consumes through Cargo is refused", async () => {
+  for (const from of ["wagon:route-model", ""]) {
+    await withDecision({ "plan/audit/_audit.yaml": auditWagon(from) },
+      evidence => expect(evidence).toEqual([expect.stringMatching(/"governance:model-routing\.attempt".*system:canonical-store.*wagon:audit/)]));
+  }
+});
+
+test("a system: produce of an artifact another wagon also reads from system: is not a relabelled Cargo move", async () => {
+  await withDecision({ "plan/audit/_audit.yaml": auditWagon("system:canonical-store") }, evidence => expect(evidence).toEqual([]));
+});
+
+const coherenceFindings = async (to: string) => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-system-io-coherence-"));
+  try {
+    await writeAt(root, "plan/route-model/_route-model.yaml", plannerWagon(to).replace("contract: null", "contract: contract:governance:model-routing.attempt"));
+    await writeAt(root, "contracts/_contracts.yaml", "contracts:\n  - identity: governance:model-routing.attempt\n    path: contracts/governance/model-routing/attempt.schema.json\n    theme: governance\n    producers: [wagon:route-model]\n    consumers: []\n");
+    await writeAt(root, "contracts/governance/model-routing/attempt.schema.json", '{"type":"object"}\n');
+    return (await validateStaticPlannerConventions(root)).filter(f => f.evidence.includes("no cross-wagon consumer")).map(f => f.evidence);
+  } finally { await rm(root, { recursive: true, force: true }); }
+};
+
+test("a contracted produce written to system:<service> with no cross-wagon consumer is registry-coherent", async () => {
+  expect(await coherenceFindings("system:canonical-store")).toEqual([]);
+});
+
+test("a contracted produce kept internal with no cross-wagon consumer is still incoherent", async () => {
+  expect(await coherenceFindings("internal")).toEqual([expect.stringContaining("is not marked to: external")]);
+});
