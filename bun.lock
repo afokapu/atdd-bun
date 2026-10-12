@@ -5,7 +5,7 @@
     "": {
       "name": "@afokapu/atdd-bun",
       "dependencies": {
-        "@afokapu/atdd-flow": "^0.3.37",
+        "@afokapu/atdd-flow": "^0.3.38",
         "ajv": "^8.17.1",
         "ajv-formats": "^3.0.1",
         "typescript": "6.0.3",
@@ -17,7 +17,7 @@
     },
   },
   "packages": {
-    "@afokapu/atdd-flow": ["@afokapu/atdd-flow@0.3.37", "", { "dependencies": { "@typesafe-ai/sdk": "^0.6.0", "yaml": "2.9.0" }, "bin": { "atdd-flow": "bin/atdd-flow" } }, "sha512-SctLTEfUFDzIEm7LrXeS3wsJZRY/d6jd2aWfMNuDYBG13wa3yaB0vGMWcjhIQC1QK7wZG4OIWxGmDlp7XQSXGw=="],
+    "@afokapu/atdd-flow": ["@afokapu/atdd-flow@0.3.38", "", { "dependencies": { "@typesafe-ai/sdk": "^0.6.0", "yaml": "2.9.0" }, "bin": { "atdd-flow": "bin/atdd-flow" } }, "sha512-LpqkcMxSGfwiF9odoZ879eqkLhINjOcLzyV2HcfKnxHsKqxcVasZtstYVLP31cfeou7QQqZQFqZ7/WvvWrIHgQ=="],
 
     "@axe-core/playwright": ["@axe-core/playwright@4.13.0", "", { "dependencies": { "axe-core": "~4.13.0" }, "peerDependencies": { "playwright-core": ">= 1.0.0" } }, "sha512-6YLx+kxXu5GJceG4ozFg+33a2EMTdjYwWGloJ3sb9Kta5pp+ZNS53uxGVog5JetIY8s++P5UrtX+cri+u0VAVg=="],
 
