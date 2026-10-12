@@ -2,7 +2,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, stat, w
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { concreteProfiles, enabledProfiles, enforce, normalizeProfileName, profileConventions } from "./enforce";
+import { concreteProfiles, enabledProfiles, enforce, normalizeProfileName, profileConventions, type ConcreteProfile } from "./enforce";
 import { activationContextDigest, canonicalFindingPath, compareFindings, contextDigest, findingFingerprint, isStrictProfileExpansion, parseRatchetPolicy, type FindingIdentity } from "./ratchet";
 import { topologyFor } from "./topology";
 import { JOURNEY_DOCS_DIR } from "./journey-docs";
@@ -35,7 +35,7 @@ export async function policy(root: string): Promise<HookPolicy> { const file = j
 function parsePolicy(text: string): HookPolicy { const data = Bun.YAML.parse(text) as Record<string, unknown>; const configuredWorktrees = data?.worktrees && typeof data.worktrees === "object" && !Array.isArray(data.worktrees) ? data.worktrees as Record<string, unknown> : {}; return { ...defaultHookPolicy, ...Object.fromEntries(Object.entries(data ?? {}).filter(([key, value]) => key in defaultHookPolicy && key !== "worktrees" && typeof value === typeof (defaultHookPolicy as any)[key])), protected_branches: strings(data?.protected_branches) ?? defaultHookPolicy.protected_branches, registry_paths: strings(data?.registry_paths) ?? defaultHookPolicy.registry_paths, worktrees: { ...defaultWorktreePolicy, ...Object.fromEntries(Object.entries(configuredWorktrees).filter(([key, value]) => key in defaultWorktreePolicy && typeof value === typeof (defaultWorktreePolicy as any)[key])) } }; }
 /** One mapping serves ordinary validation, strict pre-push, and the commit ratchet gate so their affected-area decisions cannot drift. */
 async function affectedProfiles(root: string, changed: string[], registryChanged = false) {
-  const profiles: string[] = [], topology = await topologyFor(root);
+  const profiles: ConcreteProfile[] = [], topology = await topologyFor(root);
   if (registryChanged || changed.some(path => path.startsWith(`${topology.planRoot}/`)) || changed.includes("atdd-bun.yaml")) profiles.push("planner", "traceability");
   if (changed.some(path => /\.(?:[cm]?[jt]sx?|html)$/.test(path))) profiles.push("coder", "tester");
   if (changed.includes("atdd-bun.yaml") || changed.some(path => /\.ya?ml$/.test(path))) profiles.push("topology");
