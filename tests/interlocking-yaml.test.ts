@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
+import { validatePlannerSchemas } from "../src/planner-schema-validator";
+import { validateStaticPlannerConventions } from "../src/planner-validators";
 
 // An interlocking's routes may be written as a compact list (`routes:` then `- route_id:` at column 0): the same YAML.
 // The detectors once parsed it line by line, so a compact file had no routes and every route rule passed without
@@ -182,4 +184,160 @@ test("artifact constants outside the executed wagon do not honour its Cargo cont
       expect.stringContaining('"orders:priced-basket"'),
     ]);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+// A wagon may read its input from, or write its output to, a declared platform service
+// (`from: system:<service>` / `to: system:<service>`) rather than Cargo. Decision OS's storage-read and
+// storage-write wagons are this shape: the contract check used to read only artifact names and so
+// demanded a Cargo.get / Cargo.put the wagon never performs (M-20261011T125547Z, task
+// atdd-bun/wagon-contract-system-side-io). Only the declared system side is exempt from the Cargo move;
+// the wagon must still be carried and bound to a train step, and a system: label cannot relabel an
+// artifact another wagon puts into Cargo.
+
+const WAGON_CONTRACT_RULE = "coder.bun.wagon-honours-its-contract";
+
+async function writeAt(root: string, path: string, content: string) {
+  const file = join(root, path);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, content);
+}
+
+const decisionWagon = (consume: string, produce: string) =>
+  `wagon: route-model\nproduce:\n${produce}consume:\n${consume}`;
+const systemConsume = "  - name: evidence:admission.committed\n    from: system:canonical-store\n";
+const systemProduce = "  - name: governance:model-routing.attempt\n    contract: null\n    telemetry: null\n    to: system:canonical-store\n";
+
+// The handler reads and writes storage, never Cargo.
+const storageHandler =
+  'export async function recordAttempt(cargo: Cargo, store: { read(k: string): Promise<unknown>; write(k: string, v: unknown): Promise<void> }) {\n' +
+  '  const admission = await store.read("evidence:admission.committed");\n' +
+  '  await store.write("governance:model-routing.attempt", { admission });\n' +
+  "}\n";
+const boundRunner =
+  'import { recordAttempt } from "../wagons/route-model/handler";\n' +
+  "export class Cargo {}\n" +
+  'export function runTrain(step: string, cargo: Cargo, store: any) { if (step === "route-model") return recordAttempt(cargo, store); }\n';
+const train = "train_id: train:governance:route-model\nsequence:\n- step: 1\n  from: system:canonical-store\n  to: wagon:route-model\n";
+
+async function withDecision(files: Record<string, string>, assert: (evidence: string[]) => void | Promise<void>) {
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-system-io-"));
+  try {
+    const base: Record<string, string> = {
+      "plan/route-model/_route-model.yaml": decisionWagon(systemConsume, systemProduce),
+      "plan/_trains/route-model.yaml": train,
+      "src/wagons/route-model/handler.ts": storageHandler,
+      "src/trains/runner.ts": boundRunner,
+      ...files,
+    };
+    for (const [path, content] of Object.entries(base)) await writeAt(root, path, content);
+    const violations = await runImplementation("bun_interlocking_infrastructure", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] });
+    await assert(violations.filter(v => v.rule_id === WAGON_CONTRACT_RULE).map(v => v.evidence));
+  } finally { await rm(root, { recursive: true, force: true }); }
+}
+
+test("a carried wagon that consumes from system: and produces to system: is not required to move Cargo", async () => {
+  await withDecision({}, evidence => expect(evidence).toEqual([]));
+});
+
+test("a Cargo-sourced consume without a Cargo.get still fires beside a system: produce", async () => {
+  await withDecision({
+    "plan/route-model/_route-model.yaml": decisionWagon("  - name: evidence:admission.committed\n    from: wagon:admit\n", systemProduce),
+  }, evidence => expect(evidence).toEqual([expect.stringContaining('consumes "evidence:admission.committed"')]));
+});
+
+test("a consume with no declared source and no Cargo.get still fires", async () => {
+  await withDecision({
+    "plan/route-model/_route-model.yaml": decisionWagon("  - name: evidence:admission.committed\n", systemProduce),
+  }, evidence => expect(evidence).toEqual([expect.stringContaining('consumes "evidence:admission.committed"')]));
+});
+
+test("a produce with no `to` and no Cargo.put still fires beside a system: consume", async () => {
+  await withDecision({
+    "plan/route-model/_route-model.yaml": decisionWagon(systemConsume, "  - name: governance:model-routing.attempt\n    contract: null\n    telemetry: null\n"),
+  }, evidence => expect(evidence).toEqual([expect.stringContaining('produces "governance:model-routing.attempt"')]));
+});
+
+test("a system: label on an artifact another wagon produces into Cargo is refused", async () => {
+  await withDecision({
+    "plan/admit/_admit.yaml": "wagon: admit\nproduce:\n  - name: evidence:admission.committed\n    contract: null\n    telemetry: null\nconsume: []\n",
+  }, evidence => expect(evidence).toEqual([expect.stringMatching(/"evidence:admission\.committed".*system:canonical-store.*wagon:admit/)]));
+});
+
+test("a system: label on an artifact another wagon writes to system: is not a relabelled Cargo move", async () => {
+  await withDecision({
+    "plan/admit/_admit.yaml": "wagon: admit\nproduce:\n  - name: evidence:admission.committed\n    contract: null\n    telemetry: null\n    to: system:canonical-store\nconsume: []\n",
+  }, evidence => expect(evidence).toEqual([]));
+});
+
+test("a system:-declared wagon whose handler no train step reaches still fires", async () => {
+  await withDecision({
+    "src/trains/runner.ts": 'export class Cargo {}\nexport function runTrain(step: string, cargo: Cargo) { return step; }\n',
+  }, evidence => expect(evidence).toEqual([
+    expect.stringContaining('produces "governance:model-routing.attempt"'),
+    expect.stringContaining('consumes "evidence:admission.committed"'),
+  ]));
+});
+
+const plannerWagon = (to: string) =>
+  `wagon: route-model\nurn: wagon:route-model\ndescription: Records a model routing attempt.\nsubject: agent:router\ncontext: test\naction: record\ngoal: route\noutcome: recorded\n` +
+  `produce:\n  - name: governance:model-routing.attempt\n    contract: null\n    telemetry: null\n    to: ${to}\n` +
+  `consume:\n  - name: evidence:admission.committed\n    from: system:canonical-store\nwmbt:\n  total: 1\n`;
+
+async function withPlannerWagon(to: string, assert: (root: string) => Promise<void>) {
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-system-io-plan-"));
+  try { await writeAt(root, "plan/route-model/_route-model.yaml", plannerWagon(to)); await assert(root); }
+  finally { await rm(root, { recursive: true, force: true }); }
+}
+
+const destinationFindings = async (root: string) => [
+  ...(await validatePlannerSchemas(root)).filter(f => f.evidence.includes("/produce/0/to")).map(f => f.evidence),
+  ...(await validateStaticPlannerConventions(root)).filter(f => f.evidence.includes("invalid destination")).map(f => f.evidence),
+];
+
+test("the planner accepts a produce destination of system:<service>", async () => {
+  await withPlannerWagon("system:canonical-store", async root => expect(await destinationFindings(root)).toEqual([]));
+});
+
+test("the planner still refuses a free-text or empty system produce destination", async () => {
+  for (const to of ["canonical-store", "system:", "system:Canonical Store"]) {
+    await withPlannerWagon(JSON.stringify(to), async root => {
+      const evidence = await destinationFindings(root);
+      expect(evidence.some(e => e.includes("/produce/0/to"))).toBe(true);
+      expect(evidence.some(e => e.includes("invalid destination"))).toBe(true);
+    });
+  }
+});
+
+// A produce written to system: owes no Cargo.put, so it cannot carry an artifact another wagon still reads
+// through Cargo: the producer's Cargo obligation would vanish while the consumer's expectation stayed.
+const auditWagon = (from: string) =>
+  `wagon: audit\nproduce:\n  - name: audit:entry\n    contract: null\n    telemetry: null\nconsume:\n  - name: governance:model-routing.attempt\n${from ? `    from: ${from}\n` : ""}`;
+
+test("a system: produce of an artifact another wagon consumes through Cargo is refused", async () => {
+  for (const from of ["wagon:route-model", ""]) {
+    await withDecision({ "plan/audit/_audit.yaml": auditWagon(from) },
+      evidence => expect(evidence).toEqual([expect.stringMatching(/"governance:model-routing\.attempt".*system:canonical-store.*wagon:audit/)]));
+  }
+});
+
+test("a system: produce of an artifact another wagon also reads from system: is not a relabelled Cargo move", async () => {
+  await withDecision({ "plan/audit/_audit.yaml": auditWagon("system:canonical-store") }, evidence => expect(evidence).toEqual([]));
+});
+
+const coherenceFindings = async (to: string) => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-wagon-system-io-coherence-"));
+  try {
+    await writeAt(root, "plan/route-model/_route-model.yaml", plannerWagon(to).replace("contract: null", "contract: contract:governance:model-routing.attempt"));
+    await writeAt(root, "contracts/_contracts.yaml", "contracts:\n  - identity: governance:model-routing.attempt\n    path: contracts/governance/model-routing/attempt.schema.json\n    theme: governance\n    producers: [wagon:route-model]\n    consumers: []\n");
+    await writeAt(root, "contracts/governance/model-routing/attempt.schema.json", '{"type":"object"}\n');
+    return (await validateStaticPlannerConventions(root)).filter(f => f.evidence.includes("no cross-wagon consumer")).map(f => f.evidence);
+  } finally { await rm(root, { recursive: true, force: true }); }
+};
+
+test("a contracted produce written to system:<service> with no cross-wagon consumer is registry-coherent", async () => {
+  expect(await coherenceFindings("system:canonical-store")).toEqual([]);
+});
+
+test("a contracted produce kept internal with no cross-wagon consumer is still incoherent", async () => {
+  expect(await coherenceFindings("internal")).toEqual([expect.stringContaining("is not marked to: external")]);
 });

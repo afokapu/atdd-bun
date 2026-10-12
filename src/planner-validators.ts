@@ -116,7 +116,8 @@ function contractRegistryFindings(root: string, wagons: PlanArtifact[], registry
     const name = text(produced.name), contract = text(produced.contract), producer = text(wagon.data.wagon);
     const consumers = (byName.get(name) ?? []).filter(consumer => consumer && consumer !== producer);
     if (consumers.length && !contract) findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} has contract null but is consumed cross-wagon by ${consumers.sort().join(", ")}`));
-    if (contract && !consumers.length && text(produced.to || "external") !== "external") findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} declares ${contract} but has no cross-wagon consumer and is not marked to: external`));
+    const to = text(produced.to || "external");
+    if (contract && !consumers.length && to !== "external" && !/^system:[a-z][a-z0-9-]*$/.test(to)) findings.push(finding("planner.contract.registry-coherence", wagon.file, `produce ${name} declares ${contract} but has no cross-wagon consumer and is not marked to: external`));
   }
   return findings;
 }
@@ -297,7 +298,7 @@ export async function validateStaticPlannerConventions(root = process.cwd()): Pr
     for (const item of produced) {
       const contract = text(item.contract), telemetry = item.telemetry; if (contract) contractOwners.set(contract, [...(contractOwners.get(contract) ?? []), slug]);
       for (const value of Array.isArray(telemetry) ? telemetry.map(text) : [text(telemetry)]) if (value) telemetryOwners.set(value, [...(telemetryOwners.get(value) ?? []), slug]);
-      const to = text(item.to || "external"); if (to !== "external" && to !== "internal" && (!to.startsWith("wagon:") || !wagonSlugs.has(to.slice(6)))) findings.push(finding("planner.wagon.produce-consume-artifacts", wagon.file, `${expected} produces to invalid destination ${to}`));
+      const to = text(item.to || "external"); if (to !== "external" && to !== "internal" && !/^system:[a-z][a-z0-9-]*$/.test(to) && (!to.startsWith("wagon:") || !wagonSlugs.has(to.slice(6)))) findings.push(finding("planner.wagon.produce-consume-artifacts", wagon.file, `${expected} produces to invalid destination ${to}`));
     }
     for (const item of consumed) {
       const from = text(item.from); if (!from) continue;
