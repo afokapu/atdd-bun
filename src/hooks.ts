@@ -77,6 +77,15 @@ async function ratchetCommitGate(root: string, staged: string[], registryChanged
     const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || !policyMatches || (!activation && !unchanged)) return bad("ratchet reject-new requires either unchanged explicit profiles/context or an explicit monotonic profile expansion with identical non-profile context");
     const selectedProfiles = activation || staged.some(needsFullCommitRatchetProfiles) ? candidateProfiles : (await affectedProfiles(root, staged, registryChanged)).filter(profile => candidateProfiles.includes(profile));
+    const tree = await git(root, ["write-tree"]);
+    if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
+    const baseTree = await git(root, ["rev-parse", "--verify", `${head.out}^{tree}`]);
+    if (baseTree.code || !/^[0-9a-f]{40}$/i.test(baseTree.out)) return bad(`could not identify ratchet activation base tree: ${baseTree.err || baseTree.out}`);
+    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
+    // Scan and cache the unpatched HEAD before materializing the staged candidate; both keys remain exact Git trees.
+    const cacheDirectory = await findingsCacheDirectory(root), toolkit = await toolkitIdentity().catch(() => null);
+    const findingsAt = async (treeId: string) => cachedFindings(cacheDirectory, treeId, toolkit, selectedProfiles, async () => normalize(await enforce({ root: scratch, profiles: selectedProfiles as any })));
+    const baseFindings = selectedProfiles.length ? await findingsAt(baseTree.out) : [];
     const patch = await git(root, ["diff", "--cached", "--binary"], undefined, true);
     if (patch.code) return bad(`could not read staged ratchet activation candidate: ${patch.err || patch.out}`);
     const applied = await git(scratch, ["apply", "--whitespace=nowarn"], patch.out);
@@ -84,15 +93,6 @@ async function ratchetCommitGate(root: string, staged: string[], registryChanged
     const materialized = await configAt(scratch), materializedProfiles = stable(await enabledProfiles(scratch));
     const materializedContext = activation ? activationContextDigest(materialized) === activationContextDigest(candidateConfig) : materializedProfiles.join(",") === candidateProfiles.join(",") && contextDigest(materialized, materializedProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (!materializedContext) return bad("staged ratchet candidate did not materialize exactly");
-    const tree = await git(root, ["write-tree"]);
-    if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
-    const baseTree = await git(root, ["rev-parse", "--verify", `${head.out}^{tree}`]);
-    if (baseTree.code || !/^[0-9a-f]{40}$/i.test(baseTree.out)) return bad(`could not identify ratchet activation base tree: ${baseTree.err || baseTree.out}`);
-    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
-    // Cache keys are exact Git trees and selected profiles; uncached base and candidate scans remain deliberately sequential.
-    const cacheDirectory = await findingsCacheDirectory(root), toolkit = await toolkitIdentity().catch(() => null);
-    const findingsAt = async (treeId: string) => cachedFindings(cacheDirectory, treeId, toolkit, selectedProfiles, async () => normalize(await enforce({ root: scratch, profiles: selectedProfiles as any })));
-    const baseFindings = selectedProfiles.length ? await findingsAt(baseTree.out) : [];
     const candidateFindings = selectedProfiles.length ? await findingsAt(tree.out) : [];
     const delta = compareFindings(baseFindings, candidateFindings);
     const report = JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base: head.out, candidate: tree.out, profiles: selectedProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta });
