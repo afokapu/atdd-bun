@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { copyFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
 
 // The exact findings of the frontend detectors on their fixtures. The corpus test only asks that each
@@ -328,3 +328,80 @@ test("a candidate-only member crash cannot mask a genuinely new finding", async 
     expect(result.stdout).not.toContain("atdd-bun.ratchet-report/v1");
   } finally { await rm(repo, { recursive: true, force: true }); }
 }, 30_000);
+
+// coder.bun.duplication-intra-layer on type and interface member declarations. Once identifiers are folded,
+// two unrelated record types with seven `readonly id: string;` members match line for line, and the
+// consumer has no legal fix: coupling the records is wrong and cosmetic edits are forbidden. Property
+// signatures inside a `type X = {` / `interface X {` body are therefore left out of the windows, as import
+// declarations already are. Executable code, object literals and class fields with initializers keep counting.
+const DUPLICATION_RULE = "coder.bun.duplication-intra-layer";
+async function duplications(files: Record<string, string>) {
+  const root = await mkdtemp(join(tmpdir(), "atdd-dup-type-members-"));
+  try {
+    for (const [path, text] of Object.entries(files)) {
+      await mkdir(dirname(join(root, path)), { recursive: true });
+      await writeFile(join(root, path), text);
+    }
+    const violations = await runImplementation("bun_ts_metrics_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] });
+    return violations.filter((violation) => violation.rule_id === DUPLICATION_RULE);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}
+
+const fields = (names: string[], line: (name: string) => string) => names.map(line).join("\n");
+const orderNames = ["orderId", "customerId", "storeId", "channelId", "currencyId", "regionId", "createdBy"];
+const shipmentNames = ["shipmentId", "carrierId", "depotId", "routeId", "vehicleId", "driverId", "trackingCode"];
+
+test("FRG: two unrelated readonly record types in one layer are not duplication", async () => {
+  expect(await duplications({
+    "orders/domain/order-record.ts": `export type OrderRecord = {\n${fields(orderNames, (n) => `  readonly ${n}: string;`)}\n};\n`,
+    "shipping/domain/shipment-record.ts": `export type ShipmentRecord = {\n${fields(shipmentNames, (n) => `  readonly ${n}: string;`)}\n};\n`,
+  })).toEqual([]);
+});
+
+test("interface bodies with optional and comma-terminated members are not duplication", async () => {
+  expect(await duplications({
+    "orders/domain/order-view.ts": `export interface OrderView {\n${fields(orderNames, (n) => `  ${n}?: string,`)}\n}\n`,
+    "shipping/domain/shipment-view.ts": `export interface ShipmentView extends Base {\n${fields(shipmentNames, (n) => `  ${n}?: string,`)}\n}\n`,
+  })).toEqual([]);
+});
+
+test("nested object-type members count as signatures too", async () => {
+  const nested = (name: string, names: string[]) =>
+    `export type ${name} = {\n  readonly id: string;\n  readonly meta: {\n${fields(names, (n) => `    readonly ${n}: string;`)}\n  };\n};\n`;
+  expect(await duplications({
+    "orders/domain/order-meta.ts": nested("OrderMeta", orderNames),
+    "shipping/domain/shipment-meta.ts": nested("ShipmentMeta", shipmentNames),
+  })).toEqual([]);
+});
+
+test("negative: seven duplicated statements still fire", async () => {
+  const body = (names: string[]) => `export function run(input: any) {\n${fields(names, (n) => `  const ${n} = input.${n};`)}\n  return input;\n}\n`;
+  expect((await duplications({
+    "orders/domain/order-run.ts": body(orderNames),
+    "shipping/domain/shipment-run.ts": body(shipmentNames),
+  })).length).toBeGreaterThan(0);
+});
+
+test("negative: a duplicated object-literal run still fires", async () => {
+  const literal = (name: string, names: string[]) => `export const ${name} = {\n${fields(names, (n) => `  ${n}: source,`)}\n};\n`;
+  expect((await duplications({
+    "orders/domain/order-defaults.ts": literal("orderDefaults", orderNames),
+    "shipping/domain/shipment-defaults.ts": literal("shipmentDefaults", shipmentNames),
+  })).length).toBeGreaterThan(0);
+});
+
+test("negative: a duplicated class-field-initializer run still fires", async () => {
+  const klass = (name: string, names: string[]) => `export class ${name} {\n${fields(names, (n) => `  private readonly ${n}: string = "${n}";`)}\n}\n`;
+  expect((await duplications({
+    "orders/domain/order-state.ts": klass("OrderState", orderNames),
+    "shipping/domain/shipment-state.ts": klass("ShipmentState", shipmentNames),
+  })).length).toBeGreaterThan(0);
+});
+
+test("negative: a duplicated enum body still fires", async () => {
+  const enumOf = (name: string, names: string[]) => `export enum ${name} {\n${fields(names, (n) => `  ${n[0].toUpperCase()}${n.slice(1)} = "${n}",`)}\n}\n`;
+  expect((await duplications({
+    "orders/domain/order-key.ts": enumOf("OrderKey", orderNames),
+    "shipping/domain/shipment-key.ts": enumOf("ShipmentKey", shipmentNames),
+  })).length).toBeGreaterThan(0);
+});
