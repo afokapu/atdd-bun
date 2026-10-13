@@ -99,24 +99,24 @@ async function renderIntegrityTest(root: string, packageRoot: string) {
 }
 
 /** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
-async function checkEnforcementGenerated(root: string, packageRoot: string): Promise<IntegrityFinding[]> {
+async function checkEnforcementGenerated(root: string, packageRoot: string, compare = true): Promise<IntegrityFinding[]> {
   const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace";
   for (const event of hookEvents) {
     const file = `.githooks/${event}`, path = join(root, file);
     if (!existsSync(path)) findings.push({ file, detail: "is missing", restore });
-    else if (canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+    else if (compare && canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   }
   const workflow = join(root, WORKFLOW);
   if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
-  else if (canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  else if (compare && canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   const test = relative(root, await testFilePath(root)), testPath = join(root, test);
   if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
-  else if (canonical(await readFile(testPath, "utf8")) !== canonical(await renderIntegrityTest(root, packageRoot))) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  else if (compare && canonical(await readFile(testPath, "utf8")) !== canonical(await renderIntegrityTest(root, packageRoot))) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   return findings;
 }
 
-async function checkGenerated(root: string, packageRoot: string, skipEnforcement = false): Promise<IntegrityFinding[]> {
-  const findings = skipEnforcement ? [] : await checkEnforcementGenerated(root, packageRoot);
+async function checkGenerated(root: string, packageRoot: string, skipComparisons = false): Promise<IntegrityFinding[]> {
+  const findings = await checkEnforcementGenerated(root, packageRoot, !skipComparisons);
   const agentCanonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
     const agents = existsSync(join(root, file)) ? await readFile(join(root, file), "utf8") : "", block = agents.match(BLOCK)?.[0];

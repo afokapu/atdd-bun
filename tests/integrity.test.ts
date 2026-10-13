@@ -296,6 +296,25 @@ test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci ini
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("an unreadable atdd-bun.yaml still reports missing required enforcement surfaces without rendering them", async () => {
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [unclosed\n");
+    await rm(join(root, ".githooks/pre-push"));
+    await rm(join(root, ".github/workflows/atdd-bun.yml"));
+    await rm(join(root, "atdd-bun.integrity.test.ts"));
+    await writeFile(join(root, ".githooks/pre-commit"), "#!/bin/sh\nexit 0\n");
+    await writeFile(join(root, "AGENTS.md"), "# edited\n");
+    const findings = await checkIntegrity({ root, base: "HEAD", push: false });
+    expect(files(findings)).toEqual([".github/workflows/atdd-bun.yml", ".githooks/pre-push", "AGENTS.md", "atdd-bun.integrity.test.ts", "atdd-bun.yaml"].sort());
+    expect(findings.find(finding => finding.file === ".githooks/pre-commit")).toBeUndefined();
+    for (const file of [".githooks/pre-push", ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts"]) {
+      expect(findings.find(finding => finding.file === file)?.restore).toBe("bun run atdd-bun init --replace");
+    }
+    expect(findings.find(finding => finding.file === "atdd-bun.yaml")?.detail).toContain("could not be parsed");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, and is never read as the defaults", async () => {
   const root = await consumer();
   try {
