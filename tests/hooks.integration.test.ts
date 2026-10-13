@@ -25,6 +25,25 @@ test("real Git installation is idempotent, worktree-local, and removable", async
   finally { await cleanup(root); await cleanup(`${root}-wt`); }
 }, 20_000);
 
+test("profile coherence rejects tracked generated hooks without a real worktree-local hooksPath binding", async () => {
+  const root = await repo(); try {
+    const packageVersion = (await Bun.file(resolve(import.meta.dir, "../package.json")).json() as { version: string }).version;
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@${packageVersion}", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="]\n  }\n}\n`);
+    await installHooks(root);
+    const beforeHooks = await Promise.all(hookEvents.map(event => readFile(join(root, ".githooks", event), "utf8")));
+    await git(root, ["config", "--worktree", "--unset", "core.hooksPath"]);
+    const beforeStatus = (await git(root, ["status", "--porcelain"])).out;
+    const status = await hooksStatus(root);
+    expect(status.ok).toBeFalse();
+    expect((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe("");
+    expect(await Promise.all(hookEvents.map(event => readFile(join(root, ".githooks", event), "utf8")))).toEqual(beforeHooks);
+    expect((await git(root, ["status", "--porcelain"])).out).toBe(beforeStatus);
+    expect(status.message).toContain("core.hooksPath");
+    expect(status.message).toContain("bun run atdd-bun init --replace");
+  } finally { await cleanup(root); }
+});
+
 test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
   const root = await repo(); try {
     await installHooks(root);
