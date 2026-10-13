@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { instructionPaths } from "./agent";
 import { renderWorkflow } from "./ci";
@@ -74,7 +74,7 @@ export async function checkInstalledPackage(packageRoot = ownRoot): Promise<Inte
 async function checkDependency(root: string): Promise<IntegrityFinding[]> {
   if (!existsSync(join(root, "package.json"))) return [];
   const pkg = await Bun.file(join(root, "package.json")).json() as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
-  if (pkg.name === PACKAGE) return [];
+  if (await realpath(root).then(repositoryRoot => realpath(ownRoot).then(runningRoot => repositoryRoot === runningRoot)).catch(() => false)) return [];
   const spec = pkg.devDependencies?.[PACKAGE] ?? pkg.dependencies?.[PACKAGE];
   if (spec === undefined) return [{ file: "package.json", detail: `${PACKAGE} is not a dependency`, restore: `bun add -d ${PACKAGE}@<operator-approved-version> --exact` }];
   const findings: IntegrityFinding[] = [];

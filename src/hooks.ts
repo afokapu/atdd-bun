@@ -194,7 +194,7 @@ async function existingBranchProtectedBase(root: string, candidate: string, remo
 const packageRoot = resolve(import.meta.dir, ".."), toolkitInputs = ["package.json", "relationships.yaml", "src", "lib", "detectors", "conventions", "planner-nodes", "planner-schemas"];
 const PACKAGE = "@afokapu/atdd-bun";
 export type LockedToolkit = { version: string; integrity: string };
-export type EnforcementIdentity = LockedToolkit & { installedVersion: string; profiles: string[]; digest: string };
+export type EnforcementIdentity = LockedToolkit & { installedVersion: string; profiles: string[]; digest: string; sourceCheckout: boolean };
 
 /** The exact registry tuple approved by this repository's Bun lockfile. No registry or network lookup is permitted. */
 export async function lockedToolkit(root: string): Promise<LockedToolkit | null> {
@@ -209,16 +209,16 @@ export async function lockedToolkit(root: string): Promise<LockedToolkit | null>
 
 /** One identity binds the approved lock tuple, the package that will execute, and the exact activated config/profile set. */
 export async function enforcementIdentity(root = process.cwd()): Promise<EnforcementIdentity> {
-  const repositoryManifest = existsSync(join(root, "package.json")) ? await Bun.file(join(root, "package.json")).json() as { name?: string } : {};
-  const installedRoot = repositoryManifest.name === PACKAGE ? packageRoot : join(root, "node_modules", PACKAGE);
+  const sourceCheckout = await realpath(resolve(root)).then(repositoryRoot => realpath(packageRoot).then(runningRoot => repositoryRoot === runningRoot)).catch(() => false);
+  const installedRoot = sourceCheckout ? packageRoot : join(root, "node_modules", PACKAGE);
   const installedManifest = join(installedRoot, "package.json");
   const providerVersion = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
   const installedVersion = existsSync(installedManifest) ? (await Bun.file(installedManifest).json() as { version: string }).version : providerVersion;
-  const locked = await lockedToolkit(root) ?? { version: installedVersion, integrity: repositoryManifest.name === PACKAGE ? "source" : "unresolved" };
+  const locked = await lockedToolkit(root) ?? { version: installedVersion, integrity: sourceCheckout ? "source" : "unresolved" };
   const configPath = join(root, "atdd-bun.yaml"), config = existsSync(configPath) ? (await readFile(configPath, "utf8")).replace(/\r\n/g, "\n") : "";
   const profiles = stable(await enabledProfiles(root));
   const digest = new Bun.CryptoHasher("sha256").update(JSON.stringify({ schema: "atdd-bun.enforcement-identity/v1", ...locked, installedVersion, config, profiles })).digest("hex");
-  return { ...locked, installedVersion, profiles, digest };
+  return { ...locked, installedVersion, profiles, digest, sourceCheckout };
 }
 
 export type ToolkitIdentity = { version: string; digest: string };
@@ -348,7 +348,10 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
 }
 
 // Resolve from the checkout at hook time: installed consumers use only their worktree-local package; this package uses its own source checkout.
-const dispatcher = (event: HookEvent, identity: EnforcementIdentity) => `#!/bin/sh\n# atdd-bun enforcement identity: ${identity.digest}\nroot="$(git rev-parse --show-toplevel)" || exit $?\nentry="$root/node_modules/@afokapu/atdd-bun/src/cli.ts"\nmanifest="$root/node_modules/@afokapu/atdd-bun/package.json"\nif [ -f "$entry" ] && [ -f "$manifest" ]; then\n  installed="$(grep -m 1 -E '\"version\"[[:space:]]*:' "$manifest" | sed -E 's/.*\"version\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\\1/')"\n  if [ "$installed" != "${identity.version}" ]; then\n    echo "atdd-bun hook: installed package $installed does not match exact bun.lock resolution ${identity.version}; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2\n    exit 1\n  fi\nelif [ -f "$root/package.json" ] && grep -Eq '\"name\"[[:space:]]*:[[:space:]]*\"@afokapu/atdd-bun\"' "$root/package.json" && [ -f "$root/src/cli.ts" ]; then\n  entry="$root/src/cli.ts"\nelse\n  echo "atdd-bun hook: worktree-local @afokapu/atdd-bun is missing; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2\n  exit 1\nfi\nexec bun "$entry" hook ${event} "$@"\n`;
+const dispatcher = (event: HookEvent, identity: EnforcementIdentity) => {
+  const sourceFallback = identity.sourceCheckout ? `elif [ -f "$root/src/cli.ts" ]; then\n  entry="$root/src/cli.ts"\n` : "";
+  return `#!/bin/sh\n# atdd-bun enforcement identity: ${identity.digest}\nroot="$(git rev-parse --show-toplevel)" || exit $?\nentry="$root/node_modules/@afokapu/atdd-bun/src/cli.ts"\nmanifest="$root/node_modules/@afokapu/atdd-bun/package.json"\nif [ -f "$entry" ] && [ -f "$manifest" ]; then\n  installed="$(grep -m 1 -E '\"version\"[[:space:]]*:' "$manifest" | sed -E 's/.*\"version\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\\1/')"\n  if [ "$installed" != "${identity.version}" ]; then\n    echo "atdd-bun hook: installed package $installed does not match exact bun.lock resolution ${identity.version}; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2\n    exit 1\n  fi\n${sourceFallback}else\n  echo "atdd-bun hook: worktree-local @afokapu/atdd-bun is missing; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2\n  exit 1\nfi\nexec bun "$entry" hook ${event} "$@"\n`;
+};
 export async function renderHook(event: HookEvent, root = process.cwd()) { return dispatcher(event, await enforcementIdentity(root)); }
 export async function installHooks(root = process.cwd(), replace = false) { const current = (await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out || (await git(root, ["config", "--get", "core.hooksPath"])).out; if (current && current !== ".githooks" && !replace) return bad(`core.hooksPath is ${current}; use --replace`); const identity = await enforcementIdentity(root); await git(root, ["config", "extensions.worktreeConfig", "true"]); await mkdir(join(root, ".githooks"), { recursive: true }); for (const event of hookEvents) { const file = join(root, ".githooks", event); await writeFile(file, dispatcher(event, identity)); await chmod(file, 0o755); } const result = await git(root, ["config", "--worktree", "core.hooksPath", ".githooks"]); return result.code ? bad(result.err) : { ok: true, message: "hooks installed" }; }
 export async function uninstallHooks(root = process.cwd()) { if ((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out === ".githooks") await git(root, ["config", "--worktree", "--unset", "core.hooksPath"]); for (const event of hookEvents) await rm(join(root, ".githooks", event), { force: true }); return { ok: true, message: "hooks uninstalled" }; }

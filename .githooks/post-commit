@@ -9,7 +9,7 @@ if [ -f "$entry" ] && [ -f "$manifest" ]; then
     echo "atdd-bun hook: installed package $installed does not match exact bun.lock resolution 0.10.0; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2
     exit 1
   fi
-elif [ -f "$root/package.json" ] && grep -Eq '"name"[[:space:]]*:[[:space:]]*"@afokapu/atdd-bun"' "$root/package.json" && [ -f "$root/src/cli.ts" ]; then
+elif [ -f "$root/src/cli.ts" ]; then
   entry="$root/src/cli.ts"
 else
   echo "atdd-bun hook: worktree-local @afokapu/atdd-bun is missing; run: bun install --frozen-lockfile && bun run atdd-bun init --replace" >&2
