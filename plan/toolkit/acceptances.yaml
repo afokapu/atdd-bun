@@ -1,0 +1,70 @@
+acceptances:
+  - identity:
+      urn: acc:toolkit:E001-UNIT-001-bound-test-file
+      id: AC-UNIT-001
+      purpose: Verify a new toolkit test can bind to declared behavior without adding reject-new debt.
+      phase: GREEN
+    harness:
+      type: unit
+      category: backend
+      language_hint: typescript
+    given:
+      abstract:
+        - A new Bun test file is added to the toolkit source repository.
+        - The all-profile reject-new context remains frozen.
+    when:
+      abstract: The test declares its canonical identity and binds this acceptance.
+      action: invoke
+      target: atdd-bun traceability enforcement
+    then:
+      abstract:
+        - The acceptance binding resolves from the toolkit plan catalog.
+        - The new test introduces no candidate-only finding.
+      assertions:
+        - type: equals
+          target: candidate-only finding count
+          value: 0
+    telemetry:
+      disposition: not-applicable
+      rationale: Deterministic detector findings fully expose this repository policy behavior without runtime telemetry.
+    metadata:
+      author: atdd-bun
+      created: 2026-10-13
+
+# These identities belong to this package's detector fixtures. Once the toolkit has a
+# root plan, tester resolution treats the checkout as one consumer; cataloguing each
+# fixture's intentionally valid binding preserves that truthful repository boundary.
+# Deliberately invalid resolver fixtures remain undeclared and stay carried debt.
+repository_fixture_bindings:
+  acceptances:
+    - acc:commons:E001-UNIT-001
+    - acc:commons:E002-UNIT-001
+    - acc:orders:E001-E2E-001
+    - acc:orders:E001-E2E-002
+    - acc:orders:E001-SMOKE-001-renders-row
+    - acc:orders:E001-UNIT-001
+    - acc:orders:E001-UNIT-001-create-order
+    - acc:orders:E002-RED-001-rejects-empty-cart
+    - acc:orders:E004-UNIT-001
+    - acc:orders:E005-UNIT-001
+    - acc:orders:E006-RED-001
+    - acc:orders:E007-SMOKE-001
+    - acc:orders:E008-SMOKE-001
+    - acc:orders:E009-UNIT-001
+    - acc:orders:E010-UNIT-001
+    - acc:orders:E011-UNIT-001
+    - acc:orders:E020-AUTH-001-denies-anonymous
+    - acc:orders:E021-INPUT-001-rejects-malformed
+    - acc:orders:E022-TELEMETRY-001-emits-placed
+    - acc:orders:E023-RED-001-refuses-zero-total
+    - acc:orders:E024-RED-001
+    - acc:orders:E025-UNIT-001
+    - acc:orders:E026-AUTH-001
+    - acc:orders:E027-INPUT-001
+    - acc:orders:E028-TELEMETRY-001
+    - acc:orders:E030-UNIT-001
+    - acc:orders:E040-SMOKE-001-panel
+    - acc:orders:E041-SMOKE-001
+  wmbts:
+    - wmbt:orders:E001
+    - wmbt:orders:E002
