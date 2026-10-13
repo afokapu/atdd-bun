@@ -192,6 +192,35 @@ async function existingBranchProtectedBase(root: string, candidate: string, remo
 /** Ratchet findings depend only on the scanned tree, the toolkit scanning it and the selected profiles, so they are cached
  * under the Git common directory. An entry is advisory: unreadable, malformed or differently keyed means recompute, never clean. */
 const packageRoot = resolve(import.meta.dir, ".."), toolkitInputs = ["package.json", "relationships.yaml", "src", "lib", "detectors", "conventions", "planner-nodes", "planner-schemas"];
+const PACKAGE = "@afokapu/atdd-bun";
+export type LockedToolkit = { version: string; integrity: string };
+export type EnforcementIdentity = LockedToolkit & { installedVersion: string; profiles: string[]; digest: string };
+
+/** The exact registry tuple approved by this repository's Bun lockfile. No registry or network lookup is permitted. */
+export async function lockedToolkit(root: string): Promise<LockedToolkit | null> {
+  const lock = join(root, "bun.lock");
+  if (!existsSync(lock)) return null;
+  const row = (await readFile(lock, "utf8")).split("\n").find(line => line.trimStart().startsWith(`"${PACKAGE}": [`));
+  if (!row) return null;
+  const version = row.match(/"@afokapu\/atdd-bun@(\d+\.\d+\.\d+(?:-[\w.]+)?)",\s*""/)?.[1];
+  const integrity = row.match(/"(sha512-[^"]+)"\s*\],?\s*$/)?.[1];
+  return version && integrity ? { version, integrity } : null;
+}
+
+/** One identity binds the approved lock tuple, the package that will execute, and the exact activated config/profile set. */
+export async function enforcementIdentity(root = process.cwd()): Promise<EnforcementIdentity> {
+  const repositoryManifest = existsSync(join(root, "package.json")) ? await Bun.file(join(root, "package.json")).json() as { name?: string } : {};
+  const installedRoot = repositoryManifest.name === PACKAGE ? packageRoot : join(root, "node_modules", PACKAGE);
+  const installedManifest = join(installedRoot, "package.json");
+  const providerVersion = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
+  const installedVersion = existsSync(installedManifest) ? (await Bun.file(installedManifest).json() as { version: string }).version : providerVersion;
+  const locked = await lockedToolkit(root) ?? { version: installedVersion, integrity: repositoryManifest.name === PACKAGE ? "source" : "unresolved" };
+  const configPath = join(root, "atdd-bun.yaml"), config = existsSync(configPath) ? (await readFile(configPath, "utf8")).replace(/\r\n/g, "\n") : "";
+  const profiles = stable(await enabledProfiles(root));
+  const digest = new Bun.CryptoHasher("sha256").update(JSON.stringify({ schema: "atdd-bun.enforcement-identity/v1", ...locked, installedVersion, config, profiles })).digest("hex");
+  return { ...locked, installedVersion, profiles, digest };
+}
+
 export type ToolkitIdentity = { version: string; digest: string };
 async function toolkitFiles() {
   const found = new Set<string>();
@@ -318,17 +347,29 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   return { ok: true, message: "ok" };
 }
 
-// Resolve from the checkout at hook time: installed consumers use their local package; source checkouts use src.
-const dispatcher = (event: HookEvent) => `#!/bin/sh\nroot="$(git rev-parse --show-toplevel)" || exit $?\nentry="$root/node_modules/@afokapu/atdd-bun/src/cli.ts"\nif [ ! -f "$entry" ]; then\n  if [ -f "$root/package.json" ] && grep -Eq '"name"[[:space:]]*:[[:space:]]*"@afokapu/atdd-bun"' "$root/package.json" && [ -f "$root/src/cli.ts" ]; then\n    entry="$root/src/cli.ts"\n  else\n    echo "atdd-bun hook: install @afokapu/atdd-bun in this project before running hooks" >&2\n    exit 1\n  fi\nfi\nexec bun "$entry" hook ${event} "$@"\n`;
-export async function installHooks(root = process.cwd(), replace = false) { const current = (await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out || (await git(root, ["config", "--get", "core.hooksPath"])).out; if (current && current !== ".githooks" && !replace) return bad(`core.hooksPath is ${current}; use --replace`); await git(root, ["config", "extensions.worktreeConfig", "true"]); await mkdir(join(root, ".githooks"), { recursive: true }); for (const event of hookEvents) { const file = join(root, ".githooks", event); await writeFile(file, dispatcher(event)); await chmod(file, 0o755); } const result = await git(root, ["config", "--worktree", "core.hooksPath", ".githooks"]); return result.code ? bad(result.err) : { ok: true, message: "hooks installed" }; }
+// Resolve from the checkout at hook time: installed consumers use only their worktree-local package; this package uses its own source checkout.
+const dispatcher = (event: HookEvent, identity: EnforcementIdentity) => `#!/bin/sh\n# atdd-bun enforcement identity: ${identity.digest}\nroot="$(git rev-parse --show-toplevel)" || exit $?\nentry="$root/node_modules/@afokapu/atdd-bun/src/cli.ts"\nmanifest="$root/node_modules/@afokapu/atdd-bun/package.json"\nif [ -f "$entry" ] && [ -f "$manifest" ]; then\n  installed="$(grep -m 1 -E '\"version\"[[:space:]]*:' "$manifest" | sed -E 's/.*\"version\"[[:space:]]*:[[:space:]]*\"([^\"]+)\".*/\\1/')"\n  if [ "$installed" != "${identity.version}" ]; then\n    echo "atdd-bun hook: installed package $installed does not match exact bun.lock resolution ${identity.version}; run: bun install --frozen-lockfile" >&2\n    exit 1\n  fi\nelif [ -f "$root/package.json" ] && grep -Eq '\"name\"[[:space:]]*:[[:space:]]*\"@afokapu/atdd-bun\"' "$root/package.json" && [ -f "$root/src/cli.ts" ]; then\n  entry="$root/src/cli.ts"\nelse\n  echo "atdd-bun hook: worktree-local @afokapu/atdd-bun is missing; run: bun install --frozen-lockfile" >&2\n  exit 1\nfi\nexec bun "$entry" hook ${event} "$@"\n`;
+export async function renderHook(event: HookEvent, root = process.cwd()) { return dispatcher(event, await enforcementIdentity(root)); }
+export async function installHooks(root = process.cwd(), replace = false) { const current = (await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out || (await git(root, ["config", "--get", "core.hooksPath"])).out; if (current && current !== ".githooks" && !replace) return bad(`core.hooksPath is ${current}; use --replace`); const identity = await enforcementIdentity(root); await git(root, ["config", "extensions.worktreeConfig", "true"]); await mkdir(join(root, ".githooks"), { recursive: true }); for (const event of hookEvents) { const file = join(root, ".githooks", event); await writeFile(file, dispatcher(event, identity)); await chmod(file, 0o755); } const result = await git(root, ["config", "--worktree", "core.hooksPath", ".githooks"]); return result.code ? bad(result.err) : { ok: true, message: "hooks installed" }; }
 export async function uninstallHooks(root = process.cwd()) { if ((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out === ".githooks") await git(root, ["config", "--worktree", "--unset", "core.hooksPath"]); for (const event of hookEvents) await rm(join(root, ".githooks", event), { force: true }); return { ok: true, message: "hooks uninstalled" }; }
-export async function hooksStatus(root = process.cwd()) { const path = (await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out; return { ok: path === ".githooks" && hookEvents.every(event => existsSync(join(root, ".githooks", event))), message: path || "not installed" }; }
+export async function hooksStatus(root = process.cwd()) {
+  const path = (await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out;
+  if (path !== ".githooks") return bad(`core.hooksPath is ${path || "not set"}; run: bun run atdd-bun init --replace`);
+  try {
+    for (const event of hookEvents) {
+      const file = join(root, ".githooks", event);
+      if (!existsSync(file)) return bad(`${relative(root, file)} is missing; run: bun run atdd-bun init --replace`);
+      if (await readFile(file, "utf8") !== await renderHook(event, root)) return bad(`${relative(root, file)} is stale; run: bun run atdd-bun init --replace`);
+    }
+  } catch (error) { return bad(`generated hooks cannot be verified: ${String(error)}; run: bun run atdd-bun init --replace`); }
+  return { ok: true, message: path };
+}
 
 const branchPath = (branch: string) => branch.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
 export async function startWorktree(root = process.cwd(), branch = "") { const cfg = await policy(root); if (!cfg.worktrees.enabled) return bad("worktree policy is disabled; set worktrees.enabled: true in atdd-bun.yaml"); const state = await layout(root, cfg.worktrees); if ("error" in state) return bad(state.error); if (state.current !== state.primary) return bad(`start must run from the primary checkout ${state.primary}`); if (!branch) return bad("branch is required: atdd-bun worktree start <branch>"); if ((await git(root, ["check-ref-format", "--branch", branch])).code) return bad(`invalid branch name ${JSON.stringify(branch)}`); if (cfg.protected_branches.includes(branch)) return bad(`cannot create a worktree for protected branch ${branch}`); const leaf = branchPath(branch); if (!leaf) return bad(`branch ${JSON.stringify(branch)} cannot form a safe worktree directory`); const target = join(state.worktreeRoot, leaf); if (existsSync(target)) return bad(`worktree path already exists: ${target}`); await mkdir(state.worktreeRoot, { recursive: true }); const created = await git(state.primary, ["worktree", "add", target, "-b", branch]); if (created.code) return bad(created.err || created.out); const hooks = await installHooks(target); if (!hooks.ok) return bad(`created ${target}, but could not install hooks: ${hooks.message}`); return { ok: true, message: `created linked worktree ${target} on ${branch}` }; }
 
 export async function worktreeStatus(root = process.cwd()) { const cfg = await primaryPolicy(root); if (!cfg.worktrees.enabled) return bad("worktree policy is disabled"); const state = await layout(root, cfg.worktrees); if ("error" in state) return bad(state.error); const result = await git(state.primary, ["worktree", "list", "--porcelain"]); return result.code ? bad(result.err) : { ok: true, message: result.out }; }
 
-async function generatedHooksOnly(root: string): Promise<boolean> { const directory = join(root, ".githooks"); if (!existsSync(directory)) return false; const names = (await readdir(directory)).sort(); if (names.join("\n") !== [...hookEvents].sort().join("\n")) return false; return (await Promise.all(hookEvents.map(async event => (await readFile(join(directory, event), "utf8")) === dispatcher(event)))).every(Boolean); }
+async function generatedHooksOnly(root: string): Promise<boolean> { const directory = join(root, ".githooks"); if (!existsSync(directory)) return false; const names = (await readdir(directory)).sort(); if (names.join("\n") !== [...hookEvents].sort().join("\n")) return false; return (await Promise.all(hookEvents.map(async event => (await readFile(join(directory, event), "utf8")) === await renderHook(event, root)))).every(Boolean); }
 
 export async function finishWorktree(root = process.cwd(), deleteBranch = false) { const cfg = await primaryPolicy(root); if (!cfg.worktrees.enabled) return bad("worktree policy is disabled"); const state = await layout(root, cfg.worktrees); if ("error" in state) return bad(state.error); if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return bad(`finish must run from a linked worktree beneath ${state.worktreeRoot}`); if (!state.branch || cfg.protected_branches.includes(state.branch)) return bad("finish requires a non-protected named branch"); const status = (await git(state.current, ["status", "--porcelain"])).out, generatedHooks = await generatedHooksOnly(state.current), onlyGeneratedHooks = Boolean(status) && status.split("\n").every(line => line.endsWith(" .githooks/") || line.endsWith(" .githooks")); if (status && !onlyGeneratedHooks) return bad("worktree is dirty; commit, stash, or discard changes before finish"); const tip = (await git(state.primary, ["rev-parse", "--verify", `refs/heads/${state.branch}`])).out.trim(); if (!tip || (await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) return bad(`branch ${state.branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout`); const removed = await git(state.primary, ["worktree", "remove", ...(onlyGeneratedHooks && generatedHooks ? ["--force"] : []), state.current]); if (removed.code) return bad(removed.err || removed.out); if (deleteBranch) { const now = (await git(state.primary, ["rev-parse", "--verify", `refs/heads/${state.branch}`])).out.trim(); if (now !== tip || (await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) return bad(`worktree removed, but branch ${state.branch} was not deleted: its tip changed or is no longer merged into ${cfg.worktrees.primary_branch}`); const deleted = await git(state.primary, ["branch", "-D", state.branch]); if (deleted.code) return bad(`worktree removed, but branch deletion failed: ${deleted.err || deleted.out}`); } return { ok: true, message: `removed merged worktree ${state.current}${deleteBranch ? ` and branch ${state.branch}` : ""}` }; }

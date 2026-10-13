@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { instructionPaths } from "./agent";
 import { renderWorkflow } from "./ci";
-import { defaultHookPolicy, type HookPolicy } from "./hooks";
+import { defaultHookPolicy, enforcementIdentity, hookEvents, hooksStatus, lockedToolkit, renderHook, type HookPolicy } from "./hooks";
 
 /**
  * Integrity: the files an agent could change to weaken enforcement must stay canonical.
@@ -20,8 +20,9 @@ export const MANIFEST = "integrity.json";
 export const TEST_FILE = "atdd-bun.integrity.test.ts";
 const WORKFLOW = ".github/workflows/atdd-bun.yml";
 const BLOCK = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->/;
-// Generated files carry the version that wrote them; an upgrade must not read as tampering.
+// Agent blocks are guidance rather than enforcement surfaces, so their writer version remains upgrade-tolerant.
 const unstamp = (text: string) => text.replace(/@afokapu\/atdd-bun (?:\d+\.\d+\.\d+(?:-[\w.]+)?|\{\{VERSION\}\})/g, "@afokapu/atdd-bun <version>").replace(/\r\n/g, "\n").trimEnd();
+const canonical = (text: string) => text.replace(/\r\n/g, "\n").trimEnd();
 const sha256 = (data: string | Uint8Array) => new Bun.CryptoHasher("sha256").update(data).digest("hex");
 /** Where `bun test` will find the generated test: the repository's `[test] root` from bunfig.toml, else the repo root. */
 export async function testFilePath(repo: string) {
@@ -69,41 +70,59 @@ export async function checkInstalledPackage(packageRoot = ownRoot): Promise<Inte
   return findings;
 }
 
-/** The repository installs the package from npm, pinned by a registry integrity hash. */
+/** The repository installs the package version approved by its exact npm-registry lock tuple. */
 async function checkDependency(root: string): Promise<IntegrityFinding[]> {
   if (!existsSync(join(root, "package.json"))) return [];
   const pkg = await Bun.file(join(root, "package.json")).json() as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
   if (pkg.name === PACKAGE) return [];
   const spec = pkg.devDependencies?.[PACKAGE] ?? pkg.dependencies?.[PACKAGE];
-  if (spec === undefined) return [{ file: "package.json", detail: `${PACKAGE} is not a dependency`, restore: `bun add -d ${PACKAGE}` }];
+  if (spec === undefined) return [{ file: "package.json", detail: `${PACKAGE} is not a dependency`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` }];
   const findings: IntegrityFinding[] = [];
-  if (!/^[~^]?\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(spec)) findings.push({ file: "package.json", detail: `${PACKAGE} is "${spec}"; it must be an npm version range, not a git, file, or link source`, restore: `bun add -d ${PACKAGE}` });
-  const lock = existsSync(join(root, "bun.lock")) ? await readFile(join(root, "bun.lock"), "utf8") : "";
+  if (!/^[~^]?\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(spec)) findings.push({ file: "package.json", detail: `${PACKAGE} is "${spec}"; it must be an npm version range, not a git, file, or link source`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` });
+  const locked = await lockedToolkit(root), lock = existsSync(join(root, "bun.lock")) ? await readFile(join(root, "bun.lock"), "utf8") : "";
   const entry = lock.split("\n").find(line => line.trimStart().startsWith(`"${PACKAGE}": [`));
-  if (!entry) findings.push({ file: "bun.lock", detail: `bun.lock does not pin ${PACKAGE}`, restore: "bun install" });
-  else if (!/"@afokapu\/atdd-bun@\d+\.\d+\.\d+[^"]*", ""/.test(entry) || !entry.includes('"sha512-')) findings.push({ file: "bun.lock", detail: `bun.lock does not resolve ${PACKAGE} from the npm registry with an integrity hash`, restore: `bun add -d ${PACKAGE}` });
+  if (!entry) findings.push({ file: "bun.lock", detail: `bun.lock does not pin ${PACKAGE}`, restore: "bun install --frozen-lockfile" });
+  else if (!locked) findings.push({ file: "bun.lock", detail: `bun.lock does not resolve ${PACKAGE} from the npm registry with an integrity hash`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` });
+  const installedManifest = join(root, "node_modules", PACKAGE, "package.json");
+  if (!existsSync(installedManifest)) findings.push({ file: `node_modules/${PACKAGE}/package.json`, detail: "the worktree-local installed package is missing", restore: "bun install --frozen-lockfile" });
+  else if (locked) {
+    const installedVersion = (await Bun.file(installedManifest).json() as { version?: unknown }).version;
+    if (installedVersion !== locked.version) findings.push({ file: `node_modules/${PACKAGE}/package.json`, detail: `installed version ${String(installedVersion)} does not match exact bun.lock resolution ${locked.version}`, restore: "bun install --frozen-lockfile" });
+  }
   return findings;
 }
 
-/** Generated files are byte-identical to what the installed version generates (ignoring its version stamp). */
-async function checkGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
-  const findings: IntegrityFinding[] = [];
-  const same = async (file: string, template: string, restore: string) => {
-    const path = join(root, file);
-    if (!existsSync(path)) return findings.push({ file, detail: "is missing", restore });
-    if (unstamp(await readFile(path, "utf8")) !== unstamp(await readFile(join(packageRoot, template), "utf8"))) findings.push({ file, detail: "was edited; it must match what the package generates", restore });
-  };
-  // The workflow is rendered per repository (its protected branches), so it is compared with that rendering.
+async function renderIntegrityTest(root: string, packageRoot: string) {
+  const version = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
+  const { digest } = await enforcementIdentity(root);
+  return (await readFile(join(packageRoot, "templates/agents/atdd-bun.integrity.test.ts"), "utf8")).replace("{{VERSION}}", version).replace("{{IDENTITY}}", digest);
+}
+
+/** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
+async function checkEnforcementGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
+  const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace";
+  for (const event of hookEvents) {
+    const file = `.githooks/${event}`, path = join(root, file);
+    if (!existsSync(path)) findings.push({ file, detail: "is missing", restore });
+    else if (canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  }
   const workflow = join(root, WORKFLOW);
   if (skipWorkflow) { /* rendered from atdd-bun.yaml, which does not parse: reported by the caller */ }
-  else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore: "bun run atdd-bun ci init --replace" });
-  else if (unstamp(await readFile(workflow, "utf8")) !== unstamp(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "was edited; it must match what the package generates (protected_branches decides its push branches)", restore: "bun run atdd-bun ci init --replace" });
-  await same(relative(root, await testFilePath(root)), "templates/agents/atdd-bun.integrity.test.ts", "bun run atdd-bun integrity init --replace");
-  const canonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
+  else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
+  else if (canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  const test = relative(root, await testFilePath(root)), testPath = join(root, test);
+  if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
+  else if (canonical(await readFile(testPath, "utf8")) !== canonical(await renderIntegrityTest(root, packageRoot))) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  return findings;
+}
+
+async function checkGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
+  const findings = await checkEnforcementGenerated(root, packageRoot, skipWorkflow);
+  const agentCanonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
     const agents = existsSync(join(root, file)) ? await readFile(join(root, file), "utf8") : "", block = agents.match(BLOCK)?.[0];
     if (!block) findings.push({ file, detail: "is missing the atdd-bun block", restore: "bun run atdd-bun agent init --replace" });
-    else if (unstamp(block) !== unstamp(canonical)) findings.push({ file, detail: "atdd-bun block was edited", restore: "bun run atdd-bun agent init --replace" });
+    else if (unstamp(block) !== unstamp(agentCanonical)) findings.push({ file, detail: "atdd-bun block was edited", restore: "bun run atdd-bun agent init --replace" });
   }
   return findings;
 }
@@ -216,6 +235,20 @@ async function checkPolicy(root: string, base?: string, push = process.env.GITHU
   return loosened.length ? [{ file: "atdd-bun.yaml", detail: `loosens the policy of ${against.slice(0, 7)}: ${loosened.join("; ")}`, restore: `git checkout ${against.slice(0, 7)} -- atdd-bun.yaml` }] : [];
 }
 
+export async function checkEnforcementCoherence(options: IntegrityOptions & { requireHookBinding?: boolean } = {}): Promise<IntegrityFinding[]> {
+  const root = resolve(options.root ?? process.cwd()), packageRoot = options.packageRoot ?? ownRoot;
+  try {
+    const findings = [...await checkInstalledPackage(packageRoot), ...await checkDependency(root), ...await checkEnforcementGenerated(root, packageRoot)];
+    if (options.requireHookBinding) {
+      const status = await hooksStatus(root);
+      if (!status.ok) findings.push({ file: ".githooks", detail: status.message, restore: "bun run atdd-bun init --replace" });
+    }
+    return findings;
+  } catch (error) {
+    return [{ file: "atdd-bun.yaml", detail: `the enforcement identity cannot be resolved: ${String(error)}`, restore: "correct atdd-bun.yaml and run: bun run atdd-bun init --replace" }];
+  }
+}
+
 export async function checkIntegrity(options: IntegrityOptions = {}): Promise<IntegrityFinding[]> {
   const root = resolve(options.root ?? process.cwd()), packageRoot = options.packageRoot ?? ownRoot;
   // An unreadable atdd-bun.yaml is a finding, not a crash: the policy and the workflow rendered from it cannot be
@@ -250,9 +283,8 @@ export function formatIntegrity(findings: IntegrityFinding[]): string {
 export async function integrityInit(repo = process.cwd(), replace = false) {
   const output = await testFilePath(repo);
   if (existsSync(output) && !replace) return { ok: false, message: `${output} exists; use --replace` };
-  const version = (await Bun.file(join(ownRoot, "package.json")).json() as { version: string }).version;
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, (await readFile(join(ownRoot, "templates/agents/atdd-bun.integrity.test.ts"), "utf8")).replace("{{VERSION}}", version));
+  await writeFile(output, await renderIntegrityTest(repo, ownRoot));
   return { ok: true, message: output };
 }
-export async function integrityStatus(repo = process.cwd()) { const output = await testFilePath(repo); return { ok: existsSync(output), message: output }; }
+export async function integrityStatus(repo = process.cwd()) { const output = await testFilePath(repo); if (!existsSync(output)) return { ok: false, message: `${output} is missing; run: bun run atdd-bun init --replace` }; try { return canonical(await readFile(output, "utf8")) === canonical(await renderIntegrityTest(repo, ownRoot)) ? { ok: true, message: output } : { ok: false, message: `${output} is stale; run: bun run atdd-bun init --replace` }; } catch (error) { return { ok: false, message: `${output} cannot be verified: ${String(error)}; run: bun run atdd-bun init --replace` }; } }

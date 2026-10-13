@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 import { finishWorktree, hookEvents, hooksStatus, installHooks, runHook, startWorktree, uninstallHooks, worktreeStatus } from "./hooks";
 import { ciInit, ciStatus } from "./ci";
 import { agentInit, agentStatus } from "./agent";
-import { checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from "./integrity";
+import { checkEnforcementCoherence, checkIntegrity, formatIntegrity, integrityInit, integrityStatus } from "./integrity";
 import { journeyDocs } from "./journey-docs";
 import { adrRegister } from "./docs-capability";
 import { releaseCheck } from "./release";
@@ -54,6 +54,19 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+async function governedRepository(root: string) {
+  const manifest = join(root, "package.json");
+  if (!existsSync(manifest)) return false;
+  const pkg = await Bun.file(manifest).json() as { name?: string; dependencies?: Record<string, unknown>; devDependencies?: Record<string, unknown> };
+  return pkg.name === "@afokapu/atdd-bun" || Object.hasOwn(pkg.dependencies ?? {}, "@afokapu/atdd-bun") || Object.hasOwn(pkg.devDependencies ?? {}, "@afokapu/atdd-bun");
+}
+
+async function requireCoherence(root: string, requireHookBinding: boolean) {
+  if (!await governedRepository(root)) return;
+  const findings = await checkEnforcementCoherence({ root, requireHookBinding });
+  if (findings.length) { console.error(formatIntegrity(findings)); process.exit(1); }
+}
+
 if (args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
   printHelp();
   process.exit(0);
@@ -68,6 +81,7 @@ if (args[0] === "init") {
 }
 if (args[0] === "hook") {
   if (!hookEvents.includes(args[1] as typeof hookEvents[number])) fail("unknown hook event: " + (args[1] ?? "(missing)"));
+  await requireCoherence(process.cwd(), true);
   const result = await runHook(args[1] as typeof hookEvents[number], process.cwd(), args.slice(2), await new Response(Bun.stdin.stream()).text());
   if (result.message) console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
@@ -142,6 +156,7 @@ const git = async (directory: string, gitArgs: string[]) => {
 const stable = (items: string[]) => [...new Set(items)].sort();
 const profileActivation = args.includes("--ratchet-activate-profiles");
 if (profileActivation && !args.includes("--ratchet")) fail("--ratchet-activate-profiles requires --ratchet");
+await requireCoherence(root, process.env.GITHUB_ACTIONS !== "true");
 if (!args.includes("--ratchet")) {
   const violations = await enforce({ root, profiles: normalizedRequested as Profile[] });
   printViolations(violations);
