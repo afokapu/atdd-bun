@@ -25,6 +25,67 @@ test("real Git installation is idempotent, worktree-local, and removable", async
   finally { await cleanup(root); await cleanup(`${root}-wt`); }
 }, 20_000);
 
+test("profile coherence rejects tracked generated hooks without a real worktree-local hooksPath binding", async () => {
+  const root = await repo(); try {
+    const packageVersion = (await Bun.file(resolve(import.meta.dir, "../package.json")).json() as { version: string }).version;
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@${packageVersion}", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="]\n  }\n}\n`);
+    await installHooks(root);
+    const beforeHooks = await Promise.all(hookEvents.map(event => readFile(join(root, ".githooks", event), "utf8")));
+    await git(root, ["config", "--worktree", "--unset", "core.hooksPath"]);
+    const beforeStatus = (await git(root, ["status", "--porcelain"])).out;
+    const status = await hooksStatus(root);
+    expect(status.ok).toBeFalse();
+    expect((await git(root, ["config", "--worktree", "--get", "core.hooksPath"])).out.trim()).toBe("");
+    expect(await Promise.all(hookEvents.map(event => readFile(join(root, ".githooks", event), "utf8")))).toEqual(beforeHooks);
+    expect((await git(root, ["status", "--porcelain"])).out).toBe(beforeStatus);
+    expect(status.message).toContain("core.hooksPath");
+    expect(status.message).toContain("bun run atdd-bun init --replace");
+  } finally { await cleanup(root); }
+});
+
+test("stale generated dispatcher directs an approved upgrade through install and full surface refresh before hook logic", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { "@afokapu/atdd-bun": "^0.9.9" } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@0.9.9", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-old=="]\n  }\n}\n`);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [security]\nprotected_branches: [feature]\n");
+    expect((await installHooks(root)).ok).toBeTrue();
+    const child = Bun.spawn({ cmd: [join(root, ".githooks/pre-commit")], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(code).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("installed package 0.10.0 does not match exact bun.lock resolution 0.9.9");
+    expect(stderr).toContain("bun install --frozen-lockfile");
+    expect(stderr).toContain("bun run atdd-bun init --replace");
+    expect(stderr).not.toContain("protected branch feature is blocked");
+  } finally { await cleanup(root); }
+});
+
+test("spoof-named consumer cannot use source hook fallback or skip exact lock and install checks", async () => {
+  const root = await repo(); try {
+    await rm(join(root, "node_modules"), { recursive: true, force: true });
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "@afokapu/atdd-bun", version: "9.9.9" }));
+    await mkdir(join(root, "src"), { recursive: true });
+    const marker = join(root, "spoof-cli-ran");
+    await writeFile(join(root, "src/cli.ts"), `await Bun.write(${JSON.stringify(marker)}, "consumer source fallback executed\\n");\n`);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [security]\n");
+    expect((await installHooks(root)).ok).toBeTrue();
+
+    const hook = Bun.spawn({ cmd: [join(root, ".githooks/pre-commit")], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [hookCode, hookError] = await Promise.all([hook.exited, new Response(hook.stderr).text()]);
+    expect(hookCode).toBe(1);
+    expect(hookError).toContain("worktree-local @afokapu/atdd-bun is missing");
+    expect(hookError).toContain("bun install --frozen-lockfile && bun run atdd-bun init --replace");
+    expect(await Bun.file(marker).exists()).toBeFalse();
+
+    const cli = Bun.spawn({ cmd: [process.execPath, resolve(import.meta.dir, "../src/cli.ts"), "security", "--root", root], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [cliCode, cliError] = await Promise.all([cli.exited, new Response(cli.stderr).text()]);
+    expect(cliCode).toBe(1);
+    expect(cliError).toContain("@afokapu/atdd-bun is not a dependency");
+    expect(cliError).toContain("bun add -d @afokapu/atdd-bun@<operator-approved-version> --exact");
+  } finally { await cleanup(root); }
+});
+
 test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
   const root = await repo(); try {
     await installHooks(root);

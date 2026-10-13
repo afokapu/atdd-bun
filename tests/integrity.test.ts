@@ -3,24 +3,39 @@ import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { checkInstalledPackage, checkIntegrity, formatIntegrity, loosenedPolicy, writeManifest } from "../src/integrity";
+import { hookEvents } from "../src/hooks";
 import { initializeRepository } from "../src/setup";
 
 const packageRoot = resolve(import.meta.dir, "..");
+const packageVersion = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
 const git = async (root: string, ...args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); await child.exited; };
-const lockEntry = '    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@0.2.0", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="],\n';
+const lockEntry = (version = packageVersion) => `    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@${version}", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="],\n`;
 
 /** A consumer repository bootstrapped by `init`, installing the package from npm. */
-async function consumer() {
+async function consumer(config?: string) {
   const root = await mkdtemp(join(tmpdir(), "atdd-integrity-"));
   await git(root, "init", "-q", "-b", "feature"); await git(root, "config", "user.email", "i@test"); await git(root, "config", "user.name", "I");
-  await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.2.0" } }, null, 2));
-  await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry}  }\n}\n`);
+  await writeFile(join(root, ".git/info/exclude"), "node_modules/\n");
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }, null, 2));
+  await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry()}  }\n}\n`);
+  if (config !== undefined) await writeFile(join(root, "atdd-bun.yaml"), config);
   await mkdir(join(root, "node_modules/@afokapu"), { recursive: true });
   await symlink(packageRoot, join(root, "node_modules/@afokapu/atdd-bun"), "dir");
   expect((await initializeRepository(root)).ok).toBeTrue();
   return root;
 }
 const files = (findings: { file: string }[]) => findings.map(f => f.file).sort();
+const runCli = async (root: string, ...args: string[]) => {
+  const child = Bun.spawn({ cmd: [process.execPath, join(packageRoot, "src/cli.ts"), ...args], cwd: root, stdout: "pipe", stderr: "pipe" });
+  return { code: await child.exited, out: await new Response(child.stdout).text(), err: await new Response(child.stderr).text() };
+};
+const surfacePaths = [
+  ...hookEvents.map(event => `.githooks/${event}`),
+  ".github/workflows/atdd-bun.yml",
+  "atdd-bun.integrity.test.ts",
+];
+const surfaceIdentity = (text: string) => text.match(/atdd-bun enforcement identity: ([0-9a-f]{64})/)?.[1];
+const surfaceContents = async (root: string) => Object.fromEntries(await Promise.all(surfacePaths.map(async path => [path, await readFile(join(root, path), "utf8")] as const)));
 
 test("consumer fixture materializes the project-local CLI that generated hooks execute", async () => {
   const root = await consumer();
@@ -33,6 +48,104 @@ test("a freshly bootstrapped consumer is canonical", async () => {
   try { expect(await checkIntegrity({ root })).toEqual([]); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("profile coherence rejects an installed package version that differs from the exact bun.lock resolution", async () => {
+  const root = await consumer();
+  try {
+    const lock = join(root, "bun.lock"), beforeSurfaces = await surfaceContents(root);
+    await writeFile(lock, `{\n  "packages": {\n${lockEntry("0.10.99")}  }\n}\n`);
+    const beforeLock = await readFile(lock, "utf8"), findings = await checkIntegrity({ root });
+    expect(await readFile(lock, "utf8")).toBe(beforeLock);
+    expect(await surfaceContents(root)).toEqual(beforeSurfaces);
+    expect(findings).toContainEqual(expect.objectContaining({
+      file: "node_modules/@afokapu/atdd-bun/package.json",
+      detail: expect.stringContaining(`installed version ${packageVersion} does not match exact bun.lock resolution 0.10.99`),
+      restore: "bun install --frozen-lockfile",
+    }));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("missing or unresolvable bun.lock requires an operator-approved exact-version lock repair", async () => {
+  const root = await consumer();
+  try {
+    const lock = join(root, "bun.lock"), repair = "bun add -d @afokapu/atdd-bun@<operator-approved-version> --exact";
+    await rm(lock);
+    const absent = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    expect(await Bun.file(lock).exists()).toBeFalse();
+    const invalidText = '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"]\n  }\n}\n';
+    await writeFile(lock, invalidText);
+    const invalid = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    expect(await readFile(lock, "utf8")).toBe(invalidText);
+    for (const finding of [absent, invalid]) {
+      expect(finding?.restore).toBe(repair);
+      expect(finding?.restore).not.toContain("latest");
+      expect(finding?.restore).not.toContain("--frozen-lockfile");
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("profile coherence rejects missing or stale generated hooks without repairing them", async () => {
+  const root = await consumer();
+  try {
+    const stale = join(root, ".githooks/pre-commit"), missing = join(root, ".githooks/pre-push");
+    await writeFile(stale, "#!/bin/sh\nexit 0\n");
+    await rm(missing);
+    const findings = await checkIntegrity({ root });
+    expect(await readFile(stale, "utf8")).toBe("#!/bin/sh\nexit 0\n");
+    expect(await Bun.file(missing).exists()).toBeFalse();
+    expect(findings).toContainEqual(expect.objectContaining({ file: ".githooks/pre-commit", detail: expect.stringContaining("stale"), restore: "bun run atdd-bun init --replace" }));
+    expect(findings).toContainEqual(expect.objectContaining({ file: ".githooks/pre-push", detail: expect.stringContaining("missing"), restore: "bun run atdd-bun init --replace" }));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("profile coherence rejects missing or stale required generated Provider CI without repairing it", async () => {
+  const config = "profiles: [security]\nratchet: { mode: reject-new, profiles: [security] }\n";
+  const root = await consumer(config), workflow = join(root, ".github/workflows/atdd-bun.yml");
+  try {
+    await rm(workflow);
+    const missing = await runCli(root, "security", "--root", root);
+    expect(await Bun.file(workflow).exists()).toBeFalse();
+
+    const stale = "name: stale-provider-gate\n";
+    await writeFile(workflow, stale);
+    const outdated = await runCli(root, "security", "--root", root);
+    expect(await readFile(workflow, "utf8")).toBe(stale);
+    for (const result of [missing, outdated]) {
+      expect(result.code).toBe(1);
+      expect(result.err).toContain(".github/workflows/atdd-bun.yml");
+      expect(result.err).toContain("bun run atdd-bun init --replace");
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("supported init refresh regenerates hooks Provider CI and integrity from one exact identity", async () => {
+  const root = await consumer("profiles: [security]\nratchet: { mode: reject-new, profiles: [security] }\n");
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [security, coder]\nratchet: { mode: reject-new, profiles: [security, coder] }\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
+    const contents = await surfaceContents(root), identities = Object.values(contents).map(surfaceIdentity);
+    expect(identities.every(Boolean)).toBeTrue();
+    expect([...new Set(identities)]).toHaveLength(1);
+    expect(await checkIntegrity({ root })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("coherent profile validation preserves reject-new with new empty", async () => {
+  const root = await consumer("profiles: [security]\nratchet: { mode: reject-new, profiles: [security] }\n");
+  try {
+    await writeFile(join(root, "readme.md"), "base\n");
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify");
+    const base = (await Bun.$`git -C ${root} rev-parse HEAD`.text()).trim();
+    await writeFile(join(root, "readme.md"), "candidate\n");
+    await git(root, "add", "readme.md"); await git(root, "commit", "-qm", "candidate", "--no-verify");
+    const result = await runCli(root, "security", "--root", root, "--ratchet", "--base", base);
+    expect(result.code, result.err).toBe(0);
+    expect(JSON.parse(result.out)).toMatchObject({ mode: "reject-new", new: [] });
+    const identities = Object.values(await surfaceContents(root)).map(surfaceIdentity);
+    expect(identities.every(Boolean)).toBeTrue();
+    expect([...new Set(identities)]).toHaveLength(1);
+  } finally { await rm(root, { recursive: true, force: true }); }
+}, 30_000);
+
 test("edited generated files, a non-npm dependency, and a missing test are each reported with the way back", async () => {
   const root = await consumer();
   try {
@@ -44,9 +157,12 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "github:someone/atdd-bun" } }));
     await writeFile(join(root, "bun.lock"), '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"],\n  }\n}\n');
     const findings = await checkIntegrity({ root });
-    expect(files(findings)).toEqual([".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json"]);
+    expect(files(findings)).toEqual([
+      ...hookEvents.map(event => `.githooks/${event}`),
+      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json",
+    ].sort());
     const message = formatIntegrity(findings);
-    for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun ci init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);
+    for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -54,11 +170,19 @@ test("an upgrade's new version stamp is not tampering, and the test follows bunf
   const root = await mkdtemp(join(tmpdir(), "atdd-integrity-root-"));
   try {
     await git(root, "init", "-q");
-    await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "^0.2.0" } }));
-    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry}  }\n}\n`);
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry()}  }\n}\n`);
+    await writeFile(join(root, ".git/info/exclude"), "node_modules/\n");
+    await mkdir(join(root, "node_modules/@afokapu"), { recursive: true });
+    await symlink(packageRoot, join(root, "node_modules/@afokapu/atdd-bun"), "dir");
     await writeFile(join(root, "bunfig.toml"), '[install]\nexact = true\n\n[test]\nroot = "tests"\n');
     expect((await initializeRepository(root)).ok).toBeTrue();
-    expect(await Bun.file(join(root, "tests/atdd-bun.integrity.test.ts")).exists()).toBeTrue();
+    const generatedTest = join(root, "tests/atdd-bun.integrity.test.ts");
+    expect(await Bun.file(generatedTest).exists()).toBeTrue();
+    const identity = surfaceIdentity(await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8"));
+    expect(identity).toBeDefined();
+    for (const event of hookEvents) expect(surfaceIdentity(await readFile(join(root, ".githooks", event), "utf8"))).toBe(identity);
+    expect(surfaceIdentity(await readFile(generatedTest, "utf8"))).toBe(identity);
     expect(await checkIntegrity({ root })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -67,18 +191,19 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
   const root = await consumer();
   try {
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 300\n");
-    // This policy has no reject-new ratchet, so its generated workflow is the strict rendering.
-    expect((await (await import("../src/ci")).ciInit(root, true)).ok).toBeTrue();
+    // This policy has no reject-new ratchet, so its coherently refreshed workflow keeps strict enforcement.
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 5000\nrequire_traceability: false\nprotected_branches: [develop]\n");
-    // The workflow's push branches follow protected_branches, so it is reported as stale too.
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     const loosened = await checkIntegrity({ root, base: "base", push: false }), finding = loosened.find(f => f.file === "atdd-bun.yaml")!;
-    expect(files(loosened)).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
+    expect(files(loosened)).toEqual(["atdd-bun.yaml"]);
     for (const text of ["max_staged_changed_lines 300 → 5000", "require_traceability true → false", "protected_branches drops main, master"]) expect(finding.detail).toContain(text);
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
-    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
+    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual(["atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
     // Excluding `worktrees` from ratchet context digests must not hide its loosening from integrity.
     expect(loosenedPolicy({ worktrees: { enabled: true, require_linked_worktree: true } } as never, { worktrees: { enabled: false, require_linked_worktree: false } } as never)).toEqual(["worktrees.enabled true → false", "worktrees.require_linked_worktree true → false"]);
@@ -129,8 +254,11 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
     const workflow = join(root, ".github/workflows/atdd-bun.yml");
     expect(await readFile(workflow, "utf8")).toContain('branches: ["main", "master"]');
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
-    expect(files(await checkIntegrity({ root }))).toEqual([".github/workflows/atdd-bun.yml"]);
-    expect((await ciInit(root, true)).ok).toBeTrue();
+    expect(files(await checkIntegrity({ root }))).toEqual([
+      ...hookEvents.map(event => `.githooks/${event}`),
+      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts",
+    ].sort());
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
     expect(await checkIntegrity({ root })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -168,6 +296,25 @@ test("an unreadable atdd-bun.yaml: integrity reports it as a finding, and ci ini
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("an unreadable atdd-bun.yaml still reports missing required enforcement surfaces without rendering them", async () => {
+  const root = await consumer();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [unclosed\n");
+    await rm(join(root, ".githooks/pre-push"));
+    await rm(join(root, ".github/workflows/atdd-bun.yml"));
+    await rm(join(root, "atdd-bun.integrity.test.ts"));
+    await writeFile(join(root, ".githooks/pre-commit"), "#!/bin/sh\nexit 0\n");
+    await writeFile(join(root, "AGENTS.md"), "# edited\n");
+    const findings = await checkIntegrity({ root, base: "HEAD", push: false });
+    expect(files(findings)).toEqual([".github/workflows/atdd-bun.yml", ".githooks/pre-push", "AGENTS.md", "atdd-bun.integrity.test.ts", "atdd-bun.yaml"].sort());
+    expect(findings.find(finding => finding.file === ".githooks/pre-commit")).toBeUndefined();
+    for (const file of [".githooks/pre-push", ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts"]) {
+      expect(findings.find(finding => finding.file === file)?.restore).toBe("bun run atdd-bun init --replace");
+    }
+    expect(findings.find(finding => finding.file === "atdd-bun.yaml")?.detail).toContain("could not be parsed");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, and is never read as the defaults", async () => {
   const root = await consumer();
   try {
@@ -180,8 +327,11 @@ test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, an
     expect(findings[0].restore).toContain("bring that repair into this branch");
     // The recovery the restore describes: repair the base branch, then merge it into the branch under review.
     await git(root, "stash", "-q", "-u"); await git(root, "checkout", "-qb", "work", "base"); await git(root, "stash", "pop", "-q");
-    await git(root, "commit", "-qam", "work", "--no-verify");
-    await git(root, "checkout", "-q", "base"); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n"); await git(root, "commit", "-qam", "repair base", "--no-verify");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "work", "--no-verify");
+    await git(root, "checkout", "-q", "base"); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "repair base", "--no-verify");
     await git(root, "checkout", "-q", "work");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed")]);   // still on the broken merge base
     await git(root, "merge", "-q", "--no-edit", "base", "-X", "theirs");

@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { policy } from "./hooks";
+import { enforcementIdentity, policy } from "./hooks";
 
 const root = resolve(import.meta.dir, "..");
 const template = join(root, "templates/github/atdd-bun.yml");
@@ -27,7 +27,8 @@ export async function renderWorkflow(repo = process.cwd()) {
     const config = Bun.YAML.parse(await readFile(configPath, "utf8"));
     rejectNew = Boolean(config && typeof config === "object" && !Array.isArray(config) && (config as { ratchet?: { mode?: unknown } }).ratchet?.mode === "reject-new");
   } catch { /* policy(repo) below gives its existing parse diagnostic */ }
-  return (await readFile(template, "utf8")).replace("{{PLAYWRIGHT}}\n", await usesPlaywright(repo) ? playwrightStep : "").replace("{{VERSION}}", version).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", ")).replace("{{ENFORCEMENT}}", rejectNew ? 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles' : "bun run atdd-bun all");
+  const identity = await enforcementIdentity(repo);
+  return (await readFile(template, "utf8")).replace("{{PLAYWRIGHT}}\n", await usesPlaywright(repo) ? playwrightStep : "").replace("{{VERSION}}", version).replace("{{IDENTITY}}", identity.digest).replace("{{PROTECTED_BRANCHES}}", (await policy(repo)).protected_branches.map(branch => JSON.stringify(branch)).join(", ")).replace("{{ENFORCEMENT}}", rejectNew ? 'bun run atdd-bun all --ratchet --base "$ATDD_BASE_REF" --ratchet-activate-profiles' : "bun run atdd-bun all");
 }
 const githubPackagesRegistry = /^\s*@[\w.-]+:registry\s*=\s*https:\/\/npm\.pkg\.github\.com\/?\s*$/im;
 const githubPackagesAuth = /^\s*\/\/npm\.pkg\.github\.com\/:_authToken\s*=\s*(.*?)\s*$/gim;
@@ -61,4 +62,4 @@ export async function ciInit(repo = process.cwd(), replace = false) {
   await writeFile(output, rendered);
   return { ok: true, message: npmrc.content === undefined ? output : `${output}\n${npmrc.path}` };
 }
-export async function ciStatus(repo = process.cwd()) { const output = join(repo, ".github/workflows/atdd-bun.yml"); return { ok: existsSync(output), message: output }; }
+export async function ciStatus(repo = process.cwd()) { const output = join(repo, ".github/workflows/atdd-bun.yml"); if (!existsSync(output)) return { ok: false, message: `${output} is missing; run: bun run atdd-bun init --replace` }; try { return await readFile(output, "utf8") === await renderWorkflow(repo) ? { ok: true, message: output } : { ok: false, message: `${output} is stale; run: bun run atdd-bun init --replace` }; } catch (error) { return { ok: false, message: `${output} cannot be verified: ${String(error)}; run: bun run atdd-bun init --replace` }; } }
