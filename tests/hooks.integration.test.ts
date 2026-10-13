@@ -1,6 +1,6 @@
 import { expect, spyOn, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import * as enforcer from "../src/enforce";
@@ -442,10 +442,16 @@ test("finish and status stay disabled when the primary checkout's committed HEAD
   try {
     await mkdir(layout.worktrees, { recursive: true });
     expect((await git(layout.main, ["worktree", "add", "-q", "-b", "old", old])).code).toBe(0);
+    const primary = await realpath(layout.main), primaryCommit = (await git(primary, ["rev-parse", "HEAD^{commit}"])).out.trim();
     await writeFile(join(layout.main, "atdd-bun.yaml"), "worktrees:\n  enabled: true\n"); // uncommitted
-    expect((await worktreeStatus(old)).ok).toBeFalse();
-    const refused = await finishWorktree(old);
-    expect(refused.ok).toBeFalse(); expect(refused.message).toContain("worktree policy is disabled");
+    const status = await worktreeStatus(old), refused = await finishWorktree(old);
+    for (const result of [status, refused]) {
+      expect(result.ok).toBeFalse();
+      expect(result.message).toContain("worktree policy is disabled");
+      expect(result.message).toContain(primary);
+      expect(result.message).toContain(primaryCommit);
+      expect(result.message).toContain("update the primary checkout");
+    }
     expect(existsSync(old)).toBeTrue();
   } finally { await cleanup(layout.container); }
 }, 30_000);
