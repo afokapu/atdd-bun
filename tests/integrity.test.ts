@@ -24,6 +24,7 @@ async function consumer(config?: string) {
   expect((await initializeRepository(root)).ok).toBeTrue();
   return root;
 }
+const syntheticFixtureIntegrity = (root: string) => checkIntegrity({ root, base: "0000000000000000000000000000000000000000", push: false });
 const files = (findings: { file: string }[]) => findings.map(f => f.file).sort();
 const runCli = async (root: string, ...args: string[]) => {
   const child = Bun.spawn({ cmd: [process.execPath, join(packageRoot, "src/cli.ts"), ...args], cwd: root, stdout: "pipe", stderr: "pipe" });
@@ -45,7 +46,7 @@ test("consumer fixture materializes the project-local CLI that generated hooks e
 
 test("a freshly bootstrapped consumer is canonical", async () => {
   const root = await consumer();
-  try { expect(await checkIntegrity({ root })).toEqual([]); } finally { await rm(root, { recursive: true, force: true }); }
+  try { expect(await syntheticFixtureIntegrity(root)).toEqual([]); } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("profile coherence rejects an installed package version that differs from the exact bun.lock resolution", async () => {
@@ -53,7 +54,7 @@ test("profile coherence rejects an installed package version that differs from t
   try {
     const lock = join(root, "bun.lock"), beforeSurfaces = await surfaceContents(root);
     await writeFile(lock, `{\n  "packages": {\n${lockEntry("0.10.99")}  }\n}\n`);
-    const beforeLock = await readFile(lock, "utf8"), findings = await checkIntegrity({ root });
+    const beforeLock = await readFile(lock, "utf8"), findings = await syntheticFixtureIntegrity(root);
     expect(await readFile(lock, "utf8")).toBe(beforeLock);
     expect(await surfaceContents(root)).toEqual(beforeSurfaces);
     expect(findings).toContainEqual(expect.objectContaining({
@@ -69,11 +70,11 @@ test("missing or unresolvable bun.lock requires an operator-approved exact-versi
   try {
     const lock = join(root, "bun.lock"), repair = "bun add -d @afokapu/atdd-bun@<operator-approved-version> --exact";
     await rm(lock);
-    const absent = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    const absent = (await syntheticFixtureIntegrity(root)).find(finding => finding.file === "bun.lock");
     expect(await Bun.file(lock).exists()).toBeFalse();
     const invalidText = '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"]\n  }\n}\n';
     await writeFile(lock, invalidText);
-    const invalid = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    const invalid = (await syntheticFixtureIntegrity(root)).find(finding => finding.file === "bun.lock");
     expect(await readFile(lock, "utf8")).toBe(invalidText);
     for (const finding of [absent, invalid]) {
       expect(finding?.restore).toBe(repair);
@@ -89,7 +90,7 @@ test("profile coherence rejects missing or stale generated hooks without repairi
     const stale = join(root, ".githooks/pre-commit"), missing = join(root, ".githooks/pre-push");
     await writeFile(stale, "#!/bin/sh\nexit 0\n");
     await rm(missing);
-    const findings = await checkIntegrity({ root });
+    const findings = await syntheticFixtureIntegrity(root);
     expect(await readFile(stale, "utf8")).toBe("#!/bin/sh\nexit 0\n");
     expect(await Bun.file(missing).exists()).toBeFalse();
     expect(findings).toContainEqual(expect.objectContaining({ file: ".githooks/pre-commit", detail: expect.stringContaining("stale"), restore: "bun run atdd-bun init --replace" }));
@@ -125,7 +126,7 @@ test("supported init refresh regenerates hooks Provider CI and integrity from on
     const contents = await surfaceContents(root), identities = Object.values(contents).map(surfaceIdentity);
     expect(identities.every(Boolean)).toBeTrue();
     expect([...new Set(identities)]).toHaveLength(1);
-    expect(await checkIntegrity({ root })).toEqual([]);
+    expect(await syntheticFixtureIntegrity(root)).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -156,7 +157,7 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     await rm(join(root, "atdd-bun.integrity.test.ts"));
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "github:someone/atdd-bun" } }));
     await writeFile(join(root, "bun.lock"), '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"],\n  }\n}\n');
-    const findings = await checkIntegrity({ root });
+    const findings = await syntheticFixtureIntegrity(root);
     expect(files(findings)).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
       ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json",
@@ -183,7 +184,7 @@ test("an upgrade's new version stamp is not tampering, and the test follows bunf
     expect(identity).toBeDefined();
     for (const event of hookEvents) expect(surfaceIdentity(await readFile(join(root, ".githooks", event), "utf8"))).toBe(identity);
     expect(surfaceIdentity(await readFile(generatedTest, "utf8"))).toBe(identity);
-    expect(await checkIntegrity({ root })).toEqual([]);
+    expect(await syntheticFixtureIntegrity(root)).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -254,13 +255,13 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
     const workflow = join(root, ".github/workflows/atdd-bun.yml");
     expect(await readFile(workflow, "utf8")).toContain('branches: ["main", "master"]');
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
-    expect(files(await checkIntegrity({ root }))).toEqual([
+    expect(files(await syntheticFixtureIntegrity(root))).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
       ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts",
     ].sort());
     expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
-    expect(await checkIntegrity({ root })).toEqual([]);
+    expect(await syntheticFixtureIntegrity(root)).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
