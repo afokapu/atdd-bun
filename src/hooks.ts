@@ -207,9 +207,14 @@ export async function lockedToolkit(root: string): Promise<LockedToolkit | null>
   return version && integrity ? { version, integrity } : null;
 }
 
+/** Only the running toolkit's actual repository root receives the source-checkout exception. */
+export async function isToolkitSourceCheckout(root = process.cwd()) {
+  return realpath(resolve(root)).then(repositoryRoot => realpath(packageRoot).then(runningRoot => repositoryRoot === runningRoot)).catch(() => false);
+}
+
 /** One identity binds the approved lock tuple, the package that will execute, and the exact activated config/profile set. */
 export async function enforcementIdentity(root = process.cwd()): Promise<EnforcementIdentity> {
-  const sourceCheckout = await realpath(resolve(root)).then(repositoryRoot => realpath(packageRoot).then(runningRoot => repositoryRoot === runningRoot)).catch(() => false);
+  const sourceCheckout = await isToolkitSourceCheckout(root);
   const installedRoot = sourceCheckout ? packageRoot : join(root, "node_modules", PACKAGE);
   const installedManifest = join(installedRoot, "package.json");
   const providerVersion = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
