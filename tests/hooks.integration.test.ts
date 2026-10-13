@@ -44,6 +44,23 @@ test("profile coherence rejects tracked generated hooks without a real worktree-
   } finally { await cleanup(root); }
 });
 
+test("stale generated dispatcher directs an approved upgrade through install and full surface refresh before hook logic", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "consumer", devDependencies: { "@afokapu/atdd-bun": "^0.9.9" } }));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@0.9.9", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-old=="]\n  }\n}\n`);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [security]\nprotected_branches: [feature]\n");
+    expect((await installHooks(root)).ok).toBeTrue();
+    const child = Bun.spawn({ cmd: [join(root, ".githooks/pre-commit")], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [code, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+    expect(code).toBe(1);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("installed package 0.10.0 does not match exact bun.lock resolution 0.9.9");
+    expect(stderr).toContain("bun install --frozen-lockfile");
+    expect(stderr).toContain("bun run atdd-bun init --replace");
+    expect(stderr).not.toContain("protected branch feature is blocked");
+  } finally { await cleanup(root); }
+});
+
 test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
   const root = await repo(); try {
     await installHooks(root);

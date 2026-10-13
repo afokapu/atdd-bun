@@ -64,6 +64,25 @@ test("profile coherence rejects an installed package version that differs from t
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("missing or unresolvable bun.lock requires an operator-approved exact-version lock repair", async () => {
+  const root = await consumer();
+  try {
+    const lock = join(root, "bun.lock"), repair = "bun add -d @afokapu/atdd-bun@<operator-approved-version> --exact";
+    await rm(lock);
+    const absent = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    expect(await Bun.file(lock).exists()).toBeFalse();
+    const invalidText = '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"]\n  }\n}\n';
+    await writeFile(lock, invalidText);
+    const invalid = (await checkIntegrity({ root })).find(finding => finding.file === "bun.lock");
+    expect(await readFile(lock, "utf8")).toBe(invalidText);
+    for (const finding of [absent, invalid]) {
+      expect(finding?.restore).toBe(repair);
+      expect(finding?.restore).not.toContain("latest");
+      expect(finding?.restore).not.toContain("--frozen-lockfile");
+    }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("profile coherence rejects missing or stale generated hooks without repairing them", async () => {
   const root = await consumer();
   try {
