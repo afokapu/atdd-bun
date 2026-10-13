@@ -61,6 +61,31 @@ test("stale generated dispatcher directs an approved upgrade through install and
   } finally { await cleanup(root); }
 });
 
+test("spoof-named consumer cannot use source hook fallback or skip exact lock and install checks", async () => {
+  const root = await repo(); try {
+    await rm(join(root, "node_modules"), { recursive: true, force: true });
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "@afokapu/atdd-bun", version: "9.9.9" }));
+    await mkdir(join(root, "src"), { recursive: true });
+    const marker = join(root, "spoof-cli-ran");
+    await writeFile(join(root, "src/cli.ts"), `await Bun.write(${JSON.stringify(marker)}, "consumer source fallback executed\\n");\n`);
+    await writeFile(join(root, "atdd-bun.yaml"), "profiles: [security]\n");
+    expect((await installHooks(root)).ok).toBeTrue();
+
+    const hook = Bun.spawn({ cmd: [join(root, ".githooks/pre-commit")], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [hookCode, hookError] = await Promise.all([hook.exited, new Response(hook.stderr).text()]);
+    expect(hookCode).toBe(1);
+    expect(hookError).toContain("worktree-local @afokapu/atdd-bun is missing");
+    expect(hookError).toContain("bun install --frozen-lockfile && bun run atdd-bun init --replace");
+    expect(await Bun.file(marker).exists()).toBeFalse();
+
+    const cli = Bun.spawn({ cmd: [process.execPath, resolve(import.meta.dir, "../src/cli.ts"), "security", "--root", root], cwd: root, stdout: "pipe", stderr: "pipe" });
+    const [cliCode, cliError] = await Promise.all([cli.exited, new Response(cli.stderr).text()]);
+    expect(cliCode).toBe(1);
+    expect(cliError).toContain("@afokapu/atdd-bun is not a dependency");
+    expect(cliError).toContain("bun add -d @afokapu/atdd-bun@<operator-approved-version> --exact");
+  } finally { await cleanup(root); }
+});
+
 test("generated hook dispatchers do not bind this toolkit checkout's absolute CLI path", async () => {
   const root = await repo(); try {
     await installHooks(root);
