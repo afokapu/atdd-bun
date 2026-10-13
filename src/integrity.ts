@@ -76,13 +76,13 @@ async function checkDependency(root: string): Promise<IntegrityFinding[]> {
   const pkg = await Bun.file(join(root, "package.json")).json() as { name?: string; dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
   if (pkg.name === PACKAGE) return [];
   const spec = pkg.devDependencies?.[PACKAGE] ?? pkg.dependencies?.[PACKAGE];
-  if (spec === undefined) return [{ file: "package.json", detail: `${PACKAGE} is not a dependency`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` }];
+  if (spec === undefined) return [{ file: "package.json", detail: `${PACKAGE} is not a dependency`, restore: `bun add -d ${PACKAGE}@<operator-approved-version> --exact` }];
   const findings: IntegrityFinding[] = [];
-  if (!/^[~^]?\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(spec)) findings.push({ file: "package.json", detail: `${PACKAGE} is "${spec}"; it must be an npm version range, not a git, file, or link source`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` });
+  if (!/^[~^]?\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(spec)) findings.push({ file: "package.json", detail: `${PACKAGE} is "${spec}"; it must be an npm version range, not a git, file, or link source`, restore: `bun add -d ${PACKAGE}@<operator-approved-version> --exact` });
   const locked = await lockedToolkit(root), lock = existsSync(join(root, "bun.lock")) ? await readFile(join(root, "bun.lock"), "utf8") : "";
   const entry = lock.split("\n").find(line => line.trimStart().startsWith(`"${PACKAGE}": [`));
-  if (!entry) findings.push({ file: "bun.lock", detail: `bun.lock does not pin ${PACKAGE}`, restore: "bun install --frozen-lockfile" });
-  else if (!locked) findings.push({ file: "bun.lock", detail: `bun.lock does not resolve ${PACKAGE} from the npm registry with an integrity hash`, restore: `bun add -d ${PACKAGE}@<operator-approved-version>` });
+  if (!entry) findings.push({ file: "bun.lock", detail: `bun.lock does not pin ${PACKAGE}; select the exact operator-approved version to create the reviewed lock resolution`, restore: `bun add -d ${PACKAGE}@<operator-approved-version> --exact` });
+  else if (!locked) findings.push({ file: "bun.lock", detail: `bun.lock does not resolve ${PACKAGE} from the npm registry with an integrity hash; select the exact operator-approved version to repair the reviewed lock resolution`, restore: `bun add -d ${PACKAGE}@<operator-approved-version> --exact` });
   const installedManifest = join(root, "node_modules", PACKAGE, "package.json");
   if (!existsSync(installedManifest)) findings.push({ file: `node_modules/${PACKAGE}/package.json`, detail: "the worktree-local installed package is missing", restore: "bun install --frozen-lockfile" });
   else if (locked) {
