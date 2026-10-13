@@ -157,9 +157,12 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": "github:someone/atdd-bun" } }));
     await writeFile(join(root, "bun.lock"), '{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@github:someone/atdd-bun#abc", {}, "someone-atdd-bun-abc"],\n  }\n}\n');
     const findings = await checkIntegrity({ root });
-    expect(files(findings)).toEqual([".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json"]);
+    expect(files(findings)).toEqual([
+      ...hookEvents.map(event => `.githooks/${event}`),
+      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json",
+    ].sort());
     const message = formatIntegrity(findings);
-    for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun ci init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);
+    for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
@@ -169,9 +172,17 @@ test("an upgrade's new version stamp is not tampering, and the test follows bunf
     await git(root, "init", "-q");
     await writeFile(join(root, "package.json"), JSON.stringify({ name: "app", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }));
     await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n${lockEntry()}  }\n}\n`);
+    await writeFile(join(root, ".git/info/exclude"), "node_modules/\n");
+    await mkdir(join(root, "node_modules/@afokapu"), { recursive: true });
+    await symlink(packageRoot, join(root, "node_modules/@afokapu/atdd-bun"), "dir");
     await writeFile(join(root, "bunfig.toml"), '[install]\nexact = true\n\n[test]\nroot = "tests"\n');
     expect((await initializeRepository(root)).ok).toBeTrue();
-    expect(await Bun.file(join(root, "tests/atdd-bun.integrity.test.ts")).exists()).toBeTrue();
+    const generatedTest = join(root, "tests/atdd-bun.integrity.test.ts");
+    expect(await Bun.file(generatedTest).exists()).toBeTrue();
+    const identity = surfaceIdentity(await readFile(join(root, ".github/workflows/atdd-bun.yml"), "utf8"));
+    expect(identity).toBeDefined();
+    for (const event of hookEvents) expect(surfaceIdentity(await readFile(join(root, ".githooks", event), "utf8"))).toBe(identity);
+    expect(surfaceIdentity(await readFile(generatedTest, "utf8"))).toBe(identity);
     expect(await checkIntegrity({ root })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
@@ -180,18 +191,19 @@ test("loosening atdd-bun.yaml against the base branch is reported; tightening is
   const root = await consumer();
   try {
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 300\n");
-    // This policy has no reject-new ratchet, so its generated workflow is the strict rendering.
-    expect((await (await import("../src/ci")).ciInit(root, true)).ok).toBeTrue();
+    // This policy has no reject-new ratchet, so its coherently refreshed workflow keeps strict enforcement.
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     await git(root, "add", "-A"); await git(root, "commit", "-qm", "base", "--no-verify"); await git(root, "branch", "base");
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 200\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await checkIntegrity({ root, base: "base", push: false })).toEqual([]);
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_changed_lines: 5000\nrequire_traceability: false\nprotected_branches: [develop]\n");
-    // The workflow's push branches follow protected_branches, so it is reported as stale too.
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     const loosened = await checkIntegrity({ root, base: "base", push: false }), finding = loosened.find(f => f.file === "atdd-bun.yaml")!;
-    expect(files(loosened)).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
+    expect(files(loosened)).toEqual(["atdd-bun.yaml"]);
     for (const text of ["max_staged_changed_lines 300 → 5000", "require_traceability true → false", "protected_branches drops main, master"]) expect(finding.detail).toContain(text);
     await git(root, "checkout", "-q", "base"); await git(root, "add", "-A"); await git(root, "commit", "-qm", "loosen on main", "--no-verify");
-    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual([".github/workflows/atdd-bun.yml", "atdd-bun.yaml"]);
+    expect(files(await checkIntegrity({ root, base: "base", push: true }))).toEqual(["atdd-bun.yaml"]);
     expect(loosenedPolicy({}, { registry_paths: ["plan/_*.yaml", "src/**"] } as never)).toEqual(["registry_paths adds src/**"]);
     // Excluding `worktrees` from ratchet context digests must not hide its loosening from integrity.
     expect(loosenedPolicy({ worktrees: { enabled: true, require_linked_worktree: true } } as never, { worktrees: { enabled: false, require_linked_worktree: false } } as never)).toEqual(["worktrees.enabled true → false", "worktrees.require_linked_worktree true → false"]);
@@ -242,8 +254,11 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
     const workflow = join(root, ".github/workflows/atdd-bun.yml");
     expect(await readFile(workflow, "utf8")).toContain('branches: ["main", "master"]');
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
-    expect(files(await checkIntegrity({ root }))).toEqual([".github/workflows/atdd-bun.yml"]);
-    expect((await ciInit(root, true)).ok).toBeTrue();
+    expect(files(await checkIntegrity({ root }))).toEqual([
+      ...hookEvents.map(event => `.githooks/${event}`),
+      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts",
+    ].sort());
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
     expect(await checkIntegrity({ root })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
@@ -293,8 +308,11 @@ test("a baseline atdd-bun.yaml that does not parse is a finding, not a crash, an
     expect(findings[0].restore).toContain("bring that repair into this branch");
     // The recovery the restore describes: repair the base branch, then merge it into the branch under review.
     await git(root, "stash", "-q", "-u"); await git(root, "checkout", "-qb", "work", "base"); await git(root, "stash", "pop", "-q");
-    await git(root, "commit", "-qam", "work", "--no-verify");
-    await git(root, "checkout", "-q", "base"); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n"); await git(root, "commit", "-qam", "repair base", "--no-verify");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "work", "--no-verify");
+    await git(root, "checkout", "-q", "base"); await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
+    await git(root, "add", "-A"); await git(root, "commit", "-qm", "repair base", "--no-verify");
     await git(root, "checkout", "-q", "work");
     expect((await checkIntegrity({ root, base: "base", push: false })).filter(f => f.file === "atdd-bun.yaml").map(f => f.detail)).toEqual([expect.stringContaining("could not be parsed")]);   // still on the broken merge base
     await git(root, "merge", "-q", "--no-edit", "base", "-X", "theirs");

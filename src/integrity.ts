@@ -99,7 +99,7 @@ async function renderIntegrityTest(root: string, packageRoot: string) {
 }
 
 /** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
-async function checkEnforcementGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
+async function checkEnforcementGenerated(root: string, packageRoot: string): Promise<IntegrityFinding[]> {
   const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace";
   for (const event of hookEvents) {
     const file = `.githooks/${event}`, path = join(root, file);
@@ -107,8 +107,7 @@ async function checkEnforcementGenerated(root: string, packageRoot: string, skip
     else if (canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   }
   const workflow = join(root, WORKFLOW);
-  if (skipWorkflow) { /* rendered from atdd-bun.yaml, which does not parse: reported by the caller */ }
-  else if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
+  if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
   else if (canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   const test = relative(root, await testFilePath(root)), testPath = join(root, test);
   if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
@@ -116,8 +115,8 @@ async function checkEnforcementGenerated(root: string, packageRoot: string, skip
   return findings;
 }
 
-async function checkGenerated(root: string, packageRoot: string, skipWorkflow = false): Promise<IntegrityFinding[]> {
-  const findings = await checkEnforcementGenerated(root, packageRoot, skipWorkflow);
+async function checkGenerated(root: string, packageRoot: string, skipEnforcement = false): Promise<IntegrityFinding[]> {
+  const findings = skipEnforcement ? [] : await checkEnforcementGenerated(root, packageRoot);
   const agentCanonical = (await readFile(join(packageRoot, "templates/agents/AGENTS.block.md"), "utf8")).match(BLOCK)![0];
   for (const file of instructionPaths) {
     const agents = existsSync(join(root, file)) ? await readFile(join(root, file), "utf8") : "", block = agents.match(BLOCK)?.[0];

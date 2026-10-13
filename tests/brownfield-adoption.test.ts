@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { defaultProfiles, enabledProfiles } from "../src/enforce";
@@ -34,7 +34,8 @@ test("6-8: after adoption, dropping a profile or the list is rejected, so the tw
 });
 
 // A real repository, checked through the CLI the generated CI runs first.
-const cli = resolve(import.meta.dir, "../src/cli.ts");
+const packageRoot = resolve(import.meta.dir, ".."), cli = join(packageRoot, "src/cli.ts");
+const packageVersion = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
 async function run(root: string, ...args: string[]) {
   const child = Bun.spawn({ cmd: [process.execPath, cli, ...args], cwd: root, stdout: "pipe", stderr: "pipe", env: { ...process.env, ATDD_BASE_REF: "base", GITHUB_EVENT_NAME: "" } });
   return { code: await child.exited, out: await new Response(child.stdout).text() + await new Response(child.stderr).text() };
@@ -45,8 +46,11 @@ async function brownfield(config: string | null, body: (root: string) => Promise
   try {
     await git(root, "init", "-q", "-b", "base"); await git(root, "config", "user.email", "b@test"); await git(root, "config", "user.name", "B");
     // An existing repository that installed the package from npm and ran init, as a consumer does.
-    await writeFile(join(root, "package.json"), JSON.stringify({ name: "legacy", devDependencies: { "@afokapu/atdd-bun": "^0.7.0" } }, null, 2));
-    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@0.7.0", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="],\n  }\n}\n`);
+    await writeFile(join(root, "package.json"), JSON.stringify({ name: "legacy", devDependencies: { "@afokapu/atdd-bun": `^${packageVersion}` } }, null, 2));
+    await writeFile(join(root, "bun.lock"), `{\n  "packages": {\n    "@afokapu/atdd-bun": ["@afokapu/atdd-bun@${packageVersion}", "", { "bin": { "atdd-bun": "src/cli.ts" } }, "sha512-abc=="],\n  }\n}\n`);
+    await writeFile(join(root, ".git/info/exclude"), "node_modules/\n");
+    await mkdir(join(root, "node_modules/@afokapu"), { recursive: true });
+    await symlink(packageRoot, join(root, "node_modules/@afokapu/atdd-bun"), "dir");
     if (config !== null) await writeFile(join(root, "atdd-bun.yaml"), config);
     expect((await initializeRepository(root)).ok).toBeTrue();
     // Before this release, init wrote no atdd-bun.yaml: a repository initialized then has none unless it wrote one.
@@ -65,6 +69,7 @@ test("9: an absent list still executes every profile", async () => {
 test("10: a repository with no profiles field adopts [docs] through the real integrity CLI, and runs green", async () => {
   await brownfield("max_staged_files: 20\n", async root => {
     await writeFile(join(root, "atdd-bun.yaml"), "max_staged_files: 20\nprofiles: [docs]\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     const check = await run(root, "integrity");
     expect(check.out).not.toContain("INTEGRITY VIOLATION");
     expect(check.code).toBe(0);
@@ -73,6 +78,7 @@ test("10: a repository with no profiles field adopts [docs] through the real int
   // Also when the repository has no atdd-bun.yaml at all.
   await brownfield(null, async root => {
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [docs]\n");
+    expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect((await run(root, "integrity")).code).toBe(0);
   });
 }, 30_000);
