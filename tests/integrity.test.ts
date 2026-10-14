@@ -34,6 +34,7 @@ const surfacePaths = [
   ...hookEvents.map(event => `.githooks/${event}`),
   ".github/workflows/atdd-bun.yml",
   "atdd-bun.integrity.test.ts",
+  "plan/atdd-bun.integrity.acceptance.yaml",
 ];
 const surfaceIdentity = (text: string) => text.match(/atdd-bun enforcement identity: ([0-9a-f]{64})/)?.[1];
 const surfaceContents = async (root: string) => Object.fromEntries(await Promise.all(surfacePaths.map(async path => [path, await readFile(join(root, path), "utf8")] as const)));
@@ -257,7 +258,7 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
     expect(files(await syntheticFixtureIntegrity(root))).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
-      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts",
+      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts", "plan/atdd-bun.integrity.acceptance.yaml",
     ].sort());
     expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
