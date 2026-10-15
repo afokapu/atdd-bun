@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { instructionPaths } from "./agent";
 import { renderWorkflow } from "./ci";
 import { defaultHookPolicy, enforcementIdentity, hookEvents, hooksStatus, isToolkitSourceCheckout, lockedToolkit, renderHook, type HookPolicy } from "./hooks";
+import { topologyFor } from "./topology";
 
 /**
  * Integrity: the files an agent could change to weaken enforcement must stay canonical.
@@ -18,6 +19,10 @@ const PACKAGE = "@afokapu/atdd-bun";
 const ownRoot = resolve(import.meta.dir, "..");
 export const MANIFEST = "integrity.json";
 export const TEST_FILE = "atdd-bun.integrity.test.ts";
+export const CATALOG_FILE = "atdd-bun.integrity.acceptance.yaml";
+const INTEGRITY_ACCEPTANCE = "acc:atdd-bun:E001-UNIT-001-enforcement-surfaces-canonical";
+const CATALOG_MARKER = "# atdd-bun generated integrity catalog";
+const CATALOG_POINTER = "// atdd-bun integrity catalog: ";
 const WORKFLOW = ".github/workflows/atdd-bun.yml";
 const BLOCK = /<!-- atdd-bun:start[\s\S]*?<!-- atdd-bun:end -->/;
 // Agent blocks are guidance rather than enforcement surfaces, so their writer version remains upgrade-tolerant.
@@ -30,6 +35,10 @@ export async function testFilePath(repo: string) {
   const text = existsSync(bunfig) ? await readFile(bunfig, "utf8") : "";
   const root = text.split(/^\[/m).find(section => section.startsWith("test]"))?.match(/^\s*root\s*=\s*["']([^"']+)["']/m)?.[1];
   return join(repo, root ?? ".", TEST_FILE);
+}
+/** Where the generated integrity test's acceptance is declared: beneath the configured plan root. */
+export async function catalogFilePath(repo: string) {
+  return join(repo, (await topologyFor(repo)).planRoot, CATALOG_FILE);
 }
 const git = async (root: string, args: string[]) => { const child = Bun.spawn({ cmd: ["git", ...args], cwd: root, stdout: "pipe", stderr: "pipe" }); const out = (await new Response(child.stdout).text()).trim(); return { code: await child.exited, out }; };
 
@@ -92,26 +101,43 @@ async function checkDependency(root: string): Promise<IntegrityFinding[]> {
   return findings;
 }
 
-async function renderIntegrityTest(root: string, packageRoot: string) {
+async function renderIntegrityPair(root: string, packageRoot: string) {
   const version = (await Bun.file(join(packageRoot, "package.json")).json() as { version: string }).version;
-  const { digest } = await enforcementIdentity(root);
-  return (await readFile(join(packageRoot, "templates/agents/atdd-bun.integrity.test.ts"), "utf8")).replace("{{VERSION}}", version).replace("{{IDENTITY}}", digest);
+  const { digest } = await enforcementIdentity(root), catalogPath = await catalogFilePath(root);
+  const catalog = relative(root, catalogPath).split(sep).join("/");
+  const render = async (file: string) => (await readFile(join(packageRoot, "templates/agents", file), "utf8"))
+    .replaceAll("{{VERSION}}", version).replaceAll("{{IDENTITY}}", digest).replaceAll("{{CATALOG}}", catalog);
+  return { test: await render(TEST_FILE), catalog: await render(CATALOG_FILE), catalogPath };
+}
+
+type Surface = { file: string; path: string; expected: (() => Promise<string>) | null };
+const RESTORE_GENERATED = "bun run atdd-bun init --replace";
+
+/** A generated surface is missing, or, when an expected rendering is given, stale against it. */
+async function surfaceFinding({ file, path, expected }: Surface): Promise<IntegrityFinding | null> {
+  if (!existsSync(path)) return { file, detail: "is missing", restore: RESTORE_GENERATED };
+  if (expected && canonical(await readFile(path, "utf8")) !== canonical(await expected())) return { file, detail: "is stale; it must match the exact lock/config/profile identity", restore: RESTORE_GENERATED };
+  return null;
+}
+
+/** The catalog path comes from the configured plan root, or, uncompared, only from the generated test's exact pointer. */
+async function integrityCatalogPath(root: string, testPath: string, pair: { catalogPath: string } | null) {
+  if (pair) return pair.catalogPath;
+  return existsSync(testPath) ? priorCatalogPath(root, await readFile(testPath, "utf8")) : null;
 }
 
 /** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
 async function checkEnforcementGenerated(root: string, packageRoot: string, compare = true): Promise<IntegrityFinding[]> {
-  const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace";
-  for (const event of hookEvents) {
-    const file = `.githooks/${event}`, path = join(root, file);
-    if (!existsSync(path)) findings.push({ file, detail: "is missing", restore });
-    else if (compare && canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  }
-  const workflow = join(root, WORKFLOW);
-  if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
-  else if (compare && canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  const test = relative(root, await testFilePath(root)), testPath = join(root, test);
-  if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
-  else if (compare && canonical(await readFile(testPath, "utf8")) !== canonical(await renderIntegrityTest(root, packageRoot))) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  // Without comparison the config may be unreadable: render nothing that depends on it, only check presence.
+  const pair = compare ? await renderIntegrityPair(root, packageRoot) : null;
+  const surfaces: Surface[] = hookEvents.map(event => ({ file: `.githooks/${event}`, path: join(root, ".githooks", event), expected: compare ? () => renderHook(event, root) : null }));
+  surfaces.push({ file: WORKFLOW, path: join(root, WORKFLOW), expected: compare ? () => renderWorkflow(root) : null });
+  const testPath = await testFilePath(root);
+  surfaces.push({ file: relative(root, testPath), path: testPath, expected: pair ? async () => pair.test : null });
+  const catalogPath = await integrityCatalogPath(root, testPath, pair);
+  if (catalogPath) surfaces.push({ file: relative(root, catalogPath).split(sep).join("/"), path: catalogPath, expected: pair ? async () => pair.catalog : null });
+  const findings: IntegrityFinding[] = [];
+  for (const surface of surfaces) { const finding = await surfaceFinding(surface); if (finding) findings.push(finding); }
   return findings;
 }
 
@@ -278,12 +304,42 @@ export function formatIntegrity(findings: IntegrityFinding[]): string {
   ].join("\n");
 }
 
-/** Write the generated integrity test into a repository. */
+function priorCatalogPath(root: string, generatedTest: string): string | null {
+  const pointer = generatedTest.split(/\r?\n/).find(line => line.startsWith(CATALOG_POINTER))?.slice(CATALOG_POINTER.length);
+  if (!pointer || pointer.startsWith("/") || pointer.replaceAll("\\", "/").split("/").includes("..") || basename(pointer) !== CATALOG_FILE) return null;
+  const path = resolve(root, pointer);
+  return path.startsWith(`${resolve(root)}${sep}`) ? path : null;
+}
+
+function isOwnedCatalog(text: string): boolean {
+  return text.includes(CATALOG_MARKER) && text.includes(`urn: ${INTEGRITY_ACCEPTANCE}`) && text.startsWith("# Generated by @afokapu/atdd-bun ");
+}
+
+/** Write the generated integrity test and its plan binding into a repository. */
 export async function integrityInit(repo = process.cwd(), replace = false) {
-  const output = await testFilePath(repo);
+  const root = resolve(repo), output = await testFilePath(root);
   if (existsSync(output) && !replace) return { ok: false, message: `${output} exists; use --replace` };
+  const previous = existsSync(output) ? priorCatalogPath(root, await readFile(output, "utf8")) : null;
+  const pair = await renderIntegrityPair(root, ownRoot);
+  if (previous && previous !== pair.catalogPath && existsSync(previous)) {
+    const text = await readFile(previous, "utf8").catch(() => "");
+    if (isOwnedCatalog(text)) await rm(previous);
+  }
   await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, await renderIntegrityTest(repo, ownRoot));
+  await mkdir(dirname(pair.catalogPath), { recursive: true });
+  await writeFile(pair.catalogPath, pair.catalog);
+  await writeFile(output, pair.test);
   return { ok: true, message: output };
 }
-export async function integrityStatus(repo = process.cwd()) { const output = await testFilePath(repo); if (!existsSync(output)) return { ok: false, message: `${output} is missing; run: bun run atdd-bun init --replace` }; try { return canonical(await readFile(output, "utf8")) === canonical(await renderIntegrityTest(repo, ownRoot)) ? { ok: true, message: output } : { ok: false, message: `${output} is stale; run: bun run atdd-bun init --replace` }; } catch (error) { return { ok: false, message: `${output} cannot be verified: ${String(error)}; run: bun run atdd-bun init --replace` }; } }
+export async function integrityStatus(repo = process.cwd()) {
+  const root = resolve(repo), output = await testFilePath(root);
+  if (!existsSync(output)) return { ok: false, message: `${output} is missing; run: bun run atdd-bun init --replace` };
+  try {
+    const pair = await renderIntegrityPair(root, ownRoot);
+    if (canonical(await readFile(output, "utf8")) !== canonical(pair.test)) return { ok: false, message: `${output} is stale; run: bun run atdd-bun init --replace` };
+    if (!existsSync(pair.catalogPath)) return { ok: false, message: `${pair.catalogPath} is missing; run: bun run atdd-bun init --replace` };
+    return canonical(await readFile(pair.catalogPath, "utf8")) === canonical(pair.catalog)
+      ? { ok: true, message: output }
+      : { ok: false, message: `${pair.catalogPath} is stale; run: bun run atdd-bun init --replace` };
+  } catch (error) { return { ok: false, message: `${output} cannot be verified: ${String(error)}; run: bun run atdd-bun init --replace` }; }
+}

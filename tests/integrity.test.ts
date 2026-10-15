@@ -34,6 +34,7 @@ const surfacePaths = [
   ...hookEvents.map(event => `.githooks/${event}`),
   ".github/workflows/atdd-bun.yml",
   "atdd-bun.integrity.test.ts",
+  "plan/atdd-bun.integrity.acceptance.yaml",
 ];
 const surfaceIdentity = (text: string) => text.match(/atdd-bun enforcement identity: ([0-9a-f]{64})/)?.[1];
 const surfaceContents = async (root: string) => Object.fromEntries(await Promise.all(surfacePaths.map(async path => [path, await readFile(join(root, path), "utf8")] as const)));
@@ -160,7 +161,7 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     const findings = await syntheticFixtureIntegrity(root);
     expect(files(findings)).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
-      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json",
+      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json", "plan/atdd-bun.integrity.acceptance.yaml",
     ].sort());
     const message = formatIntegrity(findings);
     for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);
@@ -257,7 +258,7 @@ test("R5: the generated workflow runs on pushes to the repository's protected br
     await writeFile(join(root, "atdd-bun.yaml"), "protected_branches: [develop, main]\n");
     expect(files(await syntheticFixtureIntegrity(root))).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
-      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts",
+      ".github/workflows/atdd-bun.yml", "atdd-bun.integrity.test.ts", "plan/atdd-bun.integrity.acceptance.yaml",
     ].sort());
     expect((await initializeRepository(root, true)).ok).toBeTrue();
     expect(await readFile(workflow, "utf8")).toContain('branches: ["develop", "main"]');
