@@ -110,27 +110,34 @@ async function renderIntegrityPair(root: string, packageRoot: string) {
   return { test: await render(TEST_FILE), catalog: await render(CATALOG_FILE), catalogPath };
 }
 
+type Surface = { file: string; path: string; expected: (() => Promise<string>) | null };
+const RESTORE_GENERATED = "bun run atdd-bun init --replace";
+
+/** A generated surface is missing, or, when an expected rendering is given, stale against it. */
+async function surfaceFinding({ file, path, expected }: Surface): Promise<IntegrityFinding | null> {
+  if (!existsSync(path)) return { file, detail: "is missing", restore: RESTORE_GENERATED };
+  if (expected && canonical(await readFile(path, "utf8")) !== canonical(await expected())) return { file, detail: "is stale; it must match the exact lock/config/profile identity", restore: RESTORE_GENERATED };
+  return null;
+}
+
+/** The catalog path comes from the configured plan root, or, uncompared, only from the generated test's exact pointer. */
+async function integrityCatalogPath(root: string, testPath: string, pair: { catalogPath: string } | null) {
+  if (pair) return pair.catalogPath;
+  return existsSync(testPath) ? priorCatalogPath(root, await readFile(testPath, "utf8")) : null;
+}
+
 /** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
 async function checkEnforcementGenerated(root: string, packageRoot: string, compare = true): Promise<IntegrityFinding[]> {
   // Without comparison the config may be unreadable: render nothing that depends on it, only check presence.
-  const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace", pair = compare ? await renderIntegrityPair(root, packageRoot) : null;
-  for (const event of hookEvents) {
-    const file = `.githooks/${event}`, path = join(root, file);
-    if (!existsSync(path)) findings.push({ file, detail: "is missing", restore });
-    else if (compare && canonical(await readFile(path, "utf8")) !== canonical(await renderHook(event, root))) findings.push({ file, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  }
-  const workflow = join(root, WORKFLOW);
-  if (!existsSync(workflow)) findings.push({ file: WORKFLOW, detail: "is missing", restore });
-  else if (compare && canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  const test = relative(root, await testFilePath(root)), testPath = join(root, test);
-  if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
-  else if (pair && canonical(await readFile(testPath, "utf8")) !== canonical(pair.test)) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  // The catalog path comes from the configured plan root, or, uncompared, only from the generated test's exact pointer.
-  const catalogPath = pair ? pair.catalogPath : existsSync(testPath) ? priorCatalogPath(root, await readFile(testPath, "utf8")) : null;
-  if (!catalogPath) return findings;
-  const catalog = relative(root, catalogPath).split(sep).join("/");
-  if (!existsSync(catalogPath)) findings.push({ file: catalog, detail: "is missing", restore });
-  else if (pair && canonical(await readFile(catalogPath, "utf8")) !== canonical(pair.catalog)) findings.push({ file: catalog, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  const pair = compare ? await renderIntegrityPair(root, packageRoot) : null;
+  const surfaces: Surface[] = hookEvents.map(event => ({ file: `.githooks/${event}`, path: join(root, ".githooks", event), expected: compare ? () => renderHook(event, root) : null }));
+  surfaces.push({ file: WORKFLOW, path: join(root, WORKFLOW), expected: compare ? () => renderWorkflow(root) : null });
+  const testPath = await testFilePath(root);
+  surfaces.push({ file: relative(root, testPath), path: testPath, expected: pair ? async () => pair.test : null });
+  const catalogPath = await integrityCatalogPath(root, testPath, pair);
+  if (catalogPath) surfaces.push({ file: relative(root, catalogPath).split(sep).join("/"), path: catalogPath, expected: pair ? async () => pair.catalog : null });
+  const findings: IntegrityFinding[] = [];
+  for (const surface of surfaces) { const finding = await surfaceFinding(surface); if (finding) findings.push(finding); }
   return findings;
 }
 
