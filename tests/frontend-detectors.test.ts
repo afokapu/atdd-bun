@@ -79,6 +79,35 @@ test("responsive detector: each dirty case is reported on its own file", async (
   expect(all.filter(f => f === "responsive-breakpoints-declared src/units.css")).toHaveLength(2);
 });
 
+// The FRG gap (M-20261015T182640Z): an htmx/Bun server renders all HTML as strings and tagged templates in
+// .ts presentation files, which maskLiteralsAndComments blanks, so raw controls in app .ts literals were unjudged.
+// These pins hold the judged shape: every raw control in a literal body is reported at its line, while regex
+// literals, comments, code position, test files, the design root and a no-design-root repo stay clean.
+test("design detector: raw controls in .ts HTML literals are judged at their line", async () => {
+  const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "primitives");
+  const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+    .filter(v => v.rule_id === "coder.bun.design-primitives")
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+  expect(found).toEqual([
+    "src/views/form.tsx:4",
+    "src/views/form.tsx:4",
+    "src/views/strings.ts:4",
+    "src/views/strings.ts:4",
+    "src/views/strings.ts:6",
+    "src/views/strings.ts:12",
+  ]);
+});
+
+test("design detector: regex, comment, code-position, test-file, design-root and no-design-root literals stay clean", async () => {
+  expect(await findings("bun_design_system_detector", "clean")).toEqual([]);
+  const root = await mkdtemp(join(tmpdir(), "atdd-no-design-root-"));
+  try {
+    await mkdir(join(root, "src", "views"), { recursive: true });
+    await copyFile(join(detectors, "bun_design_system_detector", "fixtures", "dirty", "primitives", "src", "views", "strings.ts"), join(root, "src", "views", "strings.ts"));
+    expect(await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).toEqual([]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("browser-spec detector: a backend-only plan needs no browser spec", async () => {
   // Found in PR review: trains in which no person takes part, and journeys whose surfaces are [backend],
   // have no screen to drive. The journey-runaway plan is exactly that.
