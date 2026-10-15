@@ -123,6 +123,23 @@ test("plan_root relocation removes only the exact prior marker-owned catalog pat
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("an unreadable config reports the pointed catalog only by presence, never rendering or guessing plan_root", async () => {
+  const root = await consumer("profiles: [tester, traceability]\ntopology:\n  plan_root: contracts\n");
+  const catalog = join(root, "contracts", catalogName);
+  const findings = async () => checkIntegrity({ root, base: "HEAD", push: false });
+  const files = (items: { file: string }[]) => items.map(item => item.file).sort();
+  try {
+    await writeFile(join(root, "atdd-bun.yaml"), "topology: [unclosed\n");
+    expect(files(await findings())).toEqual(["atdd-bun.yaml"]);
+    await rm(catalog);
+    const missing = await findings();
+    expect(files(missing)).toEqual(["atdd-bun.yaml", `contracts/${catalogName}`]);
+    expect(missing.find(item => item.file === `contracts/${catalogName}`)?.detail).toBe("is missing");
+    await rm(join(root, "atdd-bun.integrity.test.ts"));
+    expect(files(await findings())).toEqual(["atdd-bun.integrity.test.ts", "atdd-bun.yaml"]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("tester walks generated integrity tests without a generated-file exemption", async () => {
   const parser = await readFile(join(packageRoot, "detectors/bun_tester_discipline_detector/test_header.mjs"), "utf8");
   expect(parser).not.toContain("isGeneratedIntegrityTest");

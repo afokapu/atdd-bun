@@ -161,7 +161,7 @@ test("edited generated files, a non-npm dependency, and a missing test are each 
     const findings = await syntheticFixtureIntegrity(root);
     expect(files(findings)).toEqual([
       ...hookEvents.map(event => `.githooks/${event}`),
-      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json",
+      ".github/workflows/atdd-bun.yml", "AGENTS.md", "CLAUDE.md", "atdd-bun.integrity.test.ts", "bun.lock", "package.json", "plan/atdd-bun.integrity.acceptance.yaml",
     ].sort());
     const message = formatIntegrity(findings);
     for (const text of ["ATDD INTEGRITY VIOLATION", "You are not allowed to edit them", "stop and ask the human", "restore: bun run atdd-bun init --replace", "CI runs this same check on a clean install"]) expect(message).toContain(text);

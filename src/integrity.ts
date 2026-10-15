@@ -112,7 +112,8 @@ async function renderIntegrityPair(root: string, packageRoot: string) {
 
 /** The generated enforcement surfaces are byte-identical to this exact lock/config/profile identity. */
 async function checkEnforcementGenerated(root: string, packageRoot: string, compare = true): Promise<IntegrityFinding[]> {
-  const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace", pair = await renderIntegrityPair(root, packageRoot);
+  // Without comparison the config may be unreadable: render nothing that depends on it, only check presence.
+  const findings: IntegrityFinding[] = [], restore = "bun run atdd-bun init --replace", pair = compare ? await renderIntegrityPair(root, packageRoot) : null;
   for (const event of hookEvents) {
     const file = `.githooks/${event}`, path = join(root, file);
     if (!existsSync(path)) findings.push({ file, detail: "is missing", restore });
@@ -123,10 +124,13 @@ async function checkEnforcementGenerated(root: string, packageRoot: string, comp
   else if (compare && canonical(await readFile(workflow, "utf8")) !== canonical(await renderWorkflow(root))) findings.push({ file: WORKFLOW, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   const test = relative(root, await testFilePath(root)), testPath = join(root, test);
   if (!existsSync(testPath)) findings.push({ file: test, detail: "is missing", restore });
-  else if (compare && canonical(await readFile(testPath, "utf8")) !== canonical(pair.test)) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
-  const catalog = relative(root, pair.catalogPath).split(sep).join("/");
-  if (!existsSync(pair.catalogPath)) findings.push({ file: catalog, detail: "is missing", restore });
-  else if (compare && canonical(await readFile(pair.catalogPath, "utf8")) !== canonical(pair.catalog)) findings.push({ file: catalog, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  else if (pair && canonical(await readFile(testPath, "utf8")) !== canonical(pair.test)) findings.push({ file: test, detail: "is stale; it must match the exact lock/config/profile identity", restore });
+  // The catalog path comes from the configured plan root, or, uncompared, only from the generated test's exact pointer.
+  const catalogPath = pair ? pair.catalogPath : existsSync(testPath) ? priorCatalogPath(root, await readFile(testPath, "utf8")) : null;
+  if (!catalogPath) return findings;
+  const catalog = relative(root, catalogPath).split(sep).join("/");
+  if (!existsSync(catalogPath)) findings.push({ file: catalog, detail: "is missing", restore });
+  else if (pair && canonical(await readFile(catalogPath, "utf8")) !== canonical(pair.catalog)) findings.push({ file: catalog, detail: "is stale; it must match the exact lock/config/profile identity", restore });
   return findings;
 }
 
