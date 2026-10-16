@@ -10,7 +10,7 @@ const report = process.env.ATDD_VIOLATIONS_REPORT;
 if (!report || !Array.isArray(roots) || !roots.length) process.exit(2);
 
 const sourceExtensions = new Set([".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs"]);
-const testName = /(?:^test_.*|.*(?:\.test|\.spec|_test))\.(?:[cm]?[jt]sx?)$/;
+const testName = /(?:^test_.*|.*(?:\.test|\.spec|\.e2e|_test))\.(?:[cm]?[jt]sx?)$/;
 const violations = [];
 const plans = { acc: new Set(), wmbt: new Set(), train: new Set() };
 const tests = new Map();
