@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { copyFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, basename, join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
 
 // The exact findings of the frontend detectors on their fixtures. The corpus test only asks that each
@@ -77,6 +77,141 @@ test("responsive detector: each dirty case is reported on its own file", async (
   ]);
   // both range-syntax forms, and a rem width, are caught
   expect(all.filter(f => f === "responsive-breakpoints-declared src/units.css")).toHaveLength(2);
+});
+
+// The FRG gap (M-20261015T182640Z): an htmx/Bun server renders all HTML as strings and tagged templates in
+// .ts presentation files, which maskLiteralsAndComments blanks, so raw controls in app .ts literals were unjudged.
+// The corpus for it is synthesized at test time (owner-approved path B, M-20261016T023302Z): the exact .ts literal
+// cases are written into temporary copies of the static fixtures instead of committed .ts sources, so the toolkit's
+// own self-ratchet never counts its test corpus as repository debt. The static .tsx/.html/.css corpus stays committed.
+const STRINGS_TS = `// FRG shape: an htmx/Bun server-rendered app builds its controls as HTML
+// strings in .ts presentation files, not in .tsx components.
+export const caseForm = (action: string) =>
+  '<form action="' + action + '"><input type="text" name="caseId"><textarea name="notes" rows="4"></textarea></form>';
+
+export const severityPicker = \`<select name="severity"></select>\`;
+
+function html(parts: TemplateStringsArray, ...values: unknown[]) {
+  return parts.reduce((out, part, i) => out + part + (values[i] ?? ""), "");
+}
+
+export const submitRow = () => html\`<button type="submit" class="btn">Open case</button>\`;
+`;
+const HARDCODED_TS = `// FRG shape: inline style and <style> text authored in .ts literals.
+export const card = '<div class="card" style="margin: 12px; padding: 8px 16px;">Open</div>';
+export const sheet = \`<style>.card { transition: opacity 250ms; }</style>\`;
+`;
+const COLOR_TS = `// FRG shape: raw colors in inline style and <style> text authored in .ts literals.
+export const alert = '<span style="color: #b91c1c; background: rgba(185, 28, 28, 0.4);">Down</span>';
+export const themeSheet = \`<style>.badge { border-color: rgb(17, 24, 39); }</style>\`;
+`;
+const withCase = async (fixture: string, extra: Record<string, string>) => {
+  const root = await mkdtemp(join(tmpdir(), "atdd-design-ts-"));
+  await cp(join(detectors, "bun_design_system_detector", "fixtures", fixture), root, { recursive: true });
+  for (const [path, text] of Object.entries(extra)) {
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), text);
+  }
+  return root;
+};
+const designLines = async (root: string, rule: string) =>
+  (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+    .filter(v => v.rule_id === rule)
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`)
+    .sort(); // walk order is filesystem-dependent; the sorted multiset is the pinned behavior
+
+test("design detector: raw controls in .ts HTML literals are judged at their line", async () => {
+  const root = await withCase("dirty/primitives", { "src/views/strings.ts": STRINGS_TS });
+  try {
+    expect(await designLines(root, "coder.bun.design-primitives")).toEqual([
+      "src/views/form.tsx:4",
+      "src/views/form.tsx:4",
+      "src/views/strings.ts:12",
+      "src/views/strings.ts:4",
+      "src/views/strings.ts:4",
+      "src/views/strings.ts:6",
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("design detector: hardcoded lengths and durations in .ts HTML literals are judged at their line", async () => {
+  const root = await withCase("dirty/token_hardcoded", { "src/views/styles.ts": HARDCODED_TS });
+  try {
+    expect(await designLines(root, "coder.bun.design-token-hardcoded")).toEqual([
+      "public/list.html:1",
+      "public/list.html:1",
+      "src/views/list.tsx:2",
+      "src/views/list.tsx:2",
+      "src/views/styles.ts:2",
+      "src/views/styles.ts:2",
+      "src/views/styles.ts:3",
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("design detector: raw colors in .ts HTML literals are judged at their line", async () => {
+  const root = await withCase("dirty/token_color", { "src/views/styles.ts": COLOR_TS });
+  try {
+    expect(await designLines(root, "coder.bun.design-token-color")).toEqual([
+      "src/app.css:2",
+      "src/app.css:3",
+      "src/views/alert.tsx:2",
+      "src/views/styles.ts:2",
+      "src/views/styles.ts:2",
+      "src/views/styles.ts:3",
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("design detector: regex, comment, code-position, test-file, design-root, tokens-layer and no-design-root literals stay clean", async () => {
+  const clean = await withCase("clean/app", {
+    "src/wagons/orders/presentation/markup-regex.ts": `// Regex literals and comments are never rendered markup, and a <div> string is
+// not an interactive control: none of these may produce a primitives finding.
+export const STRIP_CONTROLS = /<button>|<input>|<select>|<textarea>/g;
+
+// A raw <button> or <textarea> mentioned in a comment is prose, not markup.
+export const rowMarkup = '<div class="row"><span class="label"></span></div>';
+`,
+    "src/wagons/orders/presentation/code-position.ts": `// Code position, not markup: a comparison against a binding named input, and a
+// legacy angle-bracket type assertion, must never read as a rendered control.
+export const clamp = (value: number, input: number) => (value<input ? value : input);
+export const asElement = (node: unknown) => <input>node;
+`,
+    "src/wagons/orders/presentation/controls.test.ts": `// Test files are never scanned: assertion strings legitimately hold raw markup.
+import { expect, test } from "bun:test";
+
+test("a button markup string round-trips", () => {
+  expect("<button>Go</button>").toContain("button");
+});
+
+test("a styled markup string round-trips", () => {
+  expect('<div style="margin: 12px; color: #b91c1c">x</div>').toContain("div");
+});
+`,
+    "src/wagons/orders/presentation/style-tokens.ts": `// Tokens in .ts literals: var(--…) references, hairline 0/1px and custom-property
+// definitions are the sanctioned shapes; none of these is a finding.
+export const panel = '<div style="margin: var(--space-3); padding: 1px;">Total</div>';
+export const sheet = \`<style>:root { --danger: #b91c1c; --space-1: 4px; }</style>\`;
+`,
+    "src/design/primitives/input-strings.ts": `// The design system's own primitives render the raw elements: HTML strings
+// authored inside the design root are the system itself, not app code.
+export const textInput = '<input type="text" class="text-input">';
+export const multiline = '<textarea class="text-area"></textarea>';
+`,
+    "src/design/tokens/strings.ts": `// The tokens layer defines values: literal HTML there is the system itself,
+// and the tokens layer is exempt from the token-use rules by design.
+export const swatch = '<span style="color: #0f172a; margin: 12px;"></span>';
+`,
+  });
+  const isolated = await mkdtemp(join(tmpdir(), "atdd-no-design-root-"));
+  try {
+    expect(await runImplementation("bun_design_system_detector", { scanRoots: [clean], excludes: ["node_modules", ".git", ".atdd"] })).toEqual([]);
+    await mkdir(join(isolated, "src", "views"), { recursive: true });
+    await writeFile(join(isolated, "src", "views", "strings.ts"), STRINGS_TS);
+    await writeFile(join(isolated, "src", "views", "hardcoded-styles.ts"), HARDCODED_TS);
+    await writeFile(join(isolated, "src", "views", "color-styles.ts"), COLOR_TS);
+    expect(await runImplementation("bun_design_system_detector", { scanRoots: [isolated], excludes: ["node_modules", ".git", ".atdd"] })).toEqual([]);
+  } finally { await rm(clean, { recursive: true, force: true }); await rm(isolated, { recursive: true, force: true }); }
 });
 
 test("browser-spec detector: a backend-only plan needs no browser spec", async () => {

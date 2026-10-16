@@ -1,4 +1,5 @@
 import { escapeHtml, fragment } from "./html";
+import { payButton } from "./design/primitives/pay-button";
 import { Cart } from "./wagons/checkout/presentation/cart";
 
 const port = Number(process.env.PORT ?? 4317);
@@ -26,7 +27,7 @@ Bun.serve({
     if (url.pathname === "/orders" && request.method === "POST") {
       const items = Number((await request.formData()).get("items"));
       if (!items) return page("Checkout", `<p role="alert" class="error">Your cart is empty</p>`, 422);
-      return page("Order placed", `<form method="post" action="/payments"><button type="submit" class="button">Pay</button></form>`);
+      return page("Order placed", `<form method="post" action="/payments">${payButton("Pay")}</form>`);
     }
     if (url.pathname === "/payments" && request.method === "POST") return page("Payment received", `<p>Thank you, your order is paid.</p>`);
     return page("Not found", `<p>No such page.</p>`, 404);

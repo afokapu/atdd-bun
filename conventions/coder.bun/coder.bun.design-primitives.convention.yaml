@@ -5,16 +5,20 @@ status: active
 name: App components compose design-system primitives for interactive controls
 statement: An app component (`.tsx`/`.jsx` outside the design root) MUST render interactive controls through a design-system
   primitive rather than a raw `<button>`, `<input>`, `<select>`, or `<textarea>`, so controls stay themed, accessible,
-  and consistent. Bun realization of `coder.design.primitives`, mirroring `coder.vite.design-primitives`.
+  and consistent. The same obligation covers controls authored as HTML in the bodies of string, template, and
+  tagged-template literals in `.ts`/`.mts` files outside the design root — the shape an htmx/Bun server-rendered
+  app writes. Bun realization of `coder.design.primitives`, mirroring `coder.vite.design-primitives`.
 terms:
 - term_id: design_root
   text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
     layer: `tokens` or `foundations`, `primitives`, `components`, `templates`. A repository with no design root
     is not judged (self-scoping): there is no system to connect to yet.'
 - term_id: raw_control
-  text: a lowercase `<button`, `<input`, `<select`, or `<textarea` element written in app code.
+  text: 'a lowercase `<button`, `<input`, `<select`, or `<textarea` element written in app code — in JSX, or in the
+    body of a string/template/tagged-template literal in a `.ts`/`.mts` file, followed by whitespace, `>`, or `/`.'
 content:
-  summary: Flags raw interactive platform elements in component source outside the design root.
+  summary: Flags raw interactive platform elements in component source and in `.ts`/`.mts` literal HTML outside the
+    design root.
   normative_text: Controls are where focus, disabled, error, and loading states live. Each raw control re-implements
     them, and each re-implementation diverges.
   fix_hint: |
@@ -38,6 +42,9 @@ content:
   - Test files (`*.test.*`, `*.spec.*`) and vendored/build directories are never scanned.
   - The design system's own primitives render the raw elements and are not scanned.
   - Plain `.html` templates cannot import components and are out of scope.
+  - 'Only literal text is judged in `.ts`/`.mts` files: code position (comparisons, angle-bracket type
+    assertions), comments, and regex literals are never treated as markup, and a control spanning a `${…}`
+    interpolation is read on its literal chunks alone.'
 metadata:
   aliases:
   - BUN-DESIGN-PRIMITIVES-001

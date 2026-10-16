@@ -6,8 +6,9 @@ name: UI files take spacing, radii, and durations from foundations
 statement: Outside the tokens layer, a UI file MUST NOT hardcode a spacing, inset, or border-radius length greater
   than 1px (`margin`, `padding`, `gap`, `inset`, `top`/`right`/`bottom`/`left`, `border-radius`), nor a non-zero
   duration in `transition`/`animation`. A bare number in a JSX style object for those properties counts as a length.
-  These values come from foundations tokens. Bun realization of `coder.design.token-hardcoded` and of the raw-pixel
-  part of `coder.design.foundations`.
+  The same declarations are judged in inline `style="…"` attributes and `<style>` text authored in the HTML a
+  `.ts`/`.mts` file renders from string/template/tagged-template literals. These values come from foundations
+  tokens. Bun realization of `coder.design.token-hardcoded` and of the raw-pixel part of `coder.design.foundations`.
 terms:
 - term_id: design_root
   text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
@@ -43,6 +44,8 @@ content:
   - 'Custom property definitions (`--space-3: 12px`) define tokens wherever they live and are not flagged.'
   - The tokens/foundations layer defines these values and is not scanned.
   - Widths, heights, and font sizes are out of scope for this rule.
+  - 'Only literal text is judged in `.ts`/`.mts` files: code, comments, and regex literals are never read as
+    declarations, and a value spanning a `${…}` interpolation is judged on its literal chunks alone.'
 metadata:
   aliases:
   - BUN-DESIGN-TOKEN-HARDCODED-001
