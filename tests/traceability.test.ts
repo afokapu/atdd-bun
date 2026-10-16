@@ -14,6 +14,18 @@ const findings = async (root: string) => (await runImplementation("atdd_traceabi
   .map(v => `${v.rule_id} ${v.file.startsWith(root) ? v.file.slice(root.length + 1) : v.file}`).sort();
 const WMBT = "urn: wmbt:orders:E001\nacceptances:\n  - identity:\n      urn: acc:orders:E001-UNIT-001\n";
 const BOUND = "// URN: test:orders:x:E001-UNIT-001\n// Acceptance: acc:orders:E001-UNIT-001\n";
+const PAY_BUTTON = `// URN: component:checkout:payment:pay-button:frontend:presentation
+// Tested-By:
+// - test:train:orders:take-payment:E2E-001-takes-payment
+// Runtime: bun
+// Purpose: chain-fixture design primitive: the pay button app code composes.
+// The design system's own primitives render the raw controls: the pay button is
+// composed here, self-contained like every other primitive, and app code renders
+// it through this module.
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+export const payButton = (label: string) => \`<button type="submit" class="button">\${escapeHtml(label)}</button>\`;
+`;
 
 test("every binding header must resolve, not only the first", async () => {
   const root = await repo({
@@ -65,6 +77,33 @@ test("a Tested-By entry counts only under a Tested-By header, and every entry is
     "src/twice.ts": "// URN: component:orders:a:Twice:backend:domain\n// Tested-By:\n// - test:orders:x:E001-UNIT-001\n// Runtime: bun\n// Tested-By:\n// - not-a-test\nexport const t = 1;\n",
   });
   expect(await findings(root)).toEqual(["traceability.source.tested-by-present src/stray.ts", "traceability.source.tested-by-resolves src/mixed.ts", "traceability.source.tested-by-resolves src/twice.ts"]);
+});
+
+test("a valid Playwright E2E URN resolves an implementation Tested-By witness", async () => {
+  const frontend = resolve(import.meta.dir, "fixtures/frontend-chain");
+  const root = await repo({
+    "plan/_trains/orders/take-payment.yaml": await readFile(join(frontend, "plan/_trains/orders/take-payment.yaml"), "utf8"),
+    "e2e/take-payment.e2e.ts": await readFile(join(frontend, "e2e/take-payment.e2e.ts"), "utf8"),
+    "src/design/primitives/pay-button.ts": PAY_BUTTON,
+  });
+  expect(await findings(root)).toEqual([]);
+});
+
+test("only E2E files with a test URN become Tested-By resolvers", async () => {
+  const component = (name: string, testUrn: string) => `// URN: component:orders:x:${name}:backend:domain\n// Tested-By:\n// - ${testUrn}\n`;
+  const root = await repo({
+    "src/plain-source.ts": component("PlainSource", "test:orders:x:E001-E2E-plain-source"),
+    "support/plain-source.ts": "// URN: test:orders:x:E001-E2E-plain-source\n",
+    "src/no-urn.ts": component("NoUrn", "test:orders:x:E001-E2E-no-urn"),
+    "e2e/no-urn.e2e.ts": "export const noIdentity = true;\n",
+    "src/malformed.ts": component("Malformed", "test:orders:x:E001-E2E-malformed"),
+    "e2e/malformed.e2e.ts": "// URN: not-a-test\n",
+  });
+  expect(await findings(root)).toEqual([
+    "traceability.source.tested-by-resolves src/malformed.ts",
+    "traceability.source.tested-by-resolves src/no-urn.ts",
+    "traceability.source.tested-by-resolves src/plain-source.ts",
+  ]);
 });
 
 // DOS residual detector compatibility: truthful DOS shapes must stay green while paired mutants stay red.
