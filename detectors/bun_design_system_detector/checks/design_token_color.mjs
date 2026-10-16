@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Detector: coder.bun.design-token-color
 // Outside the tokens layer, UI files (.tsx/.jsx/.html/.css) take colors from tokens
-// (`var(--…)`), never raw hex, rgb(), or hsla() literals. Defining a custom
+// (`var(--…)`), never raw hex, rgb(), or hsl() literals. Defining a custom
 // property (`--danger: #b91c1c`) is defining a token, not using a raw value.
 // The same declarations are judged in the HTML a .ts/.mts file renders from
 // string/template/tagged-template literals, read through the literals-only mask.

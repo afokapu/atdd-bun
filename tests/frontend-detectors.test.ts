@@ -92,10 +92,10 @@ test("design detector: raw controls in .ts HTML literals are judged at their lin
   expect(found).toEqual([
     "src/views/form.tsx:4",
     "src/views/form.tsx:4",
-    "src/views/strings.ts:12",
-    "src/views/strings.ts:4",
-    "src/views/strings.ts:4",
-    "src/views/strings.ts:6",
+    "src/views/strings.ts:11",
+    "src/views/strings.ts:17",
+    "src/views/strings.ts:9",
+    "src/views/strings.ts:9",
   ]);
 });
 
@@ -110,9 +110,9 @@ test("design detector: hardcoded lengths and durations in .ts HTML literals are 
     "public/list.html:1",
     "src/views/list.tsx:2",
     "src/views/list.tsx:2",
-    "src/views/styles.ts:2",
-    "src/views/styles.ts:2",
-    "src/views/styles.ts:3",
+    "src/views/styles.ts:7",
+    "src/views/styles.ts:7",
+    "src/views/styles.ts:8",
   ]);
 });
 
@@ -126,9 +126,9 @@ test("design detector: raw colors in .ts HTML literals are judged at their line"
     "src/app.css:2",
     "src/app.css:3",
     "src/views/alert.tsx:2",
-    "src/views/styles.ts:2",
-    "src/views/styles.ts:2",
-    "src/views/styles.ts:3",
+    "src/views/styles.ts:7",
+    "src/views/styles.ts:7",
+    "src/views/styles.ts:8",
   ]);
 });
 
