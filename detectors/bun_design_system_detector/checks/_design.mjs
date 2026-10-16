@@ -71,14 +71,17 @@ export function designTarget(file, specifier) {
   return d ? { layer: d.layer, layerName: d.layerName, root: d.root, path: t.path } : null;
 }
 
-export function masked(file) {
+export function masked(file, opts) {
   const text = readText(file);
   if (text === null) return null;
-  return { text, code: extname(file) === ".css" ? text.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " ")) : maskLiteralsAndComments(text) };
+  return { text, code: extname(file) === ".css" ? text.replace(/\/\*[\s\S]*?\*\//g, (c) => c.replace(/[^\n]/g, " ")) : maskLiteralsAndComments(text, opts) };
 }
 
 export const isUi = (file) => UI_EXT.has(extname(file));
 export const isComponentSource = (file) => extname(file) === ".tsx" || extname(file) === ".jsx";
+// `.ts`/`.mts` app files render HTML from string/template/tagged-template literals: the
+// literals-only mask keeps those bodies visible for the design rules that judge rendered markup.
+export const isTsSource = (file) => { const e = extname(file); return e === ".ts" || e === ".mts"; };
 export const hasDesignRoot = (files) => files.some((file) => designOf(file));
 
 const kebab = (prop) => prop.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase());

@@ -87,14 +87,15 @@ test("design detector: raw controls in .ts HTML literals are judged at their lin
   const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "primitives");
   const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
     .filter(v => v.rule_id === "coder.bun.design-primitives")
-    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`)
+    .sort(); // walk order is filesystem-dependent; the sorted multiset is the pinned behavior
   expect(found).toEqual([
     "src/views/form.tsx:4",
     "src/views/form.tsx:4",
+    "src/views/strings.ts:12",
     "src/views/strings.ts:4",
     "src/views/strings.ts:4",
     "src/views/strings.ts:6",
-    "src/views/strings.ts:12",
   ]);
 });
 
@@ -102,7 +103,8 @@ test("design detector: hardcoded lengths and durations in .ts HTML literals are 
   const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "token_hardcoded");
   const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
     .filter(v => v.rule_id === "coder.bun.design-token-hardcoded")
-    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`)
+    .sort();
   expect(found).toEqual([
     "public/list.html:1",
     "public/list.html:1",
@@ -118,7 +120,8 @@ test("design detector: raw colors in .ts HTML literals are judged at their line"
   const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "token_color");
   const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
     .filter(v => v.rule_id === "coder.bun.design-token-color")
-    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`)
+    .sort();
   expect(found).toEqual([
     "src/app.css:2",
     "src/app.css:3",

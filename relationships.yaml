@@ -4413,7 +4413,7 @@ edges:
     constraint: mandatory
     control: internal
     foundation: finish_to_start
-    reason: "Bun realization of the core obligation coder.design.token-color, checked over .tsx, .jsx, .html and .css"
+    reason: "Bun realization of the core obligation coder.design.token-color, checked over .tsx, .jsx, .html, .css and HTML authored in .ts/.mts literals"
     source_ref: coder.bun.design-token-color
     strength: important
     target_ref: coder.design.token-color
@@ -4423,7 +4423,7 @@ edges:
     constraint: mandatory
     control: internal
     foundation: finish_to_start
-    reason: "Bun realization of the core obligation coder.design.token-hardcoded, checked over .tsx, .jsx, .html and .css"
+    reason: "Bun realization of the core obligation coder.design.token-hardcoded, checked over .tsx, .jsx, .html, .css and HTML authored in .ts/.mts literals"
     source_ref: coder.bun.design-token-hardcoded
     strength: important
     target_ref: coder.design.token-hardcoded
@@ -4433,7 +4433,7 @@ edges:
     constraint: mandatory
     control: internal
     foundation: finish_to_start
-    reason: "Bun realization of the core obligation coder.design.primitives, checked over .tsx, .jsx, .html and .css"
+    reason: "Bun realization of the core obligation coder.design.primitives, checked over .tsx, .jsx, .html, .css and HTML authored in .ts/.mts literals"
     source_ref: coder.bun.design-primitives
     strength: important
     target_ref: coder.design.primitives

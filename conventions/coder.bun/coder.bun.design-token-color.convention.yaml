@@ -5,8 +5,10 @@ status: active
 name: UI files use color tokens, not raw color literals
 statement: Outside the tokens layer, a UI file (`.tsx`, `.jsx`, `.html`, `.htm`, `.css`) MUST NOT write a raw color
   literal — `#rgb`/`#rrggbb`/`#rrggbbaa`, `rgb()`/`rgba()`, `hsl()`/`hsla()` — in a CSS declaration, a `style` attribute,
-  a `<style>` block, a JSX `style={{…}}` object, or a `fill`/`stroke`/`bgcolor` attribute. Colors come from tokens
-  (`var(--…)`). Bun realization of `coder.design.token-color`, mirroring `coder.vite.design-token-color`.
+  a `<style>` block, a JSX `style={{…}}` object, or a `fill`/`stroke`/`bgcolor` attribute. The same declarations are
+  judged in inline `style="…"` attributes and `<style>` text authored in the HTML a `.ts`/`.mts` file renders from
+  string/template/tagged-template literals. Colors come from tokens (`var(--…)`). Bun realization of
+  `coder.design.token-color`, mirroring `coder.vite.design-token-color`.
 terms:
 - term_id: design_root
   text: 'a directory named `design`, `design_system`, or `design-system`. The first directory beneath it names the
@@ -16,8 +18,8 @@ terms:
   text: 'a hex, rgb(a), or hsl(a) color written in a declaration value. Selectors are not values: `#fade:hover {`
     is never read as a color.'
 content:
-  summary: Reads declarations from stylesheets, style attributes, style blocks, and JSX style objects, and flags
-    raw color literals in their values.
+  summary: Reads declarations from stylesheets, style attributes, style blocks, JSX style objects, and `.ts`/`.mts`
+    literal HTML, and flags raw color literals in their values.
   normative_text: A raw color is a theme decision made in one place. It does not follow dark mode, it drifts from
     the palette, and nobody can find it when the palette changes.
   fix_hint: |
@@ -42,6 +44,8 @@ content:
   - 'Custom property definitions (`--danger: #b91c1c`) define tokens wherever they live and are not flagged.'
   - The tokens/foundations layer is where raw colors are defined and is not scanned.
   - Named colors (`red`, `white`) and `currentColor`/`transparent` are not flagged.
+  - 'Only literal text is judged in `.ts`/`.mts` files: code, comments, and regex literals are never read as
+    declarations, and a value spanning a `${…}` interpolation is judged on its literal chunks alone.'
 metadata:
   aliases:
   - BUN-DESIGN-TOKEN-COLOR-001
