@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { copyFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
 import { copyFile, cp, mkdir, mkdtemp, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, basename, join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
 
 // The exact findings of the frontend detectors on their fixtures. The corpus test only asks that each
@@ -98,12 +98,44 @@ test("design detector: raw controls in .ts HTML literals are judged at their lin
   ]);
 });
 
+test("design detector: hardcoded lengths and durations in .ts HTML literals are judged at their line", async () => {
+  const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "token_hardcoded");
+  const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+    .filter(v => v.rule_id === "coder.bun.design-token-hardcoded")
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+  expect(found).toEqual([
+    "public/list.html:1",
+    "public/list.html:1",
+    "src/views/list.tsx:2",
+    "src/views/list.tsx:2",
+    "src/views/styles.ts:2",
+    "src/views/styles.ts:2",
+    "src/views/styles.ts:3",
+  ]);
+});
+
+test("design detector: raw colors in .ts HTML literals are judged at their line", async () => {
+  const root = join(detectors, "bun_design_system_detector", "fixtures", "dirty", "token_color");
+  const found = (await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+    .filter(v => v.rule_id === "coder.bun.design-token-color")
+    .map(v => `${v.file.slice(root.length + 1)}:${v.line}`);
+  expect(found).toEqual([
+    "src/app.css:2",
+    "src/app.css:3",
+    "src/views/alert.tsx:2",
+    "src/views/styles.ts:2",
+    "src/views/styles.ts:2",
+    "src/views/styles.ts:3",
+  ]);
+});
+
 test("design detector: regex, comment, code-position, test-file, design-root and no-design-root literals stay clean", async () => {
   expect(await findings("bun_design_system_detector", "clean")).toEqual([]);
   const root = await mkdtemp(join(tmpdir(), "atdd-no-design-root-"));
   try {
     await mkdir(join(root, "src", "views"), { recursive: true });
-    await copyFile(join(detectors, "bun_design_system_detector", "fixtures", "dirty", "primitives", "src", "views", "strings.ts"), join(root, "src", "views", "strings.ts"));
+    for (const fixture of ["dirty/primitives/src/views/strings.ts", "dirty/token_hardcoded/src/views/styles.ts", "dirty/token_color/src/views/styles.ts"])
+      await copyFile(join(detectors, "bun_design_system_detector", "fixtures", fixture), join(root, "src", "views", basename(fixture)));
     expect(await runImplementation("bun_design_system_detector", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] })).toEqual([]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
