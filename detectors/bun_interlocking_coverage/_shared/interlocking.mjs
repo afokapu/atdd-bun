@@ -8,7 +8,7 @@
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
-import { entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
+import { directInterlockingExecutionProofs, entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -556,9 +556,10 @@ function resolutionTrainExecution(after, resolution) {
 }
 
 export function productionExecutionProofs(text, file, croot) {
-  if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return [];
+  const directProofs = file && croot ? directInterlockingExecutionProofs(text, file, croot) : [];
+  if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return directProofs;
   const receivers = productionReceivers(text);
-  const proofs = [];
+  const proofs = [...directProofs];
   const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   for (const m of text.matchAll(resolutions)) {
     const [whole, resolution, receiver] = m;
