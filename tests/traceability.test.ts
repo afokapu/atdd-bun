@@ -3,6 +3,7 @@ import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { runImplementation } from "../src/enforce";
+import { findingFingerprint } from "../src/ratchet";
 
 // Traceability closure holes: each case is a way a test or source file could look traced while it is not.
 const repo = async (files: Record<string, string>) => {
@@ -14,6 +15,17 @@ const findings = async (root: string) => (await runImplementation("atdd_traceabi
   .map(v => `${v.rule_id} ${v.file.startsWith(root) ? v.file.slice(root.length + 1) : v.file}`).sort();
 const WMBT = "urn: wmbt:orders:E001\nacceptances:\n  - identity:\n      urn: acc:orders:E001-UNIT-001\n";
 const BOUND = "// URN: test:orders:x:E001-UNIT-001\n// Acceptance: acc:orders:E001-UNIT-001\n";
+const JOURNEY_BINDING_FIXTURE = JSON.parse(await readFile(resolve(import.meta.dir, "fixtures/journey-traceability/files.json"), "utf8")) as {
+  valid: Record<string, string>;
+  negatives: Record<string, string>;
+};
+const journeyBindingFixture = (withNegatives = false) => repo({
+  ...JOURNEY_BINDING_FIXTURE.valid,
+  ...(withNegatives ? JOURNEY_BINDING_FIXTURE.negatives : {}),
+});
+const named = (root: string, values: Awaited<ReturnType<typeof runImplementation>>) => values
+  .map(v => `${v.rule_id} ${v.file.startsWith(root) ? v.file.slice(root.length + 1) : v.file}`)
+  .sort();
 const PAY_BUTTON = `// URN: component:checkout:payment:pay-button:frontend:presentation
 // Tested-By:
 // - test:train:orders:take-payment:E2E-001-takes-payment
@@ -26,6 +38,52 @@ const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => ({ "&": "
 
 export const payButton = (label: string) => \`<button type="submit" class="button">\${escapeHtml(label)}</button>\`;
 `;
+
+test("Journey-only FRG browser bindings are tester-valid and resolve through plan/_journeys", async () => {
+  const root = await journeyBindingFixture();
+  expect(await runImplementation("htmx_e2e_detector", { scanRoots: [root], excludes: [] })).toEqual([]);
+  const traceability = await runImplementation("atdd_traceability_closure", { scanRoots: [root], excludes: [] });
+  const hashes = traceability.map(finding => findingFingerprint({
+    ...finding,
+    file: finding.file.startsWith(root) ? finding.file.slice(root.length + 1) : finding.file,
+  }));
+  const exactFrgNewHashes = [
+    "4680dc3df1bfa069bc76983028989eeae68ffbf416611cb789ba0df85f35d5ae",
+    "8bfef15e1d7964bd00a517daf257c8e638543fd6189bcba24f7fa6f88b5b00f1",
+  ];
+  expect(hashes.filter(hash => exactFrgNewHashes.includes(hash))).toEqual([]);
+  expect(named(root, traceability)).toEqual([]);
+});
+
+test("Journey binding closure keeps malformed, missing, unknown, duplicate, and mixed bindings negative", async () => {
+  const root = await journeyBindingFixture(true);
+  const testerRules = new Set([
+    "tester.htmx.e2e-binds-declared-subject",
+    "tester.htmx.journey-binding-header",
+    "tester.htmx.journey-no-acceptance-marker",
+  ]);
+  const tester = (await runImplementation("htmx_e2e_detector", { scanRoots: [root], excludes: [] }))
+    .filter(v => testerRules.has(v.rule_id));
+  expect(named(root, tester)).toEqual([
+    "tester.htmx.e2e-binds-declared-subject tests/ui/live/unknown.e2e.ts",
+    "tester.htmx.journey-binding-header tests/ui/live/duplicate.e2e.ts",
+    "tester.htmx.journey-binding-header tests/ui/live/malformed.e2e.ts",
+    "tester.htmx.journey-binding-header tests/ui/live/missing.e2e.ts",
+    "tester.htmx.journey-binding-header tests/ui/live/mixed.e2e.ts",
+    "tester.htmx.journey-no-acceptance-marker tests/ui/live/acceptance-mixed.e2e.ts",
+    "tester.htmx.journey-no-acceptance-marker tests/ui/live/wmbt-mixed.e2e.ts",
+  ]);
+
+  const traceability = (await runImplementation("atdd_traceability_closure", { scanRoots: [root], excludes: [] }))
+    .filter(v => v.rule_id === "traceability.test.binding-resolves");
+  expect(named(root, traceability)).toEqual([
+    "traceability.test.binding-resolves tests/ui/live/malformed.e2e.ts",
+    "traceability.test.binding-resolves tests/ui/live/missing.e2e.ts",
+    "traceability.test.binding-resolves tests/ui/live/unknown.e2e.ts",
+  ]);
+  expect(traceability.find(v => v.file.endsWith("malformed.e2e.ts"))?.evidence).toBe("Journey: journey:Company is not a journey: identity");
+  expect(traceability.find(v => v.file.endsWith("unknown.e2e.ts"))?.evidence).toBe("journey:not-declared is not declared in plan/");
+});
 
 test("every binding header must resolve, not only the first", async () => {
   const root = await repo({
