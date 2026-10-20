@@ -150,7 +150,42 @@ test("asserted production InterlockingRunner.execute clears all four shared proo
 const detached = `  const resolution = { routeId: "interpret-choice", trainId: "train:protocol:interpret-choice" };
   const trainResult = { steps: [{ step: 1, from: "system:resolver", to: "wagon:choice", artifact: "authority:choice.recorded" }], trace: { interlockingId: "interlocking:protocol", routeId: "interpret-choice", selectedTrainId: "train:protocol:interpret-choice", routeCategory: "nominal", guardId: "guard:interpret-choice", resolutionStrategy: "fail_on_multiple_match", resolutionReason: "guard guard:interpret-choice held" }, cargo: {} };`;
 
+const assertedResult = `  expect(resolution.routeId).toBe("interpret-choice");
+  expect(resolution.trainId).toBe("train:protocol:interpret-choice");
+  expect(trainResult.steps).toEqual([
+    { step: 1, from: "system:resolver", to: "wagon:choice", artifact: "authority:choice.recorded" },
+  ]);
+  expect(trainResult.steps).toContainEqual(expect.objectContaining({ from: "system:resolver", to: "wagon:choice" }));
+  expect(trainResult.steps.at(-1)).toEqual(expect.objectContaining({ artifact: "authority:choice.recorded" }));
+  const trace = trainResult.trace;
+  expect(trace.interlockingId).toBe("interlocking:protocol");
+  expect(trace.routeId).toBe("interpret-choice");
+  expect(trace.selectedTrainId).toBe("train:protocol:interpret-choice");
+  expect(trace.routeCategory).toBe("nominal");
+  expect(trace.guardId).toBe("guard:interpret-choice");
+  expect(trace.resolutionStrategy).toBe("fail_on_multiple_match");
+  expect(trace.resolutionReason).toBe("guard guard:interpret-choice held");
+  expect(trainResult.cargo["authority:choice.recorded"]).toEqual({ outcome: "refused" });`;
+
 const negatives: Record<string, Mutation> = {
+  "nested same-name fabricated assertions": {
+    file: "e2e/interlockings/protocol/interpret-choice.routes.test.ts",
+    from: assertedResult,
+    to: `  {
+    const resolution = { routeId: "interpret-choice", trainId: "train:protocol:interpret-choice" };
+    const trainResult = {
+      steps: [{ step: 1, from: "system:resolver", to: "wagon:choice", artifact: "authority:choice.recorded" }],
+      trace: {
+        interlockingId: "interlocking:protocol", routeId: "interpret-choice",
+        selectedTrainId: "train:protocol:interpret-choice", routeCategory: "nominal",
+        guardId: "guard:interpret-choice", resolutionStrategy: "fail_on_multiple_match",
+        resolutionReason: "guard guard:interpret-choice held",
+      },
+      cargo: { "authority:choice.recorded": { outcome: "refused" } },
+    };
+${assertedResult}
+  }`,
+  },
   "unasserted execution": {
     file: "e2e/interlockings/protocol/interpret-choice.routes.test.ts",
     from: "expect(",
