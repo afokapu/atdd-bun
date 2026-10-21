@@ -881,6 +881,142 @@ async function commitRatchetRoot(profiles = fullCommitRatchet()) {
   return root;
 }
 
+const splitPaths = {
+  product: Array.from({ length: 12 }, (_, index) => `split/product-${index}.md`),
+  tooling: Array.from({ length: 13 }, (_, index) => `split/tooling-${index}.md`),
+};
+
+async function splitRatchetRoot() {
+  const root = await repo();
+  await writeFile(join(root, "atdd-bun.yaml"), `${rejectNew("traceability")}max_staged_files: 20\n`);
+  await mkdir(join(root, "split"));
+  for (const path of [...splitPaths.product, ...splitPaths.tooling]) await writeFile(join(root, path), `base ${path}\n`);
+  await commitAll(root, "ratcheted 25-path base");
+  for (const path of [...splitPaths.product, ...splitPaths.tooling]) await writeFile(join(root, path), `candidate ${path}\n`);
+  return root;
+}
+
+type HookResult = Awaited<ReturnType<typeof runHook>>;
+
+async function isolatedTmpHook(root: string, directory: string) {
+  const module = resolve(import.meta.dir, "../src/hooks.ts");
+  const script = `import { runHook } from ${JSON.stringify(module)}; console.log(JSON.stringify(await runHook("pre-commit", process.cwd())));`;
+  const child = Bun.spawn({ cmd: [process.execPath, "-e", script], cwd: root, env: { ...process.env, TMPDIR: directory }, stdout: "pipe", stderr: "pipe" });
+  const [code, stdout, error] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+  return { code, result: stdout.trim() ? JSON.parse(stdout) as HookResult : null, error };
+}
+
+async function inPrivateRatchetTmp(root: string) {
+  const directory = await mkdtemp(join(tmpdir(), "atdd-ratchet-test-tmp-"));
+  try {
+    const execution = await isolatedTmpHook(root, directory);
+    expect(execution.code, execution.error).toBe(0);
+    expect(execution.result).not.toBeNull();
+    expect((await readdir(directory)).filter(path => path.startsWith("atdd-ratchet-commit-gate-"))).toEqual([]);
+    return execution.result!;
+  } finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+const sourceCustody = async (root: string, paths: string[]) => ({
+  head: (await git(root, ["rev-parse", "HEAD"])).out.trim(),
+  tree: (await git(root, ["write-tree"])).out.trim(),
+  status: (await git(root, ["status", "--porcelain=v1"])).out,
+  index: await Promise.all(paths.map(async path => (await git(root, ["show", `:${path}`])).out)),
+  worktree: await Promise.all(paths.map(path => readFile(join(root, path), "utf8"))),
+});
+
+test("pre-commit staged snapshot accepts both exact 12/13 split orders without changing source custody and preserves the 20-path cap", async () => {
+  const observed: Array<{ result: Awaited<ReturnType<typeof runHook>>; base: string; candidate: string }> = [];
+  for (const stagedSide of ["product", "tooling"] as const) {
+    const root = await splitRatchetRoot(), allPaths = [...splitPaths.product, ...splitPaths.tooling];
+    try {
+      await git(root, ["add", ...splitPaths[stagedSide]]);
+      const before = await sourceCustody(root, allPaths);
+      expect((before.status.match(/^M /gm) ?? [])).toHaveLength(splitPaths[stagedSide].length);
+      expect((before.status.match(/^ M/gm) ?? [])).toHaveLength(25 - splitPaths[stagedSide].length);
+
+      const result = await inPrivateRatchetTmp(root);
+      observed.push({ result, base: before.head, candidate: before.tree });
+      expect(await sourceCustody(root, allPaths)).toEqual(before);
+
+      await git(root, ["add", ...allPaths]);
+      expect(await runHook("pre-commit", root)).toMatchObject({ ok: false, message: "staged files 25 exceed 20" });
+    } finally { await cleanup(root); }
+  }
+  expect(observed.map(({ result, base, candidate }) => result.ok ? JSON.parse(result.message) : result)).toEqual([
+    expect.objectContaining({ base: observed[0]!.base, candidate: observed[0]!.candidate, profiles: [], new: [] }),
+    expect.objectContaining({ base: observed[1]!.base, candidate: observed[1]!.candidate, profiles: [], new: [] }),
+  ]);
+}, 60_000);
+
+test("pre-commit staged snapshot excludes unstaged and untracked findings while retaining staged policy and exact base", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability"));
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "payments.yaml"), "# clean tracked base\n");
+    await commitAll(root, "clean ratchet base");
+    const base = (await git(root, ["rev-parse", "HEAD"])).out.trim();
+
+    await writeFile(join(root, "atdd-bun.yaml"), `# staged policy bytes\n${rejectNew("traceability")}`);
+    await git(root, ["add", "atdd-bun.yaml"]);
+    await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments"));
+    await writeFile(join(root, "plan", "refunds.yaml"), debt.replaceAll("orders", "refunds"));
+    const candidate = (await git(root, ["write-tree"])).out.trim(), status = (await git(root, ["status", "--porcelain=v1"])).out;
+
+    const result = await inPrivateRatchetTmp(root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ base, candidate, profiles: ["traceability"], new: [] });
+    expect((await git(root, ["status", "--porcelain=v1"])).out).toBe(status);
+    expect((await git(root, ["write-tree"])).out.trim()).toBe(candidate);
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-commit staged snapshot uses the index side of a worktree collision so unstaged bytes cannot mask a staged finding", async () => {
+  const root = await repo(); try {
+    await writeFile(join(root, "atdd-bun.yaml"), rejectNew("traceability"));
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "payments.yaml"), "# clean tracked base\n");
+    await commitAll(root, "clean ratchet base");
+
+    const stagedDebt = debt.replaceAll("orders", "payments");
+    await writeFile(join(root, "plan", "payments.yaml"), stagedDebt); await git(root, ["add", "plan/payments.yaml"]);
+    await writeFile(join(root, "plan", "payments.yaml"), "# unstaged clean bytes must not mask the index\n");
+    const candidate = (await git(root, ["write-tree"])).out.trim(), status = (await git(root, ["status", "--porcelain=v1"])).out;
+
+    const result = await inPrivateRatchetTmp(root);
+    expect(result.ok).toBeFalse();
+    expect(JSON.parse(result.message)).toMatchObject({ candidate, new: [expect.any(String)] });
+    expect((await git(root, ["show", ":plan/payments.yaml"])).out).toBe(stagedDebt);
+    expect(await readFile(join(root, "plan", "payments.yaml"), "utf8")).toContain("unstaged clean bytes");
+    expect((await git(root, ["status", "--porcelain=v1"])).out).toBe(status);
+  } finally { await cleanup(root); }
+}, 60_000);
+
+test("pre-commit staged snapshot excludes intent-to-add worktree content from the writable index tree", async () => {
+  const root = await commitRatchetRoot(rejectNew("traceability")); try {
+    await mkdir(join(root, "plan")); await writeFile(join(root, "plan", "payments.yaml"), debt.replaceAll("orders", "payments"));
+    await git(root, ["add", "--intent-to-add", "plan/payments.yaml"]);
+    const base = (await git(root, ["rev-parse", "HEAD^{tree}"])).out.trim(), candidate = (await git(root, ["write-tree"])).out.trim();
+    expect(candidate).toBe(base);
+
+    const result = await inPrivateRatchetTmp(root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ candidate, profiles: [], new: [] });
+    expect(await readFile(join(root, "plan", "payments.yaml"), "utf8")).toContain("wmbt:payments");
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("pre-commit staged snapshot fails closed when private snapshot creation fails and leaves no scratch residue", async () => {
+  const root = await commitRatchetRoot(rejectNew("traceability"));
+  const privateTmp = await mkdtemp(join(tmpdir(), "atdd-ratchet-blocked-tmp-")), blocker = join(privateTmp, "not-a-directory");
+  try {
+    await writeFile(join(root, "readme.md"), "staged candidate\n"); await git(root, ["add", "readme.md"]);
+    await writeFile(blocker, "block mkdtemp\n");
+    const execution = await isolatedTmpHook(root, blocker);
+    expect(execution.code, execution.error).toBe(0);
+    expect(execution.result).toMatchObject({ ok: false, message: expect.stringContaining("ratchet activation commit gate failed closed") });
+    expect(await readdir(privateTmp)).toEqual(["not-a-directory"]);
+  } finally { await cleanup(root); await rm(privateTmp, { recursive: true, force: true }); }
+}, 30_000);
+
 test("pre-commit incremental selects only configured affected profiles for a code-only reject-new candidate", async () => {
   const root = await commitRatchetRoot(), watch = watchEnforce(true); try {
     await mkdir(join(root, "src")); await writeFile(join(root, "src", "orders.ts"), "export const orders = 1;\n"); await git(root, ["add", "src/orders.ts"]);
