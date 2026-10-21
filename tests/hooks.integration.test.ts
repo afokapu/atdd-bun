@@ -161,7 +161,7 @@ test("reject-new commit gate refuses unchanged-profile context drift", async () 
   } finally { await cleanup(root); }
 }, 30_000);
 
-test("profile activation commit gate refuses an incomplete dirty candidate", async () => {
+test("profile activation commit gate excludes untracked state from the exact staged candidate", async () => {
   const root = await repo(); try {
     await installHooks(root);
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow]\n");
@@ -169,8 +169,10 @@ test("profile activation commit gate refuses an incomplete dirty candidate", asy
     await writeFile(join(root, "atdd-bun.yaml"), "profiles: [flow, traceability]\nratchet: { mode: reject-new, profiles: [flow, traceability] }\n");
     await git(root, ["add", "atdd-bun.yaml"]);
     await writeFile(join(root, "untracked.txt"), "must not become an invisible activation candidate\n");
-    const result = await runHook("pre-commit", root);
-    expect(result).toMatchObject({ ok: false, message: expect.stringContaining("no unstaged or untracked") });
+    const candidate = (await git(root, ["write-tree"])).out.trim(), result = await runHook("pre-commit", root);
+    expect(result.ok, result.message).toBeTrue();
+    expect(JSON.parse(result.message)).toMatchObject({ candidate, profiles: ["flow", "traceability"], new: [] });
+    expect(await readFile(join(root, "untracked.txt"), "utf8")).toContain("invisible activation candidate");
   } finally { await cleanup(root); }
 }, 30_000);
 

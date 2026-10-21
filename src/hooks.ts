@@ -61,44 +61,48 @@ async function ratchetCommitGate(root: string, staged: string[], registryChanged
   try { candidateConfig = Bun.YAML.parse(stagedConfig.out) as Record<string, unknown>; policy = parseRatchetPolicy(candidateConfig); }
   catch (error) { return bad(`ratchet activation commit gate configuration is invalid: ${String(error)}`); }
   if (policy?.mode !== "reject-new" || !Array.isArray(candidateConfig.profiles) || !candidateConfig.profiles.every(profile => typeof profile === "string")) return null;
-  if ((await git(root, ["diff", "--quiet"])).code !== 0 || (await git(root, ["ls-files", "--others", "--exclude-standard"])).out) return bad("ratchet activation commit gate requires no unstaged or untracked candidate state");
   const head = await git(root, ["rev-parse", "--verify", "HEAD^{commit}"]);
   if (head.code || !/^[0-9a-f]{40}$/i.test(head.out)) return bad("ratchet activation commit gate requires an exact committed HEAD base");
-  const scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-commit-gate-"));
+  let scratch: string | undefined;
   try {
+    scratch = await mkdtemp(join(tmpdir(), "atdd-ratchet-commit-gate-"));
     const added = await git(root, ["worktree", "add", "--detach", "--no-checkout", scratch, head.out]);
-    if (added.code) return bad(`could not materialize ratchet activation base: ${added.err || added.out}`);
+    if (added.code) throw new Error(`could not materialize ratchet activation base: ${added.err || added.out}`);
     const checkedOut = await git(scratch, ["checkout", "--detach", head.out]);
-    if (checkedOut.code) return bad(`could not checkout ratchet activation base: ${checkedOut.err || checkedOut.out}`);
+    if (checkedOut.code) throw new Error(`could not checkout ratchet activation base: ${checkedOut.err || checkedOut.out}`);
     const baseConfig = await configAt(scratch), candidateProfiles = stable(candidateConfig.profiles.map(normalizeProfileName));
     const baseProfiles = stable(await enabledProfiles(scratch));
     const policyMatches = stable(policy.profiles.map(normalizeProfileName)).join(",") === candidateProfiles.join(",");
     const activation = isStrictProfileExpansion(baseProfiles, candidateProfiles) && activationContextDigest(baseConfig) === activationContextDigest(candidateConfig);
     const unchanged = baseProfiles.join(",") === candidateProfiles.join(",") && contextDigest(baseConfig, baseProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (candidateProfiles.some(profile => !concreteProfiles.includes(profile as typeof concreteProfiles[number])) || !policyMatches || (!activation && !unchanged)) return bad("ratchet reject-new requires either unchanged explicit profiles/context or an explicit monotonic profile expansion with identical non-profile context");
-    const selectedProfiles = activation || staged.some(needsFullCommitRatchetProfiles) ? candidateProfiles : (await affectedProfiles(root, staged, registryChanged)).filter(profile => candidateProfiles.includes(profile));
     const tree = await git(root, ["write-tree"]);
     if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
     const baseTree = await git(root, ["rev-parse", "--verify", `${head.out}^{tree}`]);
     if (baseTree.code || !/^[0-9a-f]{40}$/i.test(baseTree.out)) return bad(`could not identify ratchet activation base tree: ${baseTree.err || baseTree.out}`);
-    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch, finding.file) }));
-    // Scan and cache the unpatched HEAD before materializing the staged candidate; both keys remain exact Git trees.
-    const cacheDirectory = await findingsCacheDirectory(root), toolkit = await toolkitIdentity().catch(() => null);
-    const findingsAt = async (treeId: string) => cachedFindings(cacheDirectory, treeId, toolkit, selectedProfiles, async () => normalize(await enforce({ root: scratch, profiles: selectedProfiles as any })));
-    const baseFindings = selectedProfiles.length ? await findingsAt(baseTree.out) : [];
-    const patch = await git(root, ["diff", "--cached", "--binary"], undefined, true);
-    if (patch.code) return bad(`could not read staged ratchet activation candidate: ${patch.err || patch.out}`);
-    const applied = await git(scratch, ["apply", "--whitespace=nowarn"], patch.out);
-    if (applied.code) return bad(`could not materialize staged ratchet activation candidate: ${applied.err || applied.out}`);
+    const materialize = async (treeId: string, label: string) => {
+      const reset = await git(scratch!, ["read-tree", "--reset", "-u", treeId]);
+      if (reset.code) throw new Error(`could not materialize ${label}: ${reset.err || reset.out}`);
+      const exact = await git(scratch!, ["write-tree"]);
+      if (exact.code || exact.out !== treeId) throw new Error(`${label} did not materialize exactly: ${exact.err || exact.out}`);
+    };
+    await materialize(tree.out, "staged ratchet activation candidate");
     const materialized = await configAt(scratch), materializedProfiles = stable(await enabledProfiles(scratch));
     const materializedContext = activation ? activationContextDigest(materialized) === activationContextDigest(candidateConfig) : materializedProfiles.join(",") === candidateProfiles.join(",") && contextDigest(materialized, materializedProfiles) === contextDigest(candidateConfig, candidateProfiles);
     if (!materializedContext) return bad("staged ratchet candidate did not materialize exactly");
+    const selectedProfiles = activation || staged.some(needsFullCommitRatchetProfiles) ? candidateProfiles : (await affectedProfiles(scratch, staged, registryChanged)).filter(profile => candidateProfiles.includes(profile));
+    const normalize = (findings: Awaited<ReturnType<typeof enforce>>) => findings.map(finding => ({ ...finding, file: canonicalFindingPath(scratch!, finding.file) }));
+    const cacheDirectory = await findingsCacheDirectory(root), toolkit = await toolkitIdentity().catch(() => null);
+    const findingsAt = async (treeId: string) => cachedFindings(cacheDirectory, treeId, toolkit, selectedProfiles, async () => normalize(await enforce({ root: scratch, profiles: selectedProfiles as any })));
+    await materialize(baseTree.out, "ratchet activation base tree");
+    const baseFindings = selectedProfiles.length ? await findingsAt(baseTree.out) : [];
+    await materialize(tree.out, "staged ratchet activation candidate");
     const candidateFindings = selectedProfiles.length ? await findingsAt(tree.out) : [];
     const delta = compareFindings(baseFindings, candidateFindings);
     const report = JSON.stringify({ schema: "atdd-bun.ratchet-report/v1", mode: policy.mode, base: head.out, candidate: tree.out, profiles: selectedProfiles, context: contextDigest(candidateConfig, candidateProfiles), ...delta });
     return { ok: delta.new.length === 0, message: report };
   } catch (error) { return bad(`ratchet activation commit gate failed closed: ${String(error)}`); }
-  finally { await git(root, ["worktree", "remove", "--force", scratch]); await rm(scratch, { recursive: true, force: true }); }
+  finally { if (scratch) { await git(root, ["worktree", "remove", "--force", scratch]); await rm(scratch, { recursive: true, force: true }); } }
 }
 
 /** A pushed reject-new candidate is judged from its immutable object IDs, never the hook's checkout or index. */
