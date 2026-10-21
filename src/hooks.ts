@@ -80,6 +80,7 @@ async function ratchetCommitGate(root: string, staged: string[], registryChanged
     if (tree.code || !/^[0-9a-f]{40}$/i.test(tree.out)) return bad(`could not identify staged ratchet activation candidate: ${tree.err || tree.out}`);
     const baseTree = await git(root, ["rev-parse", "--verify", `${head.out}^{tree}`]);
     if (baseTree.code || !/^[0-9a-f]{40}$/i.test(baseTree.out)) return bad(`could not identify ratchet activation base tree: ${baseTree.err || baseTree.out}`);
+    // Scan only exact Git trees in private scratch: live unstaged/untracked bytes never enter, and cache keys stay tree IDs.
     const materialize = async (treeId: string, label: string) => {
       const reset = await git(scratch!, ["read-tree", "--reset", "-u", treeId]);
       if (reset.code) throw new Error(`could not materialize ${label}: ${reset.err || reset.out}`);
