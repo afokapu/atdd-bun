@@ -8,7 +8,7 @@
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
-import { entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
+import { directInterlockingExecutionProofs, entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -556,9 +556,10 @@ function resolutionTrainExecution(after, resolution) {
 }
 
 export function productionExecutionProofs(text, file, croot) {
-  if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return [];
+  const directProofs = file && croot ? directInterlockingExecutionProofs(text, file, croot) : [];
+  if (file && croot && !hasResolvedProductionRunnerImports(text, file, croot)) return directProofs;
   const receivers = productionReceivers(text);
-  const proofs = [];
+  const proofs = [...directProofs];
   const resolutions = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*([^=;{}\\n]{0,240}?)\\.resolveTrain\\s*\\(`, "g");
   for (const m of text.matchAll(resolutions)) {
     const [whole, resolution, receiver] = m;
@@ -577,8 +578,16 @@ export function assertsExpression(text, expression, expected = null) {
   return Boolean(m && (!expected || tokenCovered(expected, m[0])));
 }
 
+function directResolutionAssertion(proof, fields, expected = null) {
+  return fields.some((field) => (proof.direct?.resolution[field] ?? [])
+    .some((assertion) => !expected || tokenCovered(expected, assertion)));
+}
+
 export function hasProductionExecutionProof(text, file, croot) {
-  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
+  return productionExecutionProofs(text, file, croot).some((proof) => {
+    const { resolution, execution, direct } = proof;
+    if (direct) return directResolutionAssertion(proof, ["routeId", "trainId", "selectedTrainId"]) ||
+      direct.execution || direct.traceFields.length > 0;
     if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
       (execution && assertsExpression(text, escaped(execution)))) return true;
     if (!execution) return false;
@@ -589,16 +598,24 @@ export function hasProductionExecutionProof(text, file, croot) {
 
 export function routeHasProductionProof(route, text, interlockingId = null, file, croot) {
   const slug = interlockingId?.replace(/^interlocking:/, "");
-  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
-    const assertedRoute = assertsExpression(text, `${escaped(resolution)}\\.routeId`, route.routeId);
-    const assertedTrain = assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, route.trainId);
+  return productionExecutionProofs(text, file, croot).some((proof) => {
+    const { resolution, execution, direct } = proof;
+    const assertedRoute = direct
+      ? directResolutionAssertion(proof, ["routeId"], route.routeId)
+      : assertsExpression(text, `${escaped(resolution)}\\.routeId`, route.routeId);
+    const assertedTrain = direct
+      ? directResolutionAssertion(proof, ["trainId", "selectedTrainId"], route.trainId)
+      : assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, route.trainId);
     const scoped = !interlockingId || tokenCovered(interlockingId, text) || tokenCovered(slug, text);
-    return (assertedRoute && scoped) || assertedTrain || Boolean(scoped && execution && assertsExpression(text, escaped(execution)) && (tokenCovered(route.routeId, text) || tokenCovered(route.trainId, text)));
+    const assertedExecution = direct ? direct.execution : execution && assertsExpression(text, escaped(execution));
+    return (assertedRoute && scoped) || assertedTrain || Boolean(scoped && assertedExecution &&
+      (tokenCovered(route.routeId, text) || tokenCovered(route.trainId, text)));
   });
 }
 
 export function traceHasProductionProvenance(text, file, croot) {
-  return productionExecutionProofs(text, file, croot).some(({ execution }) => {
+  return productionExecutionProofs(text, file, croot).some(({ execution, direct }) => {
+    if (direct) return direct.traceBound && REQUIRED_TRACE_FIELDS.every(([field]) => direct.traceFields.includes(field));
     if (!execution) return false;
     const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
     return Boolean(trace);
@@ -706,7 +723,10 @@ export function routeHasStationModuleProof(route, text, action, stationText, sta
 // kills reorder/removal mutants, objectContaining records a handoff edge, and at(-1) observes the
 // final wagon.  All three must be about the TrainRunner result, never a hand-built literal.
 export function hasSequenceMutationProof(text, trainId, file, croot) {
-  return productionExecutionProofs(text, file, croot).some(({ resolution, execution }) => {
+  return productionExecutionProofs(text, file, croot).some((proof) => {
+    const { resolution, execution, direct } = proof;
+    if (direct) return directResolutionAssertion(proof, ["trainId", "selectedTrainId"], trainId) &&
+      direct.sequence.ordered && direct.sequence.handoff && direct.sequence.final;
     if (!execution || !assertsExpression(text, `${escaped(resolution)}\\.(?:trainId|selectedTrainId)`, trainId)) return false;
     const result = escaped(execution);
     const ordered = new RegExp(`expect\\s*\\(\\s*${result}\\.(?:steps|sequence|wagons)\\s*\\)\\s*\\.to(?:Equal|StrictEqual)\\s*\\(\\s*\\[`, "s").test(text);
