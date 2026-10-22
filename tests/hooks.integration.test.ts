@@ -362,6 +362,77 @@ test("pre-push fails closed on a protected destination and post-commit remains a
   finally { await cleanup(root); }
 }, 20_000);
 
+async function mergedWorktreeWithGeneratedHookIdentityDrift(branch: string) {
+  const layout = await worktreeLayout(), feature = join(layout.worktrees, branch);
+  await mkdir(layout.worktrees, { recursive: true });
+  expect((await git(layout.main, ["worktree", "add", "-q", "-b", branch, feature])).code).toBe(0);
+  expect((await installHooks(feature)).ok).toBeTrue();
+  for (const event of hookEvents) {
+    const path = join(feature, ".githooks", event), generated = await readFile(path, "utf8");
+    const stale = generated.replace(/(# atdd-bun enforcement identity: )[a-f0-9]+/, `$1${"0".repeat(64)}`);
+    expect(stale).not.toBe(generated);
+    await writeFile(path, stale);
+  }
+  await git(feature, ["add", ".githooks"]);
+  expect((await git(feature, ["commit", "-qm", "track stale generated hooks", "--no-verify"])).code).toBe(0);
+  expect((await git(layout.main, ["merge", "--no-ff", branch, "-m", `merge ${branch}`])).code).toBe(0);
+  expect((await installHooks(feature, true)).ok).toBeTrue();
+  return { ...layout, feature };
+}
+
+const generatedHookDriftStatus = [...hookEvents].map(event => ` M .githooks/${event}`).sort();
+const statusLines = async (root: string) => (await git(root, ["status", "--porcelain"])).out.split("\n").filter(Boolean).sort();
+
+// RED: current finishWorktree rejects these six exact generated paths instead of safely force-removing the merged worktree.
+test("finish generated hook drift removes exactly six tracked identity-only generated hook modifications", async () => {
+  const layout = await mergedWorktreeWithGeneratedHookIdentityDrift("generated-only");
+  try {
+    expect(await statusLines(layout.feature)).toEqual(generatedHookDriftStatus);
+    const result = await finishWorktree(layout.feature);
+    expect(result.ok).toBeTrue();
+    expect(existsSync(layout.feature)).toBeFalse();
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish generated hook drift refuses a mixed tracked non-hook change without touching it", async () => {
+  const layout = await mergedWorktreeWithGeneratedHookIdentityDrift("mixed-tracked");
+  try {
+    const readme = join(layout.feature, "readme.md"); await writeFile(readme, "user work\n");
+    const beforeStatus = await statusLines(layout.feature);
+    expect(beforeStatus).toEqual([...generatedHookDriftStatus, " M readme.md"].sort());
+    const result = await finishWorktree(layout.feature);
+    expect(result.ok).toBeFalse(); expect(result.message).toContain("dirty");
+    expect(await readFile(readme, "utf8")).toBe("user work\n");
+    expect(await statusLines(layout.feature)).toEqual(beforeStatus);
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish generated hook drift refuses user-edited generated hook content without touching it", async () => {
+  const layout = await mergedWorktreeWithGeneratedHookIdentityDrift("user-edited-hook");
+  try {
+    const hook = join(layout.feature, ".githooks", hookEvents[0]), userContent = `${await readFile(hook, "utf8")}# user-owned edit\n`;
+    await writeFile(hook, userContent);
+    const beforeStatus = await statusLines(layout.feature);
+    expect(beforeStatus).toEqual(generatedHookDriftStatus);
+    expect((await finishWorktree(layout.feature)).ok).toBeFalse();
+    expect(await readFile(hook, "utf8")).toBe(userContent);
+    expect(await statusLines(layout.feature)).toEqual(beforeStatus);
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
+test("finish generated hook drift refuses an untracked githooks path without touching it", async () => {
+  const layout = await mergedWorktreeWithGeneratedHookIdentityDrift("untracked-hook");
+  try {
+    const untracked = join(layout.feature, ".githooks", "user-hook"); await writeFile(untracked, "user work\n");
+    const beforeStatus = await statusLines(layout.feature);
+    expect(beforeStatus).toEqual([...generatedHookDriftStatus, "?? .githooks/user-hook"].sort());
+    const result = await finishWorktree(layout.feature);
+    expect(result.ok).toBeFalse(); expect(result.message).toContain("dirty");
+    expect(await readFile(untracked, "utf8")).toBe("user work\n");
+    expect(await statusLines(layout.feature)).toEqual(beforeStatus);
+  } finally { await cleanup(layout.container); }
+}, 30_000);
+
 test("worktree policy requires a main primary checkout and linked feature worktrees in the configured root", async () => {
   const layout = await worktreeLayout(); const feature = join(layout.worktrees, "feature-x"), outside = join(layout.container, "outside");
   try {
