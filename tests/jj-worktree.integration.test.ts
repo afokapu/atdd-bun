@@ -1,3 +1,8 @@
+// URN: test:atdd-bun:jj-worktrees:E001-UNIT-001
+// Acceptance: acc:atdd-bun:E001-UNIT-001
+// Phase: UNIT
+// Layer: integration
+// Runtime: bun
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
