@@ -1,0 +1,27 @@
+schema_version: 1.0.0
+rule_id: planner.journey.execution-strategies
+kind: family
+status: active
+name: Journey execution strategy catalog
+statement: >-
+    Journey strategies are candidate ways to meet declared behavioral obligations. Choose for latency, throughput, cost, reliability, determinism, and complexity requirements; none is universally best. This convention does not authorize bypassing interlockings, trains, continuations, or acceptances.
+terms:
+  - term_id: selection
+    text: >-
+      Begin with the reference strategy, then consider alternatives only when requirements or measured workloads justify complexity. Strategies are orthogonal and can combine.
+  - term_id: ownership
+    text: >-
+      Interlockings select guarded alternatives, journeys compose control flow, trains remain linear, and wagons can optimize their internals.
+  - term_id: governance
+    text: >-
+      Use only execution behavior actually supported by the plan and runtime. Missing fork/join, stream, or speculation capability requires separate implementation and accepted proof.
+  - term_id: evidence
+    text: >-
+      Preserve contracts, artifacts, prerequisites, side effects, error paths and terminal outcomes. Behavioral tests establish equivalence; reproducible benchmarks support performance claims. Observable behavior changes need their own accepted route.
+notes: >-
+  Bun-owned planner guidance, not a new runtime mode or an independently enforced rule.
+  Existing journey, interlocking, and acceptance validators remain authoritative.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

@@ -1,15 +1,15 @@
 schema_version: "1.0.0"
 package: "@afokapu/atdd-bun"
 node_corpus:
-  source: "src/atdd/planner/conventions/nodes/"
-  count: 196
+  source: "planner-nodes/nodes/"
+  count: 205
   policy: >-
-    Every node is shipped as canonical planner reference material. A node is not
+    Every node is shipped as Bun-owned planner reference material. A node is not
     represented as enforced merely because it is present in this corpus.
 
 # A provider implementation must name every canonical rule it realizes. `disposition` is
 # this package's enforcement, always strict: atdd-bun fails on every finding, whatever the
-# canonical node's own metadata says (the nodes are shipped verbatim). `coverage`
+# canonical node's own metadata says (the nodes are authored and shipped by ATDD Bun). `coverage`
 # describes the Bun predicate actually exercised, not an assertion that the entire
 # prose convention has been ported.
 canonical_bun_enforcement:
@@ -140,7 +140,7 @@ canonical_bun_enforcement:
 
 reference_only:
   selection: "every canonical planner node not named in canonical_bun_enforcement"
-  count: 180
+  count: 189
 
 package_integrity_guard:
   implementation_id: planner.plan-integrity.bun

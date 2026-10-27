@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.reference
+kind: pattern
+status: active
+name: Reference execution
+statement: >-
+    Follow declared interlocking routes and train continuations without additional scheduling or speculative transformations. Reference is the default, not a mandated slow path.
+terms:
+  - term_id: applicability
+    text: >-
+      Choose when ordering matters, workload is small, behavior must be reproduced, or performance evidence does not justify an alternative.
+  - term_id: constraints
+    text: >-
+      Preserve guards, error/exception routes, artifacts, terminal outcomes, side effects, and ordering. A nominal path is not the full route space.
+  - term_id: evidence
+    text: >-
+      Use existing journey and acceptance tests to prove behavior; gather baseline measurements before claiming another strategy is faster.
+  - term_id: runtime_boundary
+    text: >-
+      Supported by the current single-route continuation model.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

@@ -7,7 +7,7 @@
 # are not imported; several do not relate two conventions at all.
 schema_version: 1.0.0
 graph_id: "@afokapu/atdd-bun"
-nodes: 
+nodes:
   - atdd-bun.planner.acceptance-identity
   - atdd-bun.planner.identity-required
   - atdd-bun.planner.identity-unique
@@ -213,7 +213,16 @@ nodes:
   - planner.issue-body.graph-context-required
   - planner.journey.continuation-closure
   - planner.journey.definition
+  - planner.journey.execution-strategies
   - planner.journey.interlocking-composed
+  - planner.journey.strategy.adaptive
+  - planner.journey.strategy.batched
+  - planner.journey.strategy.cached
+  - planner.journey.strategy.concurrent
+  - planner.journey.strategy.conditional
+  - planner.journey.strategy.pipelined
+  - planner.journey.strategy.reference
+  - planner.journey.strategy.speculative
   - planner.plan.confirm-before-author
   - planner.plan.confirm-binds-an-issue
   - planner.plan.confirm-requires-interlocking-sanity
@@ -5278,4 +5287,94 @@ edges:
     strength: critical
     target_ref: coder.bun.phase-discipline
     type: follows
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: execution strategies inherit the existing journey ownership and continuation contract
+    source_ref: planner.journey.execution-strategies
+    strength: important
+    target_ref: planner.journey.definition
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the reference strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.reference
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the conditional strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.conditional
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the concurrent strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.concurrent
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the pipelined strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.pipelined
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the batched strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.batched
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the cached strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.cached
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the speculative strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.speculative
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: the adaptive strategy requires the shared applicability and evidence principles
+    source_ref: planner.journey.strategy.adaptive
+    strength: important
+    target_ref: planner.journey.execution-strategies
+    type: requires
     origin: "@afokapu/atdd-bun"
