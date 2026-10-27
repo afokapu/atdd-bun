@@ -75,6 +75,12 @@ jobs:
           test -d "$child"
           (cd "$child" && jj bookmark delete delivery/alias)
 
+          # JJ commonly leaves a clean empty working-copy child after the delivery
+          # bookmark. Retirement must canonicalize that state to the bookmark.
+          (cd "$child" && jj new delivery/demo)
+          test -z "$(cd "$child" && jj diff -r @ --name-only)"
+          test "$(cd "$child" && jj log -r @- --no-graph -T commit_id)" = "$current"
+
           (cd "$child" && bun "$GITHUB_WORKSPACE/src/cli.ts" worktree finish --delete-branch --vcs jj)
           test ! -d "$child"
           ! git -C "$repo" show-ref --verify --quiet refs/heads/delivery/demo
