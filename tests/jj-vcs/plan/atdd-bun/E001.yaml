@@ -1,7 +1,0 @@
-urn: acc:atdd-bun:E001-UNIT-001
-phase: UNIT
-description: >-
-  ATDD Bun may manage a colocated Jujutsu 0.46+ linked workspace through the existing
-  worktree lifecycle without altering the default Git path; creation exports one delivery
-  bookmark, status observes JJ workspaces, ambiguous ownership fails closed, and retirement
-  removes only a clean merged workspace whose exact bookmark still identifies the current revision.
