@@ -1,3 +1,7 @@
+// URN: test:toolkit:journey-execution-strategies:E001-UNIT-001-advisory-strategy-catalog
+// Acceptance: acc:toolkit:E001-UNIT-001-bound-test-file
+// Phase: UNIT
+// Layer: integration
 import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
