@@ -30,6 +30,8 @@ for (const root of readRoots()) {
   for (const f of walk(root, excludes, M.TS_EXT, true)) {
     if (isExcluded(f)) continue;
     const layer = M.determineLayer(f);
+    // A path with no established layer has no "same layer" to be duplicated within.
+    if (layer === "unknown") continue;
     if (!byLayer.has(layer)) byLayer.set(layer, []);
     byLayer.get(layer).push(f);
   }

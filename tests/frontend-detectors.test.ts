@@ -516,6 +516,14 @@ test("negative: seven duplicated statements still fire", async () => {
   })).length).toBeGreaterThan(0);
 });
 
+test("paths with no established layer are unjudged: unknown-to-unknown duplication is not a finding", async () => {
+  const body = (names: string[]) => `export function run(input: any) {\n${fields(names, (n) => `  const ${n} = input.${n};`)}\n  return input;\n}\n`;
+  expect(await duplications({
+    "orders/billing/order-run.ts": body(orderNames),
+    "shipping/routing/shipment-run.ts": body(shipmentNames),
+  })).toEqual([]);
+});
+
 test("negative: a duplicated object-literal run still fires", async () => {
   const literal = (name: string, names: string[]) => `export const ${name} = {\n${fields(names, (n) => `  ${n}: source,`)}\n};\n`;
   expect((await duplications({
