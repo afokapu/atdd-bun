@@ -80,14 +80,19 @@ async function branchCommit(root: string, branch: string) {
   return result.code ? null : result.out;
 }
 
+// A delivery commit must have one unambiguous non-protected exported bookmark.
+// Ref ordering is never used as ownership authority.
 async function branchForCommit(root: string, commit: string, protectedBranches: string[]) {
   const refs = await git(root, ["for-each-ref", "--format=%(refname:short)", "--points-at", commit, "refs/heads/"]);
-  if (refs.code) return "";
-  const names = refs.out.split("\n").map(line => line.trim()).filter(Boolean);
-  return names.find(name => !protectedBranches.includes(name)) ?? names[0] ?? "";
+  if (refs.code) return { error: refs.err || refs.out };
+  const candidates = refs.out.split("\n").map(line => line.trim()).filter(Boolean)
+    .filter(name => !protectedBranches.includes(name));
+  return candidates.length === 1
+    ? { branch: candidates[0]! }
+    : { error: `current Jujutsu revision must have exactly one non-protected exported bookmark; found ${candidates.length}` };
 }
 
-type Layout = { primary: string; worktreeRoot: string; current: string; branch: string };
+type Layout = { primary: string; worktreeRoot: string; current: string };
 async function layout(root: string, cfg: JjPolicy): Promise<Layout | { error: string }> {
   const current = await realpath(resolve(root));
   const primary = await primaryRoot(current);
@@ -96,9 +101,7 @@ async function layout(root: string, cfg: JjPolicy): Promise<Layout | { error: st
   if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` };
   const primaryTip = await branchCommit(primary, cfg.worktrees.primary_branch);
   if (!primaryTip) return { error: `primary bookmark ${cfg.worktrees.primary_branch} is not exported to Git` };
-  const currentId = await currentCommit(current);
-  const branch = currentId ? await branchForCommit(current, currentId, cfg.protected_branches) : "";
-  return { primary, worktreeRoot: resolve(primary, cfg.worktrees.root.replaceAll("{repo}", basename(primary))), current, branch };
+  return { primary, worktreeRoot: resolve(primary, cfg.worktrees.root.replaceAll("{repo}", basename(primary))), current };
 }
 
 async function noConflicts(root: string) {
@@ -106,36 +109,76 @@ async function noConflicts(root: string) {
   return result.code ? { error: result.err || result.out } : result.out ? { error: "workspace has unresolved conflicts" } : {};
 }
 
-export async function startJjWorktree(root: string, branch: string, cfg: JjPolicy) {
-  if (!cfg.worktrees.enabled) return bad("worktree policy is disabled; set worktrees.enabled: true in atdd-bun.yaml");
+async function preflight(root: string, cfg: JjPolicy): Promise<Layout | { error: string }> {
+  if (!cfg.worktrees.enabled) return { error: "worktree policy is disabled; set worktrees.enabled: true in atdd-bun.yaml" };
   const version = await requireJj46(root);
-  if (version) return bad(version);
-  const state = await layout(root, cfg);
-  if ("error" in state) return bad(state.error);
-  if (state.current !== state.primary) return bad(`start must run from the primary checkout ${state.primary}`);
-  if (!branch) return bad("branch is required: atdd-bun worktree start <branch>");
-  if ((await git(root, ["check-ref-format", "--branch", branch])).code) return bad(`invalid branch name ${JSON.stringify(branch)}`);
-  if (cfg.protected_branches.includes(branch)) return bad(`cannot create a worktree for protected branch ${branch}`);
-  if (await branchCommit(state.primary, branch)) return bad(`branch ${branch} already exists`);
-  const leaf = branchPath(branch);
-  if (!leaf) return bad(`branch ${JSON.stringify(branch)} cannot form a safe worktree directory`);
-  const target = join(state.worktreeRoot, leaf);
-  if (existsSync(target)) return bad(`worktree path already exists: ${target}`);
-  await mkdir(state.worktreeRoot, { recursive: true });
-
-  const created = await jj(state.primary, ["workspace", "add", "--colocate", "--name", leaf, "-r", cfg.worktrees.primary_branch, target]);
-  if (created.code) return bad(created.err || created.out);
-  const bookmark = await jj(target, ["bookmark", "set", branch, "-r", "@"]);
-  const id = await currentCommit(target);
-  const exported = await branchCommit(target, branch);
-  if (bookmark.code || !id || exported !== id) {
-    await jj(state.primary, ["workspace", "remove", leaf]);
-    await jj(state.primary, ["bookmark", "delete", branch]);
-    return bad(bookmark.err || bookmark.out || `bookmark ${branch} was not exported to the colocated Git repository`);
-  }
-  return { ok: true, message: `created linked Jujutsu workspace ${target} on ${branch}` };
+  return version ? { error: version } : layout(root, cfg);
 }
 
+async function startTarget(root: string, branch: string, state: Layout, cfg: JjPolicy) {
+  if (state.current !== state.primary) return { error: `start must run from the primary checkout ${state.primary}` };
+  if (!branch) return { error: "branch is required: atdd-bun worktree start <branch>" };
+  if ((await git(root, ["check-ref-format", "--branch", branch])).code) return { error: `invalid branch name ${JSON.stringify(branch)}` };
+  if (cfg.protected_branches.includes(branch)) return { error: `cannot create a worktree for protected branch ${branch}` };
+  if (await branchCommit(state.primary, branch)) return { error: `branch ${branch} already exists` };
+  const leaf = branchPath(branch);
+  if (!leaf) return { error: `branch ${JSON.stringify(branch)} cannot form a safe worktree directory` };
+  const target = join(state.worktreeRoot, leaf);
+  return existsSync(target) ? { error: `worktree path already exists: ${target}` } : { leaf, target };
+}
+
+// Workspace creation is two-phase. If bookmark export fails, both JJ artifacts
+// are rolled back so a failed start leaves no reusable partial delivery state.
+async function createWorkspace(state: Layout, target: { leaf: string; target: string }, branch: string, cfg: JjPolicy) {
+  await mkdir(state.worktreeRoot, { recursive: true });
+  const created = await jj(state.primary, ["workspace", "add", "--colocate", "--name", target.leaf, "-r", cfg.worktrees.primary_branch, target.target]);
+  if (created.code) return bad(created.err || created.out);
+  const bookmark = await jj(target.target, ["bookmark", "set", branch, "-r", "@"]);
+  const id = await currentCommit(target.target);
+  const exported = await branchCommit(target.target, branch);
+  if (!bookmark.code && id && exported === id) return { ok: true, message: `created linked Jujutsu workspace ${target.target} on ${branch}` };
+  await jj(state.primary, ["workspace", "remove", target.leaf]);
+  await jj(state.primary, ["bookmark", "delete", branch]);
+  return bad(bookmark.err || bookmark.out || `bookmark ${branch} was not exported to the colocated Git repository`);
+}
+
+async function finishCandidate(state: Layout, cfg: JjPolicy) {
+  if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
+  const conflict = await noConflicts(state.current);
+  if ("error" in conflict) return conflict;
+  const id = await currentCommit(state.current);
+  if (!id) return { error: "could not resolve the current Jujutsu revision" };
+  const found = await branchForCommit(state.current, id, cfg.protected_branches);
+  if ("error" in found) return found;
+  const tip = await branchCommit(state.primary, found.branch);
+  if (!tip || tip !== id) return { error: `bookmark ${found.branch} must point at the current Jujutsu revision before finish` };
+  if ((await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) return { error: `branch ${found.branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout` };
+  return { branch: found.branch, tip, name: branchPath(found.branch) };
+}
+
+// The sanitized bookmark name is not sufficient authority to remove a workspace;
+// verify the JJ registry resolves that name back to the exact current path.
+async function verifyWorkspace(state: Layout, candidate: { name: string }) {
+  const recorded = await jj(state.primary, ["workspace", "root", "--name", candidate.name]);
+  if (recorded.code) return `workspace ${candidate.name} is not registered: ${recorded.err || recorded.out}`;
+  const recordedPath = await realpath(recorded.out).catch(() => null);
+  return recordedPath === state.current ? null : `workspace ${candidate.name} resolves to ${recorded.out}, not ${state.current}`;
+}
+
+async function deleteBookmark(state: Layout, candidate: { branch: string; tip: string }, cfg: JjPolicy) {
+  const now = await branchCommit(state.primary, candidate.branch);
+  const merged = !(await git(state.primary, ["merge-base", "--is-ancestor", candidate.tip, cfg.worktrees.primary_branch])).code;
+  if (now !== candidate.tip || !merged) return `workspace removed, but bookmark ${candidate.branch} was not deleted: its tip changed or is no longer merged into ${cfg.worktrees.primary_branch}`;
+  const deleted = await jj(state.primary, ["bookmark", "delete", candidate.branch]);
+  return deleted.code ? `workspace removed, but bookmark deletion failed: ${deleted.err || deleted.out}` : null;
+}
+export async function startJjWorktree(root: string, branch: string, cfg: JjPolicy) {
+  const state = await preflight(root, cfg);
+  if ("error" in state) return bad(state.error);
+  const target = await startTarget(root, branch, state, cfg);
+  if ("error" in target) return bad(target.error);
+  return createWorkspace(state, target, branch, cfg);
+}
 export async function statusJjWorktrees(root: string, cfg: JjPolicy) {
   if (!cfg.worktrees.enabled) return bad("worktree policy is disabled");
   const version = await requireJj46(root);
@@ -147,40 +190,15 @@ export async function statusJjWorktrees(root: string, cfg: JjPolicy) {
 }
 
 export async function finishJjWorktree(root: string, deleteBranch: boolean, cfg: JjPolicy) {
-  if (!cfg.worktrees.enabled) return bad("worktree policy is disabled");
-  const version = await requireJj46(root);
-  if (version) return bad(version);
-  const state = await layout(root, cfg);
+  const state = await preflight(root, cfg);
   if ("error" in state) return bad(state.error);
-  if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return bad(`finish must run from a linked workspace beneath ${state.worktreeRoot}`);
-
-  const conflict = await noConflicts(state.current);
-  if ("error" in conflict) return bad(conflict.error);
-  const id = await currentCommit(state.current);
-  if (!id) return bad("could not resolve the current Jujutsu revision");
-  const branch = await branchForCommit(state.current, id, cfg.protected_branches);
-  if (!branch || cfg.protected_branches.includes(branch)) return bad("finish requires a non-protected bookmark exported as a Git branch");
-  const tip = await branchCommit(state.primary, branch);
-  if (!tip || tip !== id) return bad(`bookmark ${branch} must point at the current Jujutsu revision before finish`);
-  if ((await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) {
-    return bad(`branch ${branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout`);
-  }
-
-  const name = branchPath(branch);
-  const recorded = await jj(state.primary, ["workspace", "root", "--name", name]);
-  if (recorded.code) return bad(`workspace ${name} is not registered: ${recorded.err || recorded.out}`);
-  const recordedPath = await realpath(recorded.out).catch(() => null);
-  if (recordedPath !== state.current) return bad(`workspace ${name} resolves to ${recorded.out}, not ${state.current}`);
-
-  const removed = await jj(state.primary, ["workspace", "remove", name]);
+  const candidate = await finishCandidate(state, cfg);
+  if ("error" in candidate) return bad(candidate.error);
+  const mismatch = await verifyWorkspace(state, candidate);
+  if (mismatch) return bad(mismatch);
+  const removed = await jj(state.primary, ["workspace", "remove", candidate.name]);
   if (removed.code) return bad(removed.err || removed.out);
-  if (deleteBranch) {
-    const now = await branchCommit(state.primary, branch);
-    if (now !== tip || (await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) {
-      return bad(`workspace removed, but bookmark ${branch} was not deleted: its tip changed or is no longer merged into ${cfg.worktrees.primary_branch}`);
-    }
-    const deleted = await jj(state.primary, ["bookmark", "delete", branch]);
-    if (deleted.code) return bad(`workspace removed, but bookmark deletion failed: ${deleted.err || deleted.out}`);
-  }
-  return { ok: true, message: `removed merged Jujutsu workspace ${state.current}${deleteBranch ? ` and bookmark ${branch}` : ""}` };
+  if (!deleteBranch) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
+  const deletionError = await deleteBookmark(state, candidate, cfg);
+  return deletionError ? bad(deletionError) : { ok: true, message: `removed merged Jujutsu workspace ${state.current} and bookmark ${candidate.branch}` };
 }
