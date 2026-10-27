@@ -96,6 +96,37 @@ test("a train-sequence finding points at the train's own document, not at an unr
   for (const v of sequence) expect(v.file).toMatch(/^plan\/_trains\/train:match:match-resolution-\w+\.yaml$/);
 });
 
+test("a train-sequence finding is associated by exact train identity, never by a prefix of it", async () => {
+  // A train id that is a prefix of another used to select the other's plan document (substring match), so the shorter
+  // route was blamed on the longer train's file; two trains then collapsed onto one file and one fingerprint.
+  const root = await mkdtemp(join(tmpdir(), "atdd-train-identity-"));
+  try {
+    const shorter = "train:decision-response:await-routing-authority";
+    const longer = `${shorter}-again`;
+    const trains = join(root, "plan", "_trains");
+    await mkdir(join(trains, "_interlockings"), { recursive: true });
+    await writeFile(join(trains, "_interlockings", "decision-response.yaml"),
+      `interlocking_id: interlocking:decision-response\nroutes:\n  - route_id: await\n    train_id: ${shorter}\n    category: happy\n  - route_id: await-again\n    train_id: ${longer}\n    category: happy\n`);
+    const shorterFile = join(trains, "z-shorter.yaml");
+    const longerFile = join(trains, "a-longer-again.yaml");   // sorts first: a substring match reaches it before the exact file
+    const doc = (id: string, sequence: boolean) => `train_id: ${id}\n${sequence ? "sequence:\n  - wagon:one\n  - wagon:two\n" : "wagons: []\n"}`;
+    const sequence = async () => (await runImplementation("bun_interlocking_coverage", { scanRoots: [root], excludes: ["node_modules", ".git", ".atdd"] }))
+      .filter(v => v.rule_id === "tester.bun.interlocking-train-sequence-is-exercised")
+      .map(v => ({ file: v.file, train: /declared train "([^"]+)"/.exec(v.evidence)?.[1] }))
+      .sort((a, b) => a.file.localeCompare(b.file));
+    // Only the longer train declares a sequence: the shorter has none to exercise and must not borrow the longer's document.
+    await writeFile(longerFile, doc(longer, true));
+    await writeFile(shorterFile, doc(shorter, false));
+    expect(await sequence()).toEqual([{ file: "plan/_trains/a-longer-again.yaml", train: longer }]);
+    // Both declare one: each finding is anchored at its own exact document.
+    await writeFile(shorterFile, doc(shorter, true));
+    expect(await sequence()).toEqual([
+      { file: "plan/_trains/a-longer-again.yaml", train: longer },
+      { file: "plan/_trains/z-shorter.yaml", train: shorter },
+    ]);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("a route id covers its route only in a test of its own interlocking", async () => {
   // FWS #liu3vKZYAPXD: `refuse` is a route of two interlockings; a test of one used to cover the other with no test.
   const root = await mkdtemp(join(tmpdir(), "atdd-route-scope-"));
