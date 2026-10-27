@@ -22,7 +22,7 @@ const usage = {
     "atdd-bun [profile ...] [--root <path>] [--ratchet --base <full-sha> [--ratchet-activate-profiles]]",
     "atdd-bun init [--replace]",
     "atdd-bun hooks <install|uninstall|status> [--replace]",
-    "atdd-bun worktree <start|finish|status>",
+    "atdd-bun worktree <start|finish|status> [branch] [--vcs <git|jj>]",
     "atdd-bun ci <init|status> [--replace]",
     "atdd-bun agent <init|status> [--replace]",
     "atdd-bun profiles registry [--check]",
@@ -86,7 +86,10 @@ if (args[0] === "hook") {
   if (result.message) console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "worktree") {
-  const result = args[1] === "start" ? await startWorktree(process.cwd(), args[2] ?? "") : args[1] === "finish" ? await finishWorktree(process.cwd(), args.includes("--delete-branch")) : args[1] === "status" ? await worktreeStatus(process.cwd()) : fail("worktree requires start, finish, or status");
+  const vcsAt = args.indexOf("--vcs"), vcsValue = vcsAt === -1 ? "git" : args[vcsAt + 1];
+  if (vcsValue !== "git" && vcsValue !== "jj") fail("--vcs requires git or jj");
+  const branch = args[1] === "start" ? args.slice(2).find((arg, index, rest) => !arg.startsWith("-") && rest[index - 1] !== "--vcs") ?? "" : "";
+  const result = args[1] === "start" ? await startWorktree(process.cwd(), branch, vcsValue) : args[1] === "finish" ? await finishWorktree(process.cwd(), args.includes("--delete-branch"), vcsValue) : args[1] === "status" ? await worktreeStatus(process.cwd(), vcsValue) : fail("worktree requires start, finish, or status");
   console[result.ok ? "log" : "error"](result.message); process.exit(result.ok ? 0 : 1);
 }
 if (args[0] === "ci") {
