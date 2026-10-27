@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.conditional
+kind: pattern
+status: active
+name: Guarded alternative
+statement: >-
+    Use an interlocking's deterministic guards and priorities to select among declared linear train variants. A shortcut is a declared route, not an undeclared bypass.
+terms:
+  - term_id: applicability
+    text: >-
+    Use for workload classes, cache hit/miss, fallbacks, recovery paths, or other mutually selected alternatives.
+  - term_id: constraints
+    text: >-
+    Every branch must have declared guard, train and accepted artifacts. Ambiguous matching and changed observable behavior are invalid without new acceptance.
+  - term_id: evidence
+    text: >-
+    Test matching and nonmatching guards, ambiguity/priority resolution, errors and contract preservation.
+  - term_id: runtime_boundary
+    text: >-
+    Supported by current interlocking route resolution and journey continuations.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

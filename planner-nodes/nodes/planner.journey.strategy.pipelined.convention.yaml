@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.pipelined
+kind: pattern
+status: active
+name: Pipelined execution
+statement: >-
+    Overlap producers and consumers through incremental artifact delivery only with an explicit streaming protocol.
+terms:
+  - term_id: applicability
+    text: >-
+    Use for streaming/chunked workloads where first-result latency or memory dominates.
+  - term_id: constraints
+    text: >-
+    Preserve backpressure, ordering, partial failure, stream completion and resource bounds. A standard journey handoff does not define streaming.
+  - term_id: evidence
+    text: >-
+    Test slow consumers, bounded buffers, chunk order, interruptions and equivalence; measure throughput and first-result latency.
+  - term_id: runtime_boundary
+    text: >-
+    Internal wagon streaming is possible; cross-interlocking streaming requires new declared runtime semantics.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

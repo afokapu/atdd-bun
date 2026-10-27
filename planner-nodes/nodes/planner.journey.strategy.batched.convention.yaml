@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.batched
+kind: pattern
+status: active
+name: Batched or fused work
+statement: >-
+    Combine compatible calls or computations to amortize I/O, setup, serialization or scheduling overhead without changing accepted logical results.
+terms:
+  - term_id: applicability
+    text: >-
+    Use for repeated homogeneous operations, database queries, vectorizable computation or repeated setup.
+  - term_id: constraints
+    text: >-
+    Preserve item identity, failure independence, transaction/authority boundaries, order and resource limits. Do not fuse across wagon ownership merely to reduce calls.
+  - term_id: evidence
+    text: >-
+    Test mixed outcomes, batch boundaries, item-result mapping and equivalence; measure throughput and tail latency.
+  - term_id: runtime_boundary
+    text: >-
+    Normally an internal wagon implementation; no journey or interlocking schema change is needed.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

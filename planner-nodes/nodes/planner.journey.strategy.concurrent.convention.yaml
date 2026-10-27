@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.concurrent
+kind: pattern
+status: active
+name: Concurrent branches
+statement: >-
+    Run independent journey branches in parallel only when the topology explicitly specifies fan-out, dependency release, join, and failure semantics.
+terms:
+  - term_id: applicability
+    text: >-
+    Use for independent expensive operations whose measured saving exceeds concurrency overhead.
+  - term_id: constraints
+    text: >-
+    Multiple incoming continuations are not a synchronization join. Current journeys allow one outgoing continuation or terminal per route and do not provide fork/join semantics.
+  - term_id: evidence
+    text: >-
+    Prove bounded concurrency, prerequisite satisfaction, joining, cancellation, failures and result equivalence; benchmark latency.
+  - term_id: runtime_boundary
+    text: >-
+    Cross-interlocking fan-out/fan-in is not yet supported. Within-wagon concurrency can honor existing contracts.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0

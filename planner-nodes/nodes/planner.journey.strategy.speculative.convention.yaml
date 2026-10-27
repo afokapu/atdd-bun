@@ -1,0 +1,28 @@
+schema_version: 1.0.0
+rule_id: planner.journey.strategy.speculative
+kind: pattern
+status: active
+name: Speculative execution
+statement: >-
+    Initiate reversible likely-needed work early only when discarded work and cancellation cannot change accepted behavior.
+terms:
+  - term_id: applicability
+    text: >-
+    Consider when expensive future work is predictable and wasted work can be budgeted.
+  - term_id: constraints
+    text: >-
+    Never speculate authority commits, irreversible side effects, externally visible mutations or unauthorized data access. Define isolation, cancellation and resource budgets.
+  - term_id: evidence
+    text: >-
+    Test wrong predictions, cancellation races, duplicate attempts, isolation and total wasted work; measure net benefit.
+  - term_id: runtime_boundary
+    text: >-
+    No generic speculative journey scheduler exists; this convention cannot authorize undeclared execution.
+notes: >-
+  Guidance for agents, not independent enforcement or a new runtime dispatch option.
+  Existing plan and source validators apply. Unimplemented orchestration behavior
+  cannot be inferred from a pattern.
+metadata:
+  severity: 3
+  disposition: advisory
+  introduced_in: 0.1.0
