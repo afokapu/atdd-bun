@@ -1,3 +1,23 @@
+// URN: component:atdd-bun:jj-worktrees:jj-worktrees:backend:application
+// Tested-By:
+// - test:atdd-bun:jj-worktrees:E001-UNIT-001
+// Runtime: bun
+// Purpose: Manage colocated Jujutsu workspaces without changing the Git lifecycle.
+//
+// Jujutsu mode is a sidecar to the established Git worktree policy. The repository
+// must be colocated, so Git object IDs remain the lineage currency while JJ owns
+// working-copy commits, workspace creation, and bookmark movement.
+//
+// JJ 0.46 is the minimum because it introduced colocated additional workspaces.
+// Bookmarks are expected to export to Git branches; those refs preserve existing
+// merge ancestry, protected-branch policy, and publication behavior.
+//
+// Retirement is fail-closed: the current revision must identify one delivery
+// bookmark, that bookmark must still point at the revision, and the commit must
+// already be merged into the protected primary branch before removal.
+//
+// VCS-specific mechanics stay here so Git hooks, detectors, and policy remain
+// untouched and the public worktree API only dispatches by explicit VCS mode.
 import { existsSync } from "node:fs";
 import { mkdir, realpath } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
