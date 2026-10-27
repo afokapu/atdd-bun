@@ -34,14 +34,19 @@ async function conventionIds(dir: string): Promise<Set<string>> {
   return ids;
 }
 
-async function policyConventionIds(dir: string): Promise<Set<string>> {
+// Conventions that never run: package policies with no implementation, and advisory planner nodes
+// (guidance and reference-only strategy patterns) with no implementation. Source may name these ids
+// to load them into a profile; a detector may not emit them, which the detector scan below still enforces.
+async function nonRuntimeConventionIds(dir: string): Promise<Set<string>> {
   const ids = new Set<string>();
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    if (entry.isDirectory()) for (const id of await policyConventionIds(path)) ids.add(id);
+    if (entry.isDirectory()) for (const id of await nonRuntimeConventionIds(path)) ids.add(id);
     else if (entry.name.endsWith(".convention.yaml")) {
-      const convention = Bun.YAML.parse(await readFile(path, "utf8")) as { rule_id?: string; kind?: string; implementation?: { type?: string } };
-      if (convention.kind === "policy" && convention.implementation?.type === "none" && convention.rule_id) ids.add(convention.rule_id);
+      const convention = Bun.YAML.parse(await readFile(path, "utf8")) as { rule_id?: string; kind?: string; implementation?: { type?: string }; metadata?: { disposition?: string } };
+      const policy = convention.kind === "policy" && convention.implementation?.type === "none";
+      const advisory = convention.metadata?.disposition === "advisory" && convention.implementation === undefined;
+      if ((policy || advisory) && convention.rule_id) ids.add(convention.rule_id);
     }
   }
   return ids;
@@ -71,7 +76,8 @@ const RULE_LITERAL = /["'`]((?:planner|coder|tester|traceability|atdd-bun)\.[a-z
 const withoutComments = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`\\])\/\/[^\n]*/g, "$1");
 
 test("every enforceable rule id written in detector or package source is declared, so no emission path escapes", async () => {
-  const [declared, policies] = await Promise.all([declaredRules(), policyConventionIds(join(root, "conventions"))]), undeclared = new Set<string>();
+  const [declared, packagePolicies, advisoryNodes] = await Promise.all([declaredRules(), nonRuntimeConventionIds(join(root, "conventions")), nonRuntimeConventionIds(join(root, "planner-nodes/nodes"))]);
+  const policies = new Set([...packagePolicies, ...advisoryNodes]), undeclared = new Set<string>();
   for (const [directory, allowPolicy] of [["detectors", false], ["src", true]] as const) for (const file of await sourceFiles(join(root, directory)))
     for (const match of withoutComments(await readFile(file, "utf8")).matchAll(RULE_LITERAL)) {
       const id = match[1];
