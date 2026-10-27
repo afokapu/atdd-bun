@@ -73,6 +73,19 @@ registerEnforcementTest({ root: import.meta.dir + "/..", profiles: ["traceabilit
 
 `planner-nodes/ENFORCEMENT_SCOPE.yaml` says which canonical planner rules have a Bun realization.
 
+### Journey execution strategy conventions
+
+The planner profile exposes Bun-owned `planner.journey.execution-strategies` and eight individual
+strategy patterns: reference, conditional, concurrent, pipelined, batched, cached, speculative,
+and adaptive. Each describes applicability, constraints, evidence, and its actual runtime
+support. Agents discover them through the generated planner profile registry. Strategies
+can combine, but none is mandatory or a runtime mode merely because the convention exists.
+
+Existing journey continuation, interlocking route, and acceptance validators remain strict.
+Convention guidance does **not** enable undeclared fork/join, streaming, or speculative
+execution: these require their own runtime semantics and acceptance evidence.
+
+
 ## Greenfield and brownfield
 
 A greenfield repository enforces every profile from the start: that is the default. A brownfield

@@ -44,7 +44,18 @@ export const profileImplementations: Record<ConcreteProfile, string[]> = {
 
 /** Additional policy conventions a profile loads, whether local or contributed by an installed companion package. */
 export const profileConventions: Record<ConcreteProfile, Array<{ rule_id: string; path: string }>> = {
-  traceability: [], topology: [], docs: [], planner: [], telemetry: [], coder: [{ rule_id: "coder.bun.phase-discipline", path: "conventions/coder.bun/coder.bun.phase-discipline.convention.yaml" }], tester: [], security: [],
+  traceability: [], topology: [], docs: [], planner: [
+    { rule_id: "planner.journey.definition", path: "planner-nodes/nodes/planner.journey.definition.convention.yaml" },
+    { rule_id: "planner.journey.execution-strategies", path: "planner-nodes/nodes/planner.journey.execution-strategies.convention.yaml" },
+    { rule_id: "planner.journey.strategy.adaptive", path: "planner-nodes/nodes/planner.journey.strategy.adaptive.convention.yaml" },
+    { rule_id: "planner.journey.strategy.batched", path: "planner-nodes/nodes/planner.journey.strategy.batched.convention.yaml" },
+    { rule_id: "planner.journey.strategy.cached", path: "planner-nodes/nodes/planner.journey.strategy.cached.convention.yaml" },
+    { rule_id: "planner.journey.strategy.concurrent", path: "planner-nodes/nodes/planner.journey.strategy.concurrent.convention.yaml" },
+    { rule_id: "planner.journey.strategy.conditional", path: "planner-nodes/nodes/planner.journey.strategy.conditional.convention.yaml" },
+    { rule_id: "planner.journey.strategy.pipelined", path: "planner-nodes/nodes/planner.journey.strategy.pipelined.convention.yaml" },
+    { rule_id: "planner.journey.strategy.reference", path: "planner-nodes/nodes/planner.journey.strategy.reference.convention.yaml" },
+    { rule_id: "planner.journey.strategy.speculative", path: "planner-nodes/nodes/planner.journey.strategy.speculative.convention.yaml" },
+  ], telemetry: [], coder: [{ rule_id: "coder.bun.phase-discipline", path: "conventions/coder.bun/coder.bun.phase-discipline.convention.yaml" }], tester: [], security: [],
   architecture: [], metrics: [], runtime: [], interlocking: [], htmx: [], design: [],
   flow: [
     { rule_id: "atdd-bun.review.behavioral-reconciliation", path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml" },
