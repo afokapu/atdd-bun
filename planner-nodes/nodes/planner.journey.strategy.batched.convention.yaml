@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Use for repeated homogeneous operations, database queries, vectorizable computation or repeated setup.
+      Use for repeated homogeneous operations, database queries, vectorizable computation or repeated setup.
   - term_id: constraints
     text: >-
-    Preserve item identity, failure independence, transaction/authority boundaries, order and resource limits. Do not fuse across wagon ownership merely to reduce calls.
+      Preserve item identity, failure independence, transaction/authority boundaries, order and resource limits. Do not fuse across wagon ownership merely to reduce calls.
   - term_id: evidence
     text: >-
-    Test mixed outcomes, batch boundaries, item-result mapping and equivalence; measure throughput and tail latency.
+      Test mixed outcomes, batch boundaries, item-result mapping and equivalence; measure throughput and tail latency.
   - term_id: runtime_boundary
     text: >-
-    Normally an internal wagon implementation; no journey or interlocking schema change is needed.
+      Normally an internal wagon implementation; no journey or interlocking schema change is needed.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior

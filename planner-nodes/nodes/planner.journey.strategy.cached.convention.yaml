@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Use for expensive repeatable reads and derivations with stable identities and tractable dependencies.
+      Use for expensive repeatable reads and derivations with stable identities and tractable dependencies.
   - term_id: constraints
     text: >-
-    Define cache key, freshness, invalidation, authorization, tenant isolation and side effects. A hit cannot omit required permission or mutation.
+      Define cache key, freshness, invalidation, authorization, tenant isolation and side effects. A hit cannot omit required permission or mutation.
   - term_id: evidence
     text: >-
-    Test cold/warm paths, staleness, invalidation races, isolation and accepted-result equivalence; measure hit rate.
+      Test cold/warm paths, staleness, invalidation races, isolation and accepted-result equivalence; measure hit rate.
   - term_id: runtime_boundary
     text: >-
-    Cache work can be internal to a wagon; an explicit hit/miss route can use an existing interlocking.
+      Cache work can be internal to a wagon; an explicit hit/miss route can use an existing interlocking.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior

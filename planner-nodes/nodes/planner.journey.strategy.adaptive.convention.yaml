@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Consider only where measured workload variation justifies multiple strategies and switching overhead.
+      Consider only where measured workload variation justifies multiple strategies and switching overhead.
   - term_id: constraints
     text: >-
-    Use a deterministic inspectable selection policy and stable fallback; do not invent routes or suppress failure behavior when signals are absent.
+      Use a deterministic inspectable selection policy and stable fallback; do not invent routes or suppress failure behavior when signals are absent.
   - term_id: evidence
     text: >-
-    Test thresholds, missing metrics, fallback, oscillation and equivalence across workload classes; benchmark total cost.
+      Test thresholds, missing metrics, fallback, oscillation and equivalence across workload classes; benchmark total cost.
   - term_id: runtime_boundary
     text: >-
-    Interlocking guards support deterministic alternatives; dynamic rescheduling needs new validated capabilities.
+      Interlocking guards support deterministic alternatives; dynamic rescheduling needs new validated capabilities.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior
