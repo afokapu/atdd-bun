@@ -30,4 +30,4 @@ jobs:
         continue-on-error: true
         run: bun run atdd-bun all
       - name: Real colocated Jujutsu integration
-        run: bun test tests/jj-worktree.integration.test.ts
+        run: bun test tests/jj-vcs/tests/jj-worktree.integration.test.ts
