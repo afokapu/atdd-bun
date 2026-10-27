@@ -68,7 +68,11 @@ export function declaresASequence(croot, trainId) {
   })(join(croot, PLAN_ROOT));
   for (const f of found) {
     const text = readText(f);
-    if (!text.includes(trainId)) continue;
+    // Exact parsed identity: a train id that is a prefix of another must not select the other's document.
+    // A malformed document is the schema validator's concern, not this rule's.
+    let doc;
+    try { doc = Bun.YAML.parse(text); } catch { continue; }
+    if (!doc || typeof doc !== "object" || doc.train_id !== trainId) continue;
     if (/^\s*sequence:\s*$/m.test(text) || /^\s*sequence:\s*\[/m.test(text)) return f;
   }
   return null;
