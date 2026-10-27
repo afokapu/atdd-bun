@@ -57,6 +57,13 @@ test("JJ integration: Bun creates, observes, and safely retires a colocated work
   await exec(repository, "jj", "bookmark", "set", "main", "-r", "delivery/demo");
   expect(await exec(repository, "git", "rev-parse", "refs/heads/main")).toBe(current);
 
+  await exec(child, "jj", "bookmark", "set", "delivery/alias", "-r", "@");
+  const ambiguous = await finishWorktree(child, true, "jj");
+  expect(ambiguous.ok).toBe(false);
+  expect(ambiguous.message).toContain("exactly one non-protected exported bookmark");
+  expect(await Bun.file(child).exists()).toBe(true);
+  await exec(child, "jj", "bookmark", "delete", "delivery/alias");
+
   const finished = await finishWorktree(child, true, "jj");
   expect(finished.ok, finished.message).toBe(true);
   expect(await Bun.file(child).exists()).toBe(false);
