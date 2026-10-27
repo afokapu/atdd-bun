@@ -1,5 +1,13 @@
 # Relationship graph for every convention this package ships (planner-nodes/ and conventions/).
-# planner.relationship.no-orphan-nodes: 
+# planner.relationship.no-orphan-nodes: every node appears as the source or target of at least one edge.
+# Edges with an `origin` other than @afokapu/atdd-bun are imported unchanged from the upstream graphs
+# (atdd@36ce055a, atdd-extensions@3aa141e) because they touch a shipped convention; the rest are the
+# package's own. Each edge follows planner-schemas/author/relationship.schema.json. Upstream edges whose
+# type the schema does not define (realized-by, scoped-by, gated-by, refines: 32 at the commits above)
+# are not imported; several do not relate two conventions at all.
+schema_version: 1.0.0
+graph_id: "@afokapu/atdd-bun"
+nodes:
   - atdd-bun.planner.acceptance-identity
   - atdd-bun.planner.identity-required
   - atdd-bun.planner.identity-unique
