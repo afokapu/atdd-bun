@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Use for independent expensive operations whose measured saving exceeds concurrency overhead.
+      Use for independent expensive operations whose measured saving exceeds concurrency overhead.
   - term_id: constraints
     text: >-
-    Multiple incoming continuations are not a synchronization join. Current journeys allow one outgoing continuation or terminal per route and do not provide fork/join semantics.
+      Multiple incoming continuations are not a synchronization join. Current journeys allow one outgoing continuation or terminal per route and do not provide fork/join semantics.
   - term_id: evidence
     text: >-
-    Prove bounded concurrency, prerequisite satisfaction, joining, cancellation, failures and result equivalence; benchmark latency.
+      Prove bounded concurrency, prerequisite satisfaction, joining, cancellation, failures and result equivalence; benchmark latency.
   - term_id: runtime_boundary
     text: >-
-    Cross-interlocking fan-out/fan-in is not yet supported. Within-wagon concurrency can honor existing contracts.
+      Cross-interlocking fan-out/fan-in is not yet supported. Within-wagon concurrency can honor existing contracts.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior

@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Use for streaming/chunked workloads where first-result latency or memory dominates.
+      Use for streaming/chunked workloads where first-result latency or memory dominates.
   - term_id: constraints
     text: >-
-    Preserve backpressure, ordering, partial failure, stream completion and resource bounds. A standard journey handoff does not define streaming.
+      Preserve backpressure, ordering, partial failure, stream completion and resource bounds. A standard journey handoff does not define streaming.
   - term_id: evidence
     text: >-
-    Test slow consumers, bounded buffers, chunk order, interruptions and equivalence; measure throughput and first-result latency.
+      Test slow consumers, bounded buffers, chunk order, interruptions and equivalence; measure throughput and first-result latency.
   - term_id: runtime_boundary
     text: >-
-    Internal wagon streaming is possible; cross-interlocking streaming requires new declared runtime semantics.
+      Internal wagon streaming is possible; cross-interlocking streaming requires new declared runtime semantics.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior

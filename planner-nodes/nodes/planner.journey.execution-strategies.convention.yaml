@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: selection
     text: >-
-    Begin with the reference strategy, then consider alternatives only when requirements or measured workloads justify complexity. Strategies are orthogonal and can combine.
+      Begin with the reference strategy, then consider alternatives only when requirements or measured workloads justify complexity. Strategies are orthogonal and can combine.
   - term_id: ownership
     text: >-
-    Interlockings select guarded alternatives, journeys compose control flow, trains remain linear, and wagons can optimize their internals.
+      Interlockings select guarded alternatives, journeys compose control flow, trains remain linear, and wagons can optimize their internals.
   - term_id: governance
     text: >-
-    Use only execution behavior actually supported by the plan and runtime. Missing fork/join, stream, or speculation capability requires separate implementation and accepted proof.
+      Use only execution behavior actually supported by the plan and runtime. Missing fork/join, stream, or speculation capability requires separate implementation and accepted proof.
   - term_id: evidence
     text: >-
-    Preserve contracts, artifacts, prerequisites, side effects, error paths and terminal outcomes. Behavioral tests establish equivalence; reproducible benchmarks support performance claims. Observable behavior changes need their own accepted route.
+      Preserve contracts, artifacts, prerequisites, side effects, error paths and terminal outcomes. Behavioral tests establish equivalence; reproducible benchmarks support performance claims. Observable behavior changes need their own accepted route.
 notes: >-
   Bun-owned planner guidance, not a new runtime mode or an independently enforced rule.
   Existing journey, interlocking, and acceptance validators remain authoritative.

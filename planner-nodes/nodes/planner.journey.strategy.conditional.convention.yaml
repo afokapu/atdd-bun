@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Use for workload classes, cache hit/miss, fallbacks, recovery paths, or other mutually selected alternatives.
+      Use for workload classes, cache hit/miss, fallbacks, recovery paths, or other mutually selected alternatives.
   - term_id: constraints
     text: >-
-    Every branch must have declared guard, train and accepted artifacts. Ambiguous matching and changed observable behavior are invalid without new acceptance.
+      Every branch must have declared guard, train and accepted artifacts. Ambiguous matching and changed observable behavior are invalid without new acceptance.
   - term_id: evidence
     text: >-
-    Test matching and nonmatching guards, ambiguity/priority resolution, errors and contract preservation.
+      Test matching and nonmatching guards, ambiguity/priority resolution, errors and contract preservation.
   - term_id: runtime_boundary
     text: >-
-    Supported by current interlocking route resolution and journey continuations.
+      Supported by current interlocking route resolution and journey continuations.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior

@@ -8,16 +8,16 @@ statement: >-
 terms:
   - term_id: applicability
     text: >-
-    Choose when ordering matters, workload is small, behavior must be reproduced, or performance evidence does not justify an alternative.
+      Choose when ordering matters, workload is small, behavior must be reproduced, or performance evidence does not justify an alternative.
   - term_id: constraints
     text: >-
-    Preserve guards, error/exception routes, artifacts, terminal outcomes, side effects, and ordering. A nominal path is not the full route space.
+      Preserve guards, error/exception routes, artifacts, terminal outcomes, side effects, and ordering. A nominal path is not the full route space.
   - term_id: evidence
     text: >-
-    Use existing journey and acceptance tests to prove behavior; gather baseline measurements before claiming another strategy is faster.
+      Use existing journey and acceptance tests to prove behavior; gather baseline measurements before claiming another strategy is faster.
   - term_id: runtime_boundary
     text: >-
-    Supported by the current single-route continuation model.
+      Supported by the current single-route continuation model.
 notes: >-
   Guidance for agents, not independent enforcement or a new runtime dispatch option.
   Existing plan and source validators apply. Unimplemented orchestration behavior
