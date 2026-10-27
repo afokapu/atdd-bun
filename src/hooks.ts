@@ -411,7 +411,7 @@ async function branchCommit(root: string, branch: string) {
 
 // A delivery commit must have one unambiguous non-protected exported bookmark.
 // Ref ordering is never used as ownership authority.
-async function branchForCommit(root: string, commit: string, protectedBranches: string[]) {
+async function branchForCommit(root: string, commit: string, protectedBranches: string[]): Promise<{ error: string } | { branch: string }> {
   const refs = await git(root, ["for-each-ref", "--format=%(refname:short)", "--points-at", commit, "refs/heads/"]);
   if (refs.code) return { error: refs.err || refs.out };
   const candidates = refs.out.split("\n").map(line => line.trim()).filter(Boolean)
@@ -433,7 +433,7 @@ async function jjLayout(root: string, cfg: HookPolicy): Promise<Layout | { error
   return { primary, worktreeRoot: resolve(primary, cfg.worktrees.root.replaceAll("{repo}", basename(primary))), current };
 }
 
-async function noConflicts(root: string) {
+async function noConflicts(root: string): Promise<{ error: string } | { error?: undefined }> {
   const result = await jj(root, ["log", "-r", "@ & conflicts()", "--no-graph", "-T", "commit_id"]);
   return result.code ? { error: result.err || result.out } : result.out ? { error: "workspace has unresolved conflicts" } : {};
 }
@@ -444,7 +444,7 @@ async function preflight(root: string, cfg: HookPolicy): Promise<Layout | { erro
   return version ? { error: version } : jjLayout(root, cfg);
 }
 
-async function startTarget(root: string, branch: string, state: Layout, cfg: HookPolicy) {
+async function startTarget(root: string, branch: string, state: Layout, cfg: HookPolicy): Promise<{ error: string } | { leaf: string; target: string }> {
   if (state.current !== state.primary) return { error: `start must run from the primary checkout ${state.primary}` };
   if (!branch) return { error: "branch is required: atdd-bun worktree start <branch>" };
   if ((await git(root, ["check-ref-format", "--branch", branch])).code) return { error: `invalid branch name ${JSON.stringify(branch)}` };
@@ -471,10 +471,10 @@ async function createWorkspace(state: Layout, target: { leaf: string; target: st
   return bad(bookmark.err || bookmark.out || `bookmark ${branch} was not exported to the colocated Git repository`);
 }
 
-async function finishCandidate(state: Layout, cfg: HookPolicy) {
+async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string; tip: string; name: string }> {
   if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
   const conflict = await noConflicts(state.current);
-  if ("error" in conflict) return conflict;
+  if (conflict.error !== undefined) return conflict;
   const current = await currentCommit(state.current);
   if (!current) return { error: "could not resolve the current Jujutsu revision" };
   let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
