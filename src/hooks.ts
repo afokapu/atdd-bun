@@ -475,12 +475,20 @@ async function finishCandidate(state: Layout, cfg: HookPolicy) {
   if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
   const conflict = await noConflicts(state.current);
   if ("error" in conflict) return conflict;
-  const id = await currentCommit(state.current);
-  if (!id) return { error: "could not resolve the current Jujutsu revision" };
-  const found = await branchForCommit(state.current, id, cfg.protected_branches);
-  if ("error" in found) return found;
+  const current = await currentCommit(state.current);
+  if (!current) return { error: "could not resolve the current Jujutsu revision" };
+  let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
+  if ("error" in found) {
+    const changed = await jj(state.current, ["diff", "-r", "@", "--name-only"]);
+    const parent = await jj(state.current, ["log", "-r", "@-", "--no-graph", "-T", "commit_id"]);
+    if (changed.code || changed.out || parent.code || !parent.out) return found;
+    const parentFound = await branchForCommit(state.current, parent.out, cfg.protected_branches);
+    if ("error" in parentFound) return found;
+    delivery = parent.out;
+    found = parentFound;
+  }
   const tip = await branchCommit(state.primary, found.branch);
-  if (!tip || tip !== id) return { error: `bookmark ${found.branch} must point at the current Jujutsu revision before finish` };
+  if (!tip || tip !== delivery) return { error: `bookmark ${found.branch} must point at the delivery revision before finish` };
   if ((await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) return { error: `branch ${found.branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout` };
   return { branch: found.branch, tip, name: branchPath(found.branch) };
 }
