@@ -1,0 +1,86 @@
+name: JJ VCS Proof
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jj-vcs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Jujutsu 0.46.0
+        run: |
+          curl -fsSL -o /tmp/jj.tar.gz https://github.com/jj-vcs/jj/releases/download/v0.46.0/jj-v0.46.0-x86_64-unknown-linux-musl.tar.gz
+          echo "fce0271158e665ceb82dc66c5eb95b1728649094e9133074f3b5baece345fc08  /tmp/jj.tar.gz" | sha256sum -c -
+          mkdir /tmp/jj-bin
+          tar -xzf /tmp/jj.tar.gz -C /tmp/jj-bin
+          sudo install /tmp/jj-bin/jj /usr/local/bin/jj
+          jj version
+      - name: Real colocated Jujutsu lifecycle through the public CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          repo="$root/repository"
+          worktrees="$root/worktrees"
+          mkdir -p "$repo"
+
+          git -C "$repo" init --initial-branch=main
+          git -C "$repo" config user.email fixture@example.test
+          git -C "$repo" config user.name Fixture
+          printf 'initial\n' > "$repo/README.md"
+          cat > "$repo/atdd-bun.yaml" <<EOF
+          worktrees:
+            enabled: true
+            root: $worktrees
+            primary_directory: .
+            primary_branch: main
+            require_linked_worktree: true
+          EOF
+          git -C "$repo" add .
+          git -C "$repo" commit -m initial
+          (cd "$repo" && jj git init --colocate)
+
+          (cd "$repo" && bun "$GITHUB_WORKSPACE/src/cli.ts" worktree start delivery/demo --vcs jj)
+          child="$worktrees/delivery-demo"
+          test "$(cd "$child" && jj workspace root)" = "$child"
+          (cd "$child" && bun "$GITHUB_WORKSPACE/src/cli.ts" worktree status --vcs jj) | grep -q delivery-demo
+
+          printf 'jj rewrite\n' > "$child/feature.txt"
+          (cd "$child" && jj status >/dev/null)
+          current="$(cd "$child" && jj log -r @ --no-graph -T commit_id)"
+          test "$(git -C "$child" rev-parse refs/heads/delivery/demo)" = "$current"
+
+          (cd "$repo" && jj bookmark set main -r delivery/demo)
+          test "$(git -C "$repo" rev-parse refs/heads/main)" = "$current"
+
+          (cd "$child" && jj bookmark set delivery/alias -r @)
+          set +e
+          ambiguous="$(cd "$child" && bun "$GITHUB_WORKSPACE/src/cli.ts" worktree finish --delete-branch --vcs jj 2>&1)"
+          code=$?
+          set -e
+          test "$code" -ne 0
+          grep -q "exactly one non-protected exported bookmark" <<<"$ambiguous"
+          test -d "$child"
+          (cd "$child" && jj bookmark delete delivery/alias)
+
+          # JJ commonly leaves a clean empty working-copy child after the delivery
+          # bookmark. Retirement must canonicalize that state to the bookmark.
+          (cd "$child" && jj new delivery/demo)
+          test -z "$(cd "$child" && jj diff -r @ --name-only)"
+          test "$(cd "$child" && jj log -r @- --no-graph -T commit_id)" = "$current"
+
+          (cd "$child" && bun "$GITHUB_WORKSPACE/src/cli.ts" worktree finish --delete-branch --vcs jj)
+          test ! -d "$child"
+          ! git -C "$repo" show-ref --verify --quiet refs/heads/delivery/demo
