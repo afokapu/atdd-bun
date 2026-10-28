@@ -471,7 +471,7 @@ async function createWorkspace(state: Layout, target: { leaf: string; target: st
   return bad(bookmark.err || bookmark.out || `bookmark ${branch} was not exported to the colocated Git repository`);
 }
 
-async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string; tip: string; name: string }> {
+async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string; tip: string }> {
   if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
   const conflict = await noConflicts(state.current);
   if (conflict.error !== undefined) return conflict;
@@ -489,23 +489,50 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
   }
   const tip = await branchCommit(state.primary, found.branch);
   if (!tip || tip !== delivery) return { error: `bookmark ${found.branch} must point at the delivery revision before finish` };
-  if ((await git(state.primary, ["merge-base", "--is-ancestor", tip, cfg.worktrees.primary_branch])).code) return { error: `branch ${found.branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout` };
-  return { branch: found.branch, tip, name: branchPath(found.branch) };
+  const undelivered = await deliveryError(state, found.branch, tip, cfg);
+  return undelivered ? { error: undelivered } : { branch: found.branch, tip };
 }
 
-// The sanitized bookmark name is not sufficient authority to remove a workspace;
-// verify the JJ registry resolves that name back to the exact current path.
-async function verifyWorkspace(state: Layout, candidate: { name: string }) {
-  const recorded = await jj(state.primary, ["workspace", "root", "--name", candidate.name]);
-  if (recorded.code) return `workspace ${candidate.name} is not registered: ${recorded.err || recorded.out}`;
-  const recordedPath = await realpath(recorded.out).catch(() => null);
-  return recordedPath === state.current ? null : `workspace ${candidate.name} resolves to ${recorded.out}, not ${state.current}`;
+async function jjRevision(root: string, commit: string): Promise<{ error: string } | { empty: boolean; conflict: boolean; parents: string[] }> {
+  const info = await jj(root, ["log", "-r", commit, "--no-graph", "-T", 'if(empty, "empty", "content") ++ " " ++ if(conflict, "conflict", "clean") ++ " " ++ parents.map(|p| p.commit_id()).join(" ")']);
+  if (info.code || !info.out) return { error: `could not inspect Jujutsu revision ${commit}: ${info.err || info.out}` };
+  const [emptiness, conflict, ...parents] = info.out.split(" ");
+  return { empty: emptiness === "empty", conflict: conflict === "conflict", parents };
+}
+
+// A tip is delivered when it is an ancestor of the protected branch, or when it
+// reaches such an ancestor only through empty single-parent changes (nothing to
+// deliver). Content, conflicts, or merge shapes outside that chain fail closed.
+async function deliveryError(state: Layout, branch: string, tip: string, cfg: HookPolicy): Promise<string | null> {
+  let commit = tip;
+  for (;;) {
+    const info = await jjRevision(state.primary, commit);
+    if ("error" in info) return info.error;
+    if (info.conflict) return `bookmark ${branch} has unresolved conflicts`;
+    if (!(await git(state.primary, ["merge-base", "--is-ancestor", commit, cfg.worktrees.primary_branch])).code) return null;
+    if (!info.empty || info.parents.length !== 1) return `branch ${branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout`;
+    commit = info.parents[0]!;
+  }
+}
+
+// The workspace name is never derived from the bookmark (bookmarks can be
+// renamed). Resolve it from the JJ registry: exactly one registered workspace
+// must resolve, by real path, to the current directory.
+async function resolveWorkspace(state: Layout): Promise<{ error: string } | { name: string }> {
+  const listed = await jj(state.primary, ["workspace", "list", "-T", 'name ++ "\\n"']);
+  if (listed.code) return { error: `could not list Jujutsu workspaces: ${listed.err || listed.out}` };
+  const matches: string[] = [];
+  for (const name of listed.out.split("\n").filter(Boolean)) {
+    const recorded = await jj(state.primary, ["workspace", "root", "--name", name]);
+    if (!recorded.code && await realpath(recorded.out).catch(() => null) === state.current) matches.push(name);
+  }
+  return matches.length === 1 ? { name: matches[0]! } : { error: `${state.current} is not registered as exactly one Jujutsu workspace; found ${matches.length}` };
 }
 
 async function deleteBookmark(state: Layout, candidate: { branch: string; tip: string }, cfg: HookPolicy) {
   const now = await branchCommit(state.primary, candidate.branch);
-  const merged = !(await git(state.primary, ["merge-base", "--is-ancestor", candidate.tip, cfg.worktrees.primary_branch])).code;
-  if (now !== candidate.tip || !merged) return `workspace removed, but bookmark ${candidate.branch} was not deleted: its tip changed or is no longer merged into ${cfg.worktrees.primary_branch}`;
+  const merged = now === candidate.tip && !(await deliveryError(state, candidate.branch, candidate.tip, cfg));
+  if (!merged) return `workspace removed, but bookmark ${candidate.branch} was not deleted: its tip changed or is no longer merged into ${cfg.worktrees.primary_branch}`;
   const deleted = await jj(state.primary, ["bookmark", "delete", candidate.branch]);
   return deleted.code ? `workspace removed, but bookmark deletion failed: ${deleted.err || deleted.out}` : null;
 }
@@ -531,9 +558,9 @@ async function finishJjWorktree(root: string, deleteBranch: boolean, cfg: HookPo
   if ("error" in state) return bad(state.error);
   const candidate = await finishCandidate(state, cfg);
   if ("error" in candidate) return bad(candidate.error);
-  const mismatch = await verifyWorkspace(state, candidate);
-  if (mismatch) return bad(mismatch);
-  const removed = await jj(state.primary, ["workspace", "remove", candidate.name]);
+  const workspace = await resolveWorkspace(state);
+  if ("error" in workspace) return bad(workspace.error);
+  const removed = await jj(state.primary, ["workspace", "remove", workspace.name]);
   if (removed.code) return bad(removed.err || removed.out);
   if (!deleteBranch) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
   const deletionError = await deleteBookmark(state, candidate, cfg);
