@@ -1,3 +1,7 @@
+// URN: test:toolkit:hooks-jj-finish:E001-UNIT-001-bound-test-file
+// Acceptance: acc:toolkit:E001-UNIT-001-bound-test-file
+// Phase: UNIT
+// Layer: integration
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdtemp, realpath, rename, rm, writeFile } from "node:fs/promises";
