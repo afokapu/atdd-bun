@@ -603,8 +603,8 @@ export function hasProductionExecutionProof(text, file, croot) {
     if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
       (execution && assertsExpression(text, escaped(execution)))) return true;
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
-    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}\\.${field}`)));
+    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\??\\.trace\\b`).exec(text)?.[1];
+    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}\\??\\.${field}`)));
   });
 }
 
@@ -629,13 +629,13 @@ export function traceHasProductionProvenance(text, file, croot) {
   return productionExecutionProofs(text, file, croot).some(({ execution, direct }) => {
     if (direct) return direct.traceBound && REQUIRED_TRACE_FIELDS.every(([field]) => direct.traceFields.includes(field));
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
+    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\??\\.trace\\b`).exec(text)?.[1];
     return Boolean(trace);
   });
 }
 
 export function assertedTraceFields(text, traceName = "trace") {
-  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}\\.${field}`)).map(([field]) => field);
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}\\??\\.${field}`)).map(([field]) => field);
 }
 
 // A smoke path has a real Station Master call and observes that call's returned value; separately

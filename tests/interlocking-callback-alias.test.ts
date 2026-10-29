@@ -189,7 +189,11 @@ test("an optional-chain read of a different object is not the production trace",
 });
 
 test("an optional-chain call on the resolution still rebinds it before execution", async () => {
-  const mutated = `  resolution?.retarget();\n${DIRECT_EXECUTION}`;
+  // The declaration form (constructed from resolution.trainPath) is the one that checks rebinding.
+  const declaration = `  const outer: any = await new TrainRunner(resolution.trainPath).execute(resolution);`;
+  const clean = await findingsFor(caseFile(TRANSPARENT_WRAPPER, declaration, OPTIONAL_ASSERTIONS));
+  expect(clean).toEqual({ trace: 0, runner: 0 });
+  const mutated = `  resolution?.retarget();\n${declaration}`;
   const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, mutated, OPTIONAL_ASSERTIONS));
   expect(found.trace > 0 || found.runner > 0).toBe(true);
 });
