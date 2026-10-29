@@ -1,3 +1,7 @@
+// URN: test:toolkit:interlocking-callback-alias:E001-UNIT-001-transparent-callback-return-alias
+// Acceptance: acc:toolkit:E001-UNIT-001-bound-test-file
+// Phase: UNIT
+// Layer: integration
 import { expect, test } from "bun:test";
 import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
