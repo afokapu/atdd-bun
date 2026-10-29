@@ -96,8 +96,7 @@ test("a transparent alias keeps exact trace field recognition", async () => {
   expect(found.trace).toBeGreaterThan(0);
 });
 
-test("nontransparent wrappers and callbacks do not alias the inner execution", async () => {
-  const cases: Record<string, [string, string]> = {
+const NONTRANSPARENT: Record<string, [string, string]> = {
     "wrapper returns a fabricated value": [
       `async function withDeployment<T>(work: () => Promise<T>): Promise<any> {
   await work();
@@ -142,9 +141,55 @@ test("nontransparent wrappers and callbacks do not alias the inner execution", a
       TRANSPARENT_WRAPPER,
       `  const outer: any = await withDeployment(async () => new TrainRunner("train:unrelated").execute({}));`,
     ],
-  };
-  for (const [label, [wrapper, call]] of Object.entries(cases)) {
-    const found = await findingsFor(caseFile(wrapper, call));
-    expect({ label, flagged: found.trace > 0 || found.runner > 0 }).toEqual({ label, flagged: true });
+};
+
+async function flaggedLabels(assertions: string): Promise<Record<string, boolean>> {
+  const flagged: Record<string, boolean> = {};
+  for (const [label, [wrapper, call]] of Object.entries(NONTRANSPARENT)) {
+    const found = await findingsFor(caseFile(wrapper, call, assertions));
+    flagged[label] = found.trace > 0 || found.runner > 0;
   }
+  return flagged;
+}
+
+const allFlagged = () => Object.fromEntries(Object.keys(NONTRANSPARENT).map((label) => [label, true]));
+
+test("nontransparent wrappers and callbacks do not alias the inner execution", async () => {
+  expect(await flaggedLabels(ASSERTIONS)).toEqual(allFlagged());
+});
+
+// The real Decision witness reads the trace through optional chains: `const trace = outer?.trace` and
+// `expect(trace?.field)`. A transparent optional member read is the same member read; calls, writes,
+// and every nontransparent alias stay rejected.
+const OPTIONAL_ASSERTIONS = ASSERTIONS.replace("outer.trace", "outer?.trace").replace(/trace\./g, "trace?.");
+const DIRECT_EXECUTION = `  const outer: any = await new TrainRunner(resolution.trainId).execute({});`;
+
+test("optional-chain trace reads follow a transparent alias and a direct execution", async () => {
+  expect(OPTIONAL_ASSERTIONS).toContain("outer?.trace");
+  expect(OPTIONAL_ASSERTIONS).toContain("trace?.guardId");
+  expect(await findingsFor(caseFile(TRANSPARENT_WRAPPER, EXPRESSION_CALLBACK, OPTIONAL_ASSERTIONS))).toEqual({ trace: 0, runner: 0 });
+  expect(await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, OPTIONAL_ASSERTIONS))).toEqual({ trace: 0, runner: 0 });
+  const mixed = ASSERTIONS.replace("outer.trace", "outer?.trace");
+  expect(await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, mixed))).toEqual({ trace: 0, runner: 0 });
+});
+
+test("optional-chain reads keep exact trace field recognition", async () => {
+  const partial = OPTIONAL_ASSERTIONS.replace(/  expect\(trace\?\.guardId\).*\n/, "");
+  expect((await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, partial))).trace).toBeGreaterThan(0);
+});
+
+test("optional-chain reads keep every nontransparent alias rejected", async () => {
+  expect(await flaggedLabels(OPTIONAL_ASSERTIONS)).toEqual(allFlagged());
+});
+
+test("an optional-chain read of a different object is not the production trace", async () => {
+  const detached = `${DIRECT_EXECUTION}\n  const other: any = { trace: {} };`;
+  const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, detached, OPTIONAL_ASSERTIONS.replace("outer?.trace", "other?.trace")));
+  expect(found.trace).toBeGreaterThan(0);
+});
+
+test("an optional-chain call on the resolution still rebinds it before execution", async () => {
+  const mutated = `  resolution?.retarget();\n${DIRECT_EXECUTION}`;
+  const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, mutated, OPTIONAL_ASSERTIONS));
+  expect(found.trace > 0 || found.runner > 0).toBe(true);
 });
