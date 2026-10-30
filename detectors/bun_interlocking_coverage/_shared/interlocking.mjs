@@ -8,7 +8,7 @@
 // data (snake_case, plan/_trains/_interlockings/**); the e2e tests are Bun/TS under e2e/**.
 
 import { excludedPath } from "../../../lib/scan.mjs";
-import { directInterlockingExecutionProofs, entryDelegatedAction, provenJourneyAction } from "../../../lib/journey-chain.mjs";
+import { directInterlockingExecutionProofs, entryDelegatedAction, provenJourneyAction, transparentCallbackAliases } from "../../../lib/journey-chain.mjs";
 import { existsSync, readFileSync, statSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 
@@ -529,7 +529,11 @@ function firstRebinding(text, name, executeArgument, returns) {
 function resolutionBinding(after, resolution, executeArgument) {
   const statement = after.slice(enclosingEnd(after) + 1);
   const scope = statement.slice(0, enclosingEnd(statement));
-  return { scope, bound: scope.slice(0, firstRebinding(scope, resolution, executeArgument, topLevelReturns(scope))) };
+  return {
+    scope,
+    offset: after.length - statement.length,
+    bound: scope.slice(0, firstRebinding(scope, resolution, executeArgument, topLevelReturns(scope))),
+  };
 }
 
 function trainExecutionForms(resolution) {
@@ -541,15 +545,20 @@ function trainExecutionForms(resolution) {
   return { legacy, constructed, declaration: `${constructed}${r}\\s*(?:,|\\))` };
 }
 
-function resolutionTrainExecution(after, resolution) {
+// `aliases` are the transparent callback-return aliases of this resolution's execution (see
+// transparentCallbackAliases); only one declared inside the resolution's binding names the execution.
+function resolutionTrainExecution(after, resolution, aliases = [], base = 0) {
   const { legacy, constructed, declaration } = trainExecutionForms(resolution);
-  const { scope, bound } = resolutionBinding(after, resolution, constructed);
+  const { scope, bound, offset } = resolutionBinding(after, resolution, constructed);
   const assignment = `\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?`;
   const assigned = new RegExp(`${assignment}${legacy}`).exec(after) ?? new RegExp(`${assignment}${declaration}`).exec(bound);
   const returns = `\\breturn\\s+(?:await\\s+)?`;
+  const first = base + offset;
+  const alias = aliases.find((candidate) => candidate.start >= first && candidate.start < first + bound.length);
   return {
     execution: assigned?.[1] ?? null,
-    found: Boolean(assigned || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
+    alias: alias?.alias ?? null,
+    found: Boolean(assigned || alias || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
     returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
       Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
   };
@@ -566,10 +575,21 @@ export function productionExecutionProofs(text, file, croot) {
     const direct = new RegExp(`new\\s+${PROD_INTERLOCKING}\\b`).test(receiver);
     const named = [...receivers].some((name) => receiver.trim().endsWith(name));
     if (!direct && !named) continue;
-    const proof = resolutionTrainExecution(text.slice((m.index ?? 0) + whole.length), resolution);
+    const base = (m.index ?? 0) + whole.length;
+    const proof = resolutionTrainExecution(text.slice(base), resolution,
+      file ? transparentCallbackAliases(text, file, resolution) : [], base);
     if (proof.found) proofs.push({ resolution, execution: proof.execution });
+    if (proof.alias && proof.alias !== proof.execution) proofs.push({ resolution, execution: proof.alias });
   }
   return proofs;
+}
+
+// A member read of a binding: `.` or the optional-chain `?.`. Calls and writes are never matched here.
+const MEMBER = "\\??\\.";
+
+// Name of the const/let/var bound to `<execution>.trace` (or `<execution>?.trace`), or undefined.
+function boundTraceName(text, execution) {
+  return new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}${MEMBER}trace\\b`).exec(text)?.[1];
 }
 
 export function assertsExpression(text, expression, expected = null) {
@@ -591,8 +611,8 @@ export function hasProductionExecutionProof(text, file, croot) {
     if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
       (execution && assertsExpression(text, escaped(execution)))) return true;
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
-    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}\\.${field}`)));
+    const trace = boundTraceName(text, execution);
+    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}${MEMBER}${field}`)));
   });
 }
 
@@ -617,13 +637,13 @@ export function traceHasProductionProvenance(text, file, croot) {
   return productionExecutionProofs(text, file, croot).some(({ execution, direct }) => {
     if (direct) return direct.traceBound && REQUIRED_TRACE_FIELDS.every(([field]) => direct.traceFields.includes(field));
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\.trace\\b`).exec(text)?.[1];
+    const trace = boundTraceName(text, execution);
     return Boolean(trace);
   });
 }
 
 export function assertedTraceFields(text, traceName = "trace") {
-  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}\\.${field}`)).map(([field]) => field);
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`)).map(([field]) => field);
 }
 
 // A smoke path has a real Station Master call and observes that call's returned value; separately
