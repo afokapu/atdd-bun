@@ -584,6 +584,14 @@ export function productionExecutionProofs(text, file, croot) {
   return proofs;
 }
 
+// A member read of a binding: `.` or the optional-chain `?.`. Calls and writes are never matched here.
+const MEMBER = "\\??\\.";
+
+// Name of the const/let/var bound to `<execution>.trace` (or `<execution>?.trace`), or undefined.
+function boundTraceName(text, execution) {
+  return new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}${MEMBER}trace\\b`).exec(text)?.[1];
+}
+
 export function assertsExpression(text, expression, expected = null) {
   const pat = new RegExp(`\\bexpect\\s*\\(\\s*(?:await\\s+)?${expression}\\s*\\)\\s*\\.(?:to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match|BeTruthy)|not\\.to(?:Be|BeDefined|Equal|StrictEqual|Contain|ContainEqual|MatchObject|Match))\\b([\\s\\S]{0,220})`);
   const m = pat.exec(text);
@@ -603,8 +611,8 @@ export function hasProductionExecutionProof(text, file, croot) {
     if (assertsExpression(text, `${escaped(resolution)}\\.(?:routeId|trainId|selectedTrainId)`) ||
       (execution && assertsExpression(text, escaped(execution)))) return true;
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\??\\.trace\\b`).exec(text)?.[1];
-    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}\\??\\.${field}`)));
+    const trace = boundTraceName(text, execution);
+    return Boolean(trace && REQUIRED_TRACE_FIELDS.some(([field]) => assertsExpression(text, `${escaped(trace)}${MEMBER}${field}`)));
   });
 }
 
@@ -629,13 +637,13 @@ export function traceHasProductionProvenance(text, file, croot) {
   return productionExecutionProofs(text, file, croot).some(({ execution, direct }) => {
     if (direct) return direct.traceBound && REQUIRED_TRACE_FIELDS.every(([field]) => direct.traceFields.includes(field));
     if (!execution) return false;
-    const trace = new RegExp(`\\b(?:const|let|var)\\s+(${ident})(?:\\s*:\\s*[^=;\\n]+)?\\s*=\\s*(?:await\\s+)?${escaped(execution)}\\??\\.trace\\b`).exec(text)?.[1];
+    const trace = boundTraceName(text, execution);
     return Boolean(trace);
   });
 }
 
 export function assertedTraceFields(text, traceName = "trace") {
-  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}\\??\\.${field}`)).map(([field]) => field);
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`)).map(([field]) => field);
 }
 
 // A smoke path has a real Station Master call and observes that call's returned value; separately
