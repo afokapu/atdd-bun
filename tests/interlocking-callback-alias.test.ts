@@ -15,6 +15,9 @@ import { runImplementation } from "../src/enforce";
 // exact transparent shape may alias the inner execution; every other wrapper or callback is a
 // fabrication channel and must stay rejected.
 
+// Each case spawns the detector subprocess; the looped cases exceed bun's default 5s test timeout on CI.
+const TIMEOUT = 120_000;
+
 const detector = resolve(import.meta.dir, "../detectors/bun_interlocking_coverage");
 const RULE = "tester.bun.interlocking-trace-binds-declared-route";
 const RUNNER = "tester.bun.interlocking-production-runner-used";
@@ -88,13 +91,13 @@ test("a transparent callback return alias follows the inner production execution
     return new TrainRunner(resolution.trainId).execute({});
   });`));
   expect(direct).toEqual({ trace: 0, runner: 0 });
-});
+}, TIMEOUT);
 
 test("a transparent alias keeps exact trace field recognition", async () => {
   const partial = ASSERTIONS.replace(/  expect\(trace\.guardId\).*\n/, "");
   const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, EXPRESSION_CALLBACK, partial));
   expect(found.trace).toBeGreaterThan(0);
-});
+}, TIMEOUT);
 
 const NONTRANSPARENT: Record<string, [string, string]> = {
     "wrapper returns a fabricated value": [
@@ -156,7 +159,7 @@ const allFlagged = () => Object.fromEntries(Object.keys(NONTRANSPARENT).map((lab
 
 test("nontransparent wrappers and callbacks do not alias the inner execution", async () => {
   expect(await flaggedLabels(ASSERTIONS)).toEqual(allFlagged());
-});
+}, TIMEOUT);
 
 // The real Decision witness reads the trace through optional chains: `const trace = outer?.trace` and
 // `expect(trace?.field)`. A transparent optional member read is the same member read; calls, writes,
@@ -171,22 +174,22 @@ test("optional-chain trace reads follow a transparent alias and a direct executi
   expect(await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, OPTIONAL_ASSERTIONS))).toEqual({ trace: 0, runner: 0 });
   const mixed = ASSERTIONS.replace("outer.trace", "outer?.trace");
   expect(await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, mixed))).toEqual({ trace: 0, runner: 0 });
-});
+}, TIMEOUT);
 
 test("optional-chain reads keep exact trace field recognition", async () => {
   const partial = OPTIONAL_ASSERTIONS.replace(/  expect\(trace\?\.guardId\).*\n/, "");
   expect((await findingsFor(caseFile(TRANSPARENT_WRAPPER, DIRECT_EXECUTION, partial))).trace).toBeGreaterThan(0);
-});
+}, TIMEOUT);
 
 test("optional-chain reads keep every nontransparent alias rejected", async () => {
   expect(await flaggedLabels(OPTIONAL_ASSERTIONS)).toEqual(allFlagged());
-});
+}, TIMEOUT);
 
 test("an optional-chain read of a different object is not the production trace", async () => {
   const detached = `${DIRECT_EXECUTION}\n  const other: any = { trace: {} };`;
   const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, detached, OPTIONAL_ASSERTIONS.replace("outer?.trace", "other?.trace")));
   expect(found.trace).toBeGreaterThan(0);
-});
+}, TIMEOUT);
 
 test("an optional-chain call on the resolution still rebinds it before execution", async () => {
   // The declaration form (constructed from resolution.trainPath) is the one that checks rebinding.
@@ -196,4 +199,4 @@ test("an optional-chain call on the resolution still rebinds it before execution
   const mutated = `  resolution?.retarget();\n${declaration}`;
   const found = await findingsFor(caseFile(TRANSPARENT_WRAPPER, mutated, OPTIONAL_ASSERTIONS));
   expect(found.trace > 0 || found.runner > 0).toBe(true);
-});
+}, TIMEOUT);
