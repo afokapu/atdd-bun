@@ -409,3 +409,41 @@ for (const [name, { text, edits, extra }] of Object.entries(f1Positives)) {
     expect(await findings(text ?? base, edits, extra)).toEqual([]);
   });
 }
+
+// Review F1d: a directory specifier resolves to `index.<suffix>` for every module suffix, so a writer behind a
+// directory import cannot hide from the closure whatever its extension.
+const INDEX_SUFFIXES = [".ts", ".tsx", ".mts", ".cts", ".js", ".mjs", ".cjs", ".jsx"];
+const deepWriter = `import { JOURNEY_MAP } from "../../../src/server.ts";\n(JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`;
+const deepReader = `import { JOURNEY_MAP } from "../../../src/server.ts";\nexport const declared = JOURNEY_MAP.create_world.path;\n`;
+
+const f1d: Record<string, Case> = {};
+for (const suffix of INDEX_SUFFIXES) {
+  f1d[`F1d: a writer sits behind a directory import resolving to index${suffix}`] = withSupport(
+    `import "./deep";\n`,
+    [`e2e/support/deep/index${suffix}`, deepWriter],
+  );
+  f1d[`F1d: a writer sits behind a directory import with a trailing slash resolving to index${suffix}`] = withSupport(
+    `import "./deep/";\n`,
+    [`e2e/support/deep/index${suffix}`, deepWriter],
+  );
+}
+f1d["F1d: the test imports the writer directory directly"] = {
+  edits: [edit(`import { JourneyRunner }`, `import "../support/deep";\nimport { JourneyRunner }`)],
+  extra: { "e2e/support/deep/index.tsx": deepWriter },
+};
+f1d["F1d: a writer behind a directory import is reached transitively"] = withSupport(
+  `import "./mid";\n`,
+  ["e2e/support/mid/index.mts", `import "../deep";\n`],
+  ["e2e/support/deep/index.cts", deepWriter],
+);
+
+for (const [name, { edits, extra }] of Object.entries(f1d)) {
+  test(`production-runner-used still fires for the object-form JourneyEntry: ${name}`, async () => {
+    expect(await findings(base, edits, extra)).toContain(JOURNEY_TEST);
+  });
+}
+
+test("production-runner-used accepts the object-form JourneyEntry: F1d: a read-only module behind a directory import", async () => {
+  const { edits, extra } = withSupport(`import "./deep";\n`, ["e2e/support/deep/index.tsx", deepReader]);
+  expect(await findings(base, edits, extra)).toEqual([]);
+});
