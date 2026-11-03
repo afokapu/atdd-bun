@@ -345,7 +345,7 @@ type PrimaryPolicy = { policy: HookPolicy; source: { path: string; commit: strin
 async function primaryPolicy(root: string): Promise<PrimaryPolicy> { const found = await primaryRoot(await realpath(resolve(root))); if (!found) return { policy: defaultHookPolicy, source: null }; const primary = await realpath(found), revision = await git(primary, ["rev-parse", "--verify", "HEAD^{commit}"]); if (revision.code || !revision.out) return { policy: defaultHookPolicy, source: null }; const source = { path: primary, commit: revision.out }, committed = await git(primary, ["show", `${source.commit}:atdd-bun.yaml`]); return { policy: committed.code ? defaultHookPolicy : parsePolicy(committed.out), source }; }
 const disabledWorktreePolicy = (source: PrimaryPolicy["source"]) => bad(source ? `worktree policy is disabled in primary checkout ${source.path} at ${source.commit}; update the primary checkout and try again` : "worktree policy is disabled");
 export type WorktreeLayout = { primary: string; worktreeRoot: string; current: string; branch: string };
-async function layout(root: string, cfg: WorktreePolicy): Promise<WorktreeLayout | { error: string }> { const current = await realpath(resolve(root)), commonRoot = await primaryRoot(current); if (!commonRoot) return { error: "not inside a Git worktree" }; const primary = await realpath(commonRoot), expectedPrimary = cfg.primary_directory === "." ? primary : join(dirname(primary), cfg.primary_directory); if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` }; const branch = (await git(primary, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out; if (branch !== cfg.primary_branch) return { error: `primary checkout ${primary} must be on ${cfg.primary_branch}, not ${branch || "a detached HEAD"}` }; return { primary, worktreeRoot: resolve(primary, cfg.root.replaceAll("{repo}", basename(primary))), current, branch: (await git(current, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out }; }
+async function layout(root: string, cfg: WorktreePolicy): Promise<WorktreeLayout | { error: string }> { const current = await realpath(resolve(root)), commonRoot = await primaryRoot(current); if (!commonRoot) return { error: "not inside a Git worktree" }; const primary = await realpath(commonRoot), expectedPrimary = cfg.primary_directory === "." ? primary : join(dirname(primary), cfg.primary_directory); if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` }; const branch = (await git(primary, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out; if (branch !== cfg.primary_branch && !(await jjPrimaryOnBranch(primary, cfg.primary_branch))) return { error: `primary checkout ${primary} must be on ${cfg.primary_branch}, not ${branch || "a detached HEAD"}` }; return { primary, worktreeRoot: resolve(primary, cfg.root.replaceAll("{repo}", basename(primary))), current, branch: (await git(current, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out }; }
 async function worktreeCommitPolicy(root: string, cfg: WorktreePolicy): Promise<string | null> { if (!cfg.enabled || !cfg.require_linked_worktree) return null; const state = await layout(root, cfg); if ("error" in state) return state.error; if (state.current === state.primary) return `commits must use a linked worktree beneath ${state.worktreeRoot}; run: atdd-bun worktree start <branch>`; if (!inside(state.worktreeRoot, state.current)) return `linked worktree ${state.current} is outside required root ${state.worktreeRoot}`; if (!state.branch) return "commits require a named branch, not a detached HEAD"; return null; }
 
 export async function runHook(event: HookEvent, root = process.cwd(), args: string[] = [], stdin = "") {
@@ -419,6 +419,17 @@ async function branchForCommit(root: string, commit: string, protectedBranches: 
   return candidates.length === 1
     ? { branch: candidates[0]! }
     : { error: `current Jujutsu revision must have exactly one non-protected exported bookmark; found ${candidates.length}` };
+}
+
+// A JJ-colocated primary keeps Git HEAD detached at its working-copy parent, so JJ state decides:
+// the parent must be exactly one commit and it must be the primary branch or its origin bookmark.
+async function jjPrimaryOnBranch(primary: string, branch: string): Promise<boolean> {
+  if (!existsSync(join(primary, ".jj"))) return false;
+  const name = JSON.stringify(branch), lines = async (revset: string) => {
+    const result = await jj(primary, ["log", "--ignore-working-copy", "--no-graph", "-r", revset, "-T", 'commit_id ++ "\\n"']).catch(() => null);
+    return result && !result.code ? result.out.split("\n").filter(Boolean) : [];
+  };
+  return (await lines("@-")).length === 1 && (await lines(`@- & (bookmarks(exact:${name}) | remote_bookmarks(exact:${name}, exact:"origin"))`)).length === 1;
 }
 
 type Layout = { primary: string; worktreeRoot: string; current: string };
