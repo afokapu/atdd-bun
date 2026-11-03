@@ -298,3 +298,114 @@ for (const [name, { edits, extra }] of Object.entries(closureNegatives)) {
     expect(await findings(base, edits, extra)).toContain(JOURNEY_TEST);
   });
 }
+
+// Review F1a/F1b/F1c: write targets beyond plain assignment, TS import-equals access, and .js/.mjs/.cjs/.jsx
+// specifiers that name local TypeScript modules. Each must keep the imported map refused (a finding).
+type Case = { text?: string; edits: Edit[]; extra: Record<string, string> };
+const RUNTIME = `const runtime = { clock: "fixed" };`;
+const namedHead = `import { JOURNEY_MAP } from ${SERVER_SPEC};\n`;
+const namespaceHead = `import * as station from ${SERVER_SPEC};\n`;
+
+const writeForms = (m: string): Record<string, string> => ({
+  "an object-destructuring target": `({ p: (${m} as any).create_world.path } = { p: ${REWRITE} });`,
+  "an object-destructuring target with a default": `({ p: (${m} as any).create_world.path = "x" } = { p: ${REWRITE} });`,
+  "an array-destructuring target": `[(${m} as any).create_world.path] = [${REWRITE}];`,
+  "a nested destructuring target": `[{ p: (${m} as any).create_world.path }] = [{ p: ${REWRITE} }];`,
+  "an array-rest target": `[...(${m} as any).create_world.path] = [${REWRITE}];`,
+  "a whole-entry destructuring target": `[(${m} as any).create_world] = [{ path: ${REWRITE} }];`,
+  "a for-of target": `for ((${m} as any).create_world.path of [${REWRITE}]) { break; }`,
+  "a for-in target": `for ((${m} as any).create_world.path in { [${REWRITE}]: 1 }) { break; }`,
+  "a destructuring target on a const entry alias": `const aliased = (${m} as any).create_world;\n({ p: aliased.path } = { p: ${REWRITE} });`,
+  "a for-of target on a const entry alias": `const aliased = (${m} as any).create_world;\nfor (aliased.path of [${REWRITE}]) { break; }`,
+});
+
+const f1a: Record<string, Case> = {};
+for (const [form, statement] of Object.entries(writeForms("JOURNEY_MAP")))
+  f1a[`F1a: a side-effect module with a named import uses ${form}`] = withSupport(`${namedHead}${statement}\n`);
+for (const [form, statement] of Object.entries(writeForms("station.JOURNEY_MAP")))
+  f1a[`F1a: a side-effect module with a namespace import uses ${form}`] = withSupport(`${namespaceHead}${statement}\n`);
+for (const form of ["an object-destructuring target", "an array-destructuring target", "a for-of target"]) {
+  f1a[`F1a: the test itself uses ${form} on the namespace map`] = {
+    edits: [edit(RUNTIME, `${RUNTIME}\n${writeForms("stationMaster.JOURNEY_MAP")[form]}`)],
+    extra: {},
+  };
+  f1a[`F1a: the test itself uses ${form} on a named-imported map`] = {
+    text: journeyTest(`import { JOURNEY_MAP } from ${SERVER_SPEC};`, "JOURNEY_MAP[ACTION]"),
+    edits: [edit(RUNTIME, `${RUNTIME}\n${writeForms("JOURNEY_MAP")[form]}`)],
+    extra: {},
+  };
+}
+
+const f1b: Record<string, Case> = {
+  "F1b: a side-effect module assigns through an import-equals require": withSupport(
+    `import station = require(${SERVER_SPEC});\nstation.JOURNEY_MAP.create_world.path = ${REWRITE};\n`,
+  ),
+  "F1b: a side-effect module uses Object.assign through an import-equals require": withSupport(
+    `import station = require(${SERVER_SPEC});\nObject.assign(station.JOURNEY_MAP.create_world, { path: ${REWRITE} });\n`,
+  ),
+  "F1b: a side-effect module aliases the namespace map by import-equals": withSupport(
+    `${namespaceHead}import map = station.JOURNEY_MAP;\n(map as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "F1b: a side-effect module aliases the named map by import-equals": withSupport(
+    `${namedHead}import map = JOURNEY_MAP;\n(map as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "F1b: a side-effect module hands the namespace map on by export import-equals": withSupport(
+    `${namespaceHead}export import map = station.JOURNEY_MAP;\n`,
+  ),
+  "F1b: a side-effect module hands the map module on by export import-equals require": withSupport(
+    `export import station = require(${SERVER_SPEC});\n`,
+  ),
+  "F1b: a later writer rewrites the map handed on by export import-equals": withSupport(
+    `import { map } from "./exporter.ts";\n(map as any).create_world.path = ${REWRITE};\n`,
+    ["e2e/support/exporter.ts", `${namespaceHead}export import map = station.JOURNEY_MAP;\n`],
+  ),
+  "F1b: the test itself aliases the namespace map by import-equals": {
+    edits: [edit(RUNTIME, `${RUNTIME}\nimport map = stationMaster.JOURNEY_MAP;\n(map as any).create_world.path = ${REWRITE};`)],
+    extra: {},
+  },
+};
+
+const viaSpecifier = (specifier: string, file: string, source: string, ...more: Array<[string, string]>): Case => ({
+  edits: [edit(`import { JourneyRunner }`, `import "${specifier}";\nimport { JourneyRunner }`)],
+  extra: { [file]: source, ...Object.fromEntries(more) },
+});
+const writer = `${namedHead}(JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`;
+const f1c: Record<string, Case> = {
+  "F1c: a writer is imported through a .js specifier for a .ts module": viaSpecifier("../support/patch-map.js", "e2e/support/patch-map.ts", writer),
+  "F1c: a writer is imported through a .mjs specifier for a .mts module": viaSpecifier("../support/patch-map.mjs", "e2e/support/patch-map.mts", writer),
+  "F1c: a writer is imported through a .cjs specifier for a .cts module": viaSpecifier("../support/patch-map.cjs", "e2e/support/patch-map.cts", writer),
+  "F1c: a writer is imported through a .jsx specifier for a .tsx module": viaSpecifier("../support/patch-map.jsx", "e2e/support/patch-map.tsx", writer),
+  "F1c: a writer is only transitively imported through a .js specifier": withSupport(
+    `import "./deep-patch.js";\n`,
+    ["e2e/support/deep-patch.ts", writer],
+  ),
+  "F1c: a writer imports the map module through a .js specifier": withSupport(
+    `import { JOURNEY_MAP } from "../../src/server.js";\n(JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "F1c: a writer imports the namespace through a .js specifier": withSupport(
+    `import * as station from "../../src/server.js";\n(station.JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+};
+
+for (const [name, { text, edits, extra }] of Object.entries({ ...f1a, ...f1b, ...f1c })) {
+  test(`production-runner-used still fires for the object-form JourneyEntry: ${name}`, async () => {
+    expect(await findings(text ?? base, edits, extra)).toContain(JOURNEY_TEST);
+  });
+}
+
+const readOnly = `${namedHead}export const declared = JOURNEY_MAP.create_world.path;\n`;
+const f1Positives: Record<string, Case> = {
+  "F1b: an import-equals require of an unrelated module": withSupport(
+    `import path = require("node:path");\nexport const separator = path.sep;\n`,
+  ),
+  "F1c: a read-only sibling is imported through a .js specifier": viaSpecifier("../support/patch-map.js", "e2e/support/patch-map.ts", readOnly),
+  "F1c: a read-only sibling imports the map module through a .js specifier": withSupport(
+    `import { JOURNEY_MAP } from "../../src/server.js";\nexport const declared = JOURNEY_MAP.create_world.path;\n`,
+  ),
+};
+
+for (const [name, { text, edits, extra }] of Object.entries(f1Positives)) {
+  test(`production-runner-used accepts the object-form JourneyEntry: ${name}`, async () => {
+    expect(await findings(text ?? base, edits, extra)).toEqual([]);
+  });
+}
