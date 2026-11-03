@@ -44,7 +44,7 @@ for (const scanRoot of roots) {
       if (!isInterlockingTest(text, tokens)) continue;
       const m = TRACE_OBJECT.exec(text);
       if (!m) continue; // not a trace-binding test.
-      const missing = assertedTraceFields(text);
+      const missing = assertedTraceFields(text, "trace", file, croot);
       const provenance = traceHasProductionProvenance(text, file, croot);
       if (!missing.length && provenance) continue;
       const line = lineOfIndex(text, m.index);
