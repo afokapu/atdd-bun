@@ -558,6 +558,7 @@ function resolutionTrainExecution(after, resolution, aliases = [], base = 0) {
   return {
     execution: assigned?.[1] ?? null,
     alias: alias?.alias ?? null,
+    aliasTraceFields: alias?.traceFields ?? null,
     found: Boolean(assigned || alias || new RegExp(legacy).test(after) || new RegExp(declaration).test(bound)),
     returned: new RegExp(`${returns}${legacy}`).test(after) || returnsMatch(scope, declaration, bound.length) ||
       Boolean(assigned && new RegExp(`${returns}${escaped(assigned[1])}\\s*;?`).test(after)),
@@ -579,7 +580,9 @@ export function productionExecutionProofs(text, file, croot) {
     const proof = resolutionTrainExecution(text.slice(base), resolution,
       file ? transparentCallbackAliases(text, file, resolution) : [], base);
     if (proof.found) proofs.push({ resolution, execution: proof.execution });
-    if (proof.alias && proof.alias !== proof.execution) proofs.push({ resolution, execution: proof.alias });
+    if (proof.alias && proof.alias !== proof.execution) {
+      proofs.push({ resolution, execution: proof.alias, callbackTraceFields: proof.aliasTraceFields });
+    }
   }
   return proofs;
 }
@@ -634,16 +637,20 @@ export function routeHasProductionProof(route, text, interlockingId = null, file
 }
 
 export function traceHasProductionProvenance(text, file, croot) {
-  return productionExecutionProofs(text, file, croot).some(({ execution, direct }) => {
+  return productionExecutionProofs(text, file, croot).some(({ execution, direct, callbackTraceFields }) => {
     if (direct) return direct.traceBound && REQUIRED_TRACE_FIELDS.every(([field]) => direct.traceFields.includes(field));
     if (!execution) return false;
     const trace = boundTraceName(text, execution);
-    return Boolean(trace);
+    return Boolean(trace) || Boolean(callbackTraceFields?.size);
   });
 }
 
-export function assertedTraceFields(text, traceName = "trace") {
-  return REQUIRED_TRACE_FIELDS.filter(([field]) => !assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`)).map(([field]) => field);
+// Required trace fields not asserted. A field also counts as asserted when a transparent callback return
+// alias of a production execution compares `<alias>.trace` to an object literal carrying it (the proofs
+// come from productionExecutionProofs, so only an execution proven for this file qualifies).
+export function assertedTraceFields(text, traceName = "trace", file, croot) {
+  const whole = new Set(file ? productionExecutionProofs(text, file, croot).flatMap(({ callbackTraceFields }) => [...(callbackTraceFields ?? [])]) : []);
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !whole.has(field) && !assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`)).map(([field]) => field);
 }
 
 // A smoke path has a real Station Master call and observes that call's returned value; separately
