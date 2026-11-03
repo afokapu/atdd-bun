@@ -219,7 +219,7 @@ const withSupport = (source: string, ...more: Array<[string, string]>) => ({
 
 const closurePositives: Record<string, { edits: Edit[]; extra: Record<string, string> }> = {
   "a sibling support module only reads the imported map": withSupport(
-    `import { JOURNEY_MAP } from ${SERVER_SPEC};\nexport const declared = JOURNEY_MAP.create_world.path;\nexport const keys = Object.keys(JOURNEY_MAP);\n`,
+    `import { JOURNEY_MAP } from ${SERVER_SPEC};\nexport const declared = JOURNEY_MAP.create_world.path;\nexport const journeyId = JOURNEY_MAP.create_world.journeyId;\n`,
   ),
   "a sibling support module only reads the map through a namespace": withSupport(
     `import * as station from ${SERVER_SPEC};\nexport const declared = station.JOURNEY_MAP.create_world.path;\nexport const run = station.executeAction;\n`,
