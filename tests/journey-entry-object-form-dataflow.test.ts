@@ -207,3 +207,94 @@ for (const [name, { text, edits, extra }] of Object.entries(negatives)) {
     expect(await findings(text ?? base, edits, extra)).toContain(JOURNEY_TEST);
   });
 }
+
+// Review F1: an imported JOURNEY_MAP is only static if no module of the test's local import closure can rewrite it.
+const SUPPORT = "e2e/support/patch-map.ts";
+const SERVER_SPEC = `"../../src/server.ts"`;
+const REWRITE = `"plan/_journeys/play-world-scenario.yaml"`;
+const withSupport = (source: string, ...more: Array<[string, string]>) => ({
+  edits: [edit(`import { JourneyRunner }`, `import "../support/patch-map.ts";\nimport { JourneyRunner }`)],
+  extra: { [SUPPORT]: source, ...Object.fromEntries(more) },
+});
+
+const closurePositives: Record<string, { edits: Edit[]; extra: Record<string, string> }> = {
+  "a sibling support module only reads the imported map": withSupport(
+    `import { JOURNEY_MAP } from ${SERVER_SPEC};\nexport const declared = JOURNEY_MAP.create_world.path;\nexport const keys = Object.keys(JOURNEY_MAP);\n`,
+  ),
+  "a sibling support module only reads the map through a namespace": withSupport(
+    `import * as station from ${SERVER_SPEC};\nexport const declared = station.JOURNEY_MAP.create_world.path;\nexport const run = station.executeAction;\n`,
+  ),
+};
+
+for (const [name, { edits, extra }] of Object.entries(closurePositives)) {
+  test(`production-runner-used accepts the object-form JourneyEntry: ${name}`, async () => {
+    expect(await findings(base, edits, extra)).toEqual([]);
+  });
+}
+
+const closureNegatives: Record<string, { edits: Edit[]; extra: Record<string, string> }> = {
+  "a side-effect module assigns a named-imported map entry path": withSupport(
+    `import { JOURNEY_MAP } from ${SERVER_SPEC};\n(JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module assigns through a renamed named import": withSupport(
+    `import { JOURNEY_MAP as MAP } from ${SERVER_SPEC};\n(MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module assigns through a namespace import": withSupport(
+    `import * as station from ${SERVER_SPEC};\n(station.JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module uses Object.assign on a named-imported entry": withSupport(
+    `import { JOURNEY_MAP } from ${SERVER_SPEC};\nObject.assign(JOURNEY_MAP.create_world, { path: ${REWRITE} });\n`,
+  ),
+  "a side-effect module uses Object.assign on a namespace-imported entry": withSupport(
+    `import * as station from ${SERVER_SPEC};\nObject.assign(station.JOURNEY_MAP.create_world, { path: ${REWRITE} });\n`,
+  ),
+  "a side-effect module uses Object.assign on the namespace-imported map": withSupport(
+    `import * as station from ${SERVER_SPEC};\nObject.assign(station.JOURNEY_MAP, { create_world: { path: ${REWRITE} } });\n`,
+  ),
+  "a side-effect module aliases the namespace before writing": withSupport(
+    `import * as station from ${SERVER_SPEC};\nconst alias = station as any;\nalias.JOURNEY_MAP.create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module destructures the map out of the namespace": withSupport(
+    `import * as station from ${SERVER_SPEC};\nconst { JOURNEY_MAP: map } = station;\n(map as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module reads the namespace map by element access": withSupport(
+    `import * as station from ${SERVER_SPEC};\n(station as any)["JOURNEY_MAP"].create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module reaches the map by dynamic import": withSupport(
+    `const station = await import(${SERVER_SPEC});\n(station.JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module reaches the map by require": withSupport(
+    `const station = require(${SERVER_SPEC});\nstation.JOURNEY_MAP.create_world.path = ${REWRITE};\n`,
+  ),
+  "a side-effect module re-exports the map for a later writer": withSupport(
+    `export { JOURNEY_MAP } from ${SERVER_SPEC};\n`,
+  ),
+  "a side-effect module star re-exports the map module": withSupport(
+    `export * from ${SERVER_SPEC};\n`,
+  ),
+  "a side-effect module deletes a map entry": withSupport(
+    `import { JOURNEY_MAP } from ${SERVER_SPEC};\ndelete (JOURNEY_MAP as any).create_world;\n`,
+  ),
+  "the writer is only transitively imported by the test": withSupport(
+    `import "./deep-patch.ts";\n`,
+    [`e2e/support/deep-patch.ts`, `import { JOURNEY_MAP } from ${SERVER_SPEC};\n(JOURNEY_MAP as any).create_world.path = ${REWRITE};\n`],
+  ),
+  "the writer is imported through a relative index module": withSupport(
+    `import "./deep/index.ts";\n`,
+    [`e2e/support/deep/index.ts`, `import { JOURNEY_MAP } from "../../../src/server.ts";\nObject.assign(JOURNEY_MAP.create_world, { path: ${REWRITE} });\n`],
+  ),
+  "the test itself aliases the namespace before writing": {
+    edits: [edit(`const runtime = { clock: "fixed" };`, `const runtime = { clock: "fixed" };\nconst alias = stationMaster as any;\nalias.JOURNEY_MAP.create_world.path = ${REWRITE};`)],
+    extra: {},
+  },
+  "the test itself destructures the map out of the namespace": {
+    edits: [edit(`const runtime = { clock: "fixed" };`, `const runtime = { clock: "fixed" };\nconst { JOURNEY_MAP: map } = stationMaster;\n(map as any).create_world.path = ${REWRITE};`)],
+    extra: {},
+  },
+};
+
+for (const [name, { edits, extra }] of Object.entries(closureNegatives)) {
+  test(`production-runner-used still fires for the object-form JourneyEntry: ${name}`, async () => {
+    expect(await findings(base, edits, extra)).toContain(JOURNEY_TEST);
+  });
+}
