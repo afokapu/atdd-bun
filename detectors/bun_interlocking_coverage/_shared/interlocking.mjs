@@ -649,8 +649,11 @@ export function traceHasProductionProvenance(text, file, croot) {
 // alias of a production execution compares `<alias>.trace` to an object literal carrying it (the proofs
 // come from productionExecutionProofs, so only an execution proven for this file qualifies).
 export function assertedTraceFields(text, traceName = "trace", file, croot) {
-  const whole = new Set(file ? productionExecutionProofs(text, file, croot).flatMap(({ callbackTraceFields }) => [...(callbackTraceFields ?? [])]) : []);
-  return REQUIRED_TRACE_FIELDS.filter(([field]) => !whole.has(field) && !assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`)).map(([field]) => field);
+  const comparedWhole = new Set(file
+    ? productionExecutionProofs(text, file, croot).flatMap(({ callbackTraceFields }) => [...(callbackTraceFields ?? [])])
+    : []);
+  const asserted = (field) => comparedWhole.has(field) || assertsExpression(text, `${escaped(traceName)}${MEMBER}${field}`);
+  return REQUIRED_TRACE_FIELDS.filter(([field]) => !asserted(field)).map(([field]) => field);
 }
 
 // A smoke path has a real Station Master call and observes that call's returned value; separately
