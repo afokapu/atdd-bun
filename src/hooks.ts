@@ -483,7 +483,8 @@ async function createWorkspace(state: Layout, target: { leaf: string; target: st
 }
 
 // A branch of null means the delivery bookmark is already gone and the revision is merged.
-async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string | null; tip: string }> {
+type FinishCandidate = { branch: string | null; tip: string };
+async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | FinishCandidate> {
   if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
   const conflict = await noConflicts(state.current);
   if (conflict.error !== undefined) return conflict;
@@ -527,7 +528,7 @@ async function deliveryError(state: Layout, branch: string, tip: string, cfg: Ho
     const info = await jjRevision(state.primary, commit);
     if ("error" in info) return info.error;
     if (info.conflict) return `bookmark ${branch} has unresolved conflicts`;
-    if (!(await git(state.primary, ["merge-base", "--is-ancestor", commit, cfg.worktrees.primary_branch])).code) return null;
+    if (await mergedIntoPrimary(state, commit, cfg)) return null;
     if (!info.empty || info.parents.length !== 1) return `branch ${branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout`;
     commit = info.parents[0]!;
   }
