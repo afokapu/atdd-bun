@@ -411,14 +411,14 @@ async function branchCommit(root: string, branch: string) {
 
 // A delivery commit must have one unambiguous non-protected exported bookmark.
 // Ref ordering is never used as ownership authority.
-async function branchForCommit(root: string, commit: string, protectedBranches: string[]): Promise<{ error: string } | { branch: string }> {
+async function branchForCommit(root: string, commit: string, protectedBranches: string[]): Promise<{ error: string; count?: number } | { branch: string }> {
   const refs = await git(root, ["for-each-ref", "--format=%(refname:short)", "--points-at", commit, "refs/heads/"]);
   if (refs.code) return { error: refs.err || refs.out };
   const candidates = refs.out.split("\n").map(line => line.trim()).filter(Boolean)
     .filter(name => !protectedBranches.includes(name));
   return candidates.length === 1
     ? { branch: candidates[0]! }
-    : { error: `current Jujutsu revision must have exactly one non-protected exported bookmark; found ${candidates.length}` };
+    : { error: `current Jujutsu revision must have exactly one non-protected exported bookmark; found ${candidates.length}`, count: candidates.length };
 }
 
 // A JJ-colocated primary keeps Git HEAD detached at its working-copy parent, so JJ state decides:
@@ -482,13 +482,15 @@ async function createWorkspace(state: Layout, target: { leaf: string; target: st
   return bad(bookmark.err || bookmark.out || `bookmark ${branch} was not exported to the colocated Git repository`);
 }
 
-async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string; tip: string }> {
+// A branch of null means the delivery bookmark is already gone and the revision is merged.
+async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error: string } | { branch: string | null; tip: string }> {
   if (state.current === state.primary || !inside(state.worktreeRoot, state.current)) return { error: `finish must run from a linked workspace beneath ${state.worktreeRoot}` };
   const conflict = await noConflicts(state.current);
   if (conflict.error !== undefined) return conflict;
   const current = await currentCommit(state.current);
   if (!current) return { error: "could not resolve the current Jujutsu revision" };
   let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
+  if ("error" in found && found.count === 0 && await mergedIntoPrimary(state, current, cfg)) return { branch: null, tip: current };
   if ("error" in found) {
     const changed = await jj(state.current, ["diff", "-r", "@", "--name-only"]);
     const parent = await jj(state.current, ["log", "-r", "@-", "--no-graph", "-T", "commit_id"]);
@@ -502,6 +504,11 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
   if (!tip || tip !== delivery) return { error: `bookmark ${found.branch} must point at the delivery revision before finish` };
   const undelivered = await deliveryError(state, found.branch, tip, cfg);
   return undelivered ? { error: undelivered } : { branch: found.branch, tip };
+}
+
+// Zero-bookmark retirement is safe only for a revision already equal to or an ancestor of protected main.
+async function mergedIntoPrimary(state: Layout, commit: string, cfg: HookPolicy) {
+  return !(await git(state.primary, ["merge-base", "--is-ancestor", commit, cfg.worktrees.primary_branch])).code;
 }
 
 async function jjRevision(root: string, commit: string): Promise<{ error: string } | { empty: boolean; conflict: boolean; parents: string[] }> {
@@ -573,7 +580,7 @@ async function finishJjWorktree(root: string, deleteBranch: boolean, cfg: HookPo
   if ("error" in workspace) return bad(workspace.error);
   const removed = await jj(state.primary, ["workspace", "remove", workspace.name]);
   if (removed.code) return bad(removed.err || removed.out);
-  if (!deleteBranch) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
+  if (!deleteBranch || candidate.branch === null) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
   const deletionError = await deleteBookmark(state, candidate, cfg);
   return deletionError ? bad(deletionError) : { ok: true, message: `removed merged Jujutsu workspace ${state.current} and bookmark ${candidate.branch}` };
 }
