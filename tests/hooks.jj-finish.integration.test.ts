@@ -222,3 +222,86 @@ jjTest("finish refuses a merged revision carrying more than one bookmark", async
     await expectRefused(f, "exactly one non-protected exported bookmark");
   } finally { await rm(f.container, { recursive: true, force: true }); }
 }, 60_000);
+
+// Zero-bookmark empty chains: a workspace whose current chain is only empty single-parent
+// changes above a main ancestor has no unique work, so it is retireable without a bookmark.
+jjTest("finish retires a zero-bookmark workspace on one empty change above main", async () => {
+  const f = await fixture(); try {
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish retires a zero-bookmark workspace on several empty changes above main", async () => {
+  const f = await fixture(); try {
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new"); await jj(f.ws, "new");
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish retires a zero-bookmark empty chain above merged content", async () => {
+  const f = await fixture(); try {
+    await deliverContent(f.ws);
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new"); await jj(f.ws, "new");
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+async function expectZeroRefused(f: Awaited<ReturnType<typeof fixture>>) {
+  const result = await finishWorktree(f.ws, true, "jj");
+  expect(outcome(result)).toMatchObject({ ok: false });
+  expect(existsSync(f.ws)).toBeTrue();
+  return result;
+}
+
+jjTest("finish refuses a zero-bookmark empty chain above unmerged content", async () => {
+  const f = await fixture(); try {
+    await writeFile(join(f.ws, "feature.txt"), "feature\n"); await jj(f.ws, "status");
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new"); await jj(f.ws, "new");
+    expect((await expectZeroRefused(f)).message).toContain("exactly one non-protected exported bookmark");
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a zero-bookmark empty chain with an unrelated bookmark on an earlier change", async () => {
+  const f = await fixture(); try {
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new"); await jj(f.ws, "new");
+    await jj(f.ws, "bookmark", "set", "delivery/other", "-r", "@--");
+    await expectZeroRefused(f);
+    expect(await f.bookmark("delivery/other")).toBeTrue();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a zero-bookmark empty chain carrying a protected non-main bookmark", async () => {
+  const f = await fixture(); try {
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new"); await jj(f.ws, "new");
+    await jj(f.ws, "bookmark", "set", "master", "-r", "@-");
+    await expectZeroRefused(f);
+    expect(await f.bookmark("master")).toBeTrue();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a zero-bookmark empty chain through a merge change", async () => {
+  const f = await fixture(); try {
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new", "main", "-m", "left"); await jj(f.ws, "new", "main", "-m", "right");
+    await jj(f.ws, "new", "description(exact:'left\n')", "description(exact:'right\n')", "-m", "merge");
+    await expectZeroRefused(f);
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a zero-bookmark empty chain above a conflicted merged change", async () => {
+  const f = await fixture(); try {
+    await conflictedMerged(f.ws);
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new");
+    await expectZeroRefused(f);
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
