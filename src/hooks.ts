@@ -259,6 +259,120 @@ const cachedEntry = (text: string, key: string): FindingIdentity[] | null => {
   const valid = entry.findings.every(finding => finding && typeof finding.rule_id === "string" && typeof finding.file === "string" && findingFingerprint(finding));
   return valid ? entry.findings : null;
 };
+// Owner-authorized, single-use relaxation of the staged-file-count limit for one atomic delivery (and only that limit).
+// Authorization M-20261104T155526Z-owner-authorization_3fd46f1c; evidence M-20261104T120517Z-atomic-decision-evidence_a871b6f0.
+// The pin lives in reviewed package source, so a consumer-side activation record can only confirm it, never widen it.
+const exceptionSchema = "atdd-bun.staged-file-limit-exception/v1";
+const exceptionPin: Record<string, string> = { project: "score-os", task: "wagon-control-implementation-v2", scope: "staged-file-count", owner_authorization: "M-20261104T155526Z-owner-authorization_3fd46f1c", decision_evidence: "M-20261104T120517Z-atomic-decision-evidence_a871b6f0" };
+const exceptionInventory = [
+  "contracts/score-provider/v1/inspection/descriptor.json",
+  "contracts/score-provider/v1/inspection/fixture.json",
+  "contracts/score-provider/v1/inspection/integrity.json",
+  "contracts/score-provider/v1/manifest.json",
+  "contracts/score-provider/v1/schemas.json",
+  "docs/purpose/journeys/index.adoc",
+  "docs/purpose/journeys/svg/journey-control-assessment.svg",
+  "docs/purpose/journeys/svg/path-control-assessment-nominal.svg",
+  "docs/purpose/journeys/svg/train-score-evaluate-control-refused.svg",
+  "docs/purpose/journeys/svg/train-score-evaluate-control-technical-failure.svg",
+  "docs/purpose/journeys/svg/train-score-evaluate-control.svg",
+  "e2e/interlockings/control-assessment/control-nominal.routes.test.ts",
+  "e2e/interlockings/control-assessment/control-refused.routes.test.ts",
+  "e2e/interlockings/control-assessment/control-technical-failure.routes.test.ts",
+  "plan/_journeys/control-assessment.yaml",
+  "plan/_themes.yaml",
+  "plan/_trains.yaml",
+  "plan/_trains/_interlockings/control-assessment.yaml",
+  "plan/_trains/train:score:evaluate-control-refused.yaml",
+  "plan/_trains/train:score:evaluate-control-technical-failure.yaml",
+  "plan/_trains/train:score:evaluate-control.yaml",
+  "plan/control/_control.yaml",
+  "plan/control/assess-joint-feasibility.yaml",
+  "plan/control/C001.yaml",
+  "plan/control/D001.yaml",
+  "plan/control/E001.yaml",
+  "plan/control/estimate-respite.yaml",
+  "plan/control/estimate-response-time.yaml",
+  "plan/control/evaluate-required-predicates.yaml",
+  "plan/control/P001.yaml",
+  "plan/control/publish-control-diagnostics.yaml",
+  "plan/control/R001.yaml",
+  "plan/control/Y001.yaml",
+  "src/composition.ts",
+  "src/wagons/control/features/assess-joint-feasibility/domain/canonical-joint-feasibility.ts",
+  "src/wagons/control/features/estimate-respite/domain/canonical-respite.ts",
+  "src/wagons/control/features/estimate-response-time/domain/canonical-response-time.ts",
+  "src/wagons/control/features/evaluate-required-predicates/application/evaluate-control.ts",
+  "src/wagons/control/features/evaluate-required-predicates/domain/canonical-vector.ts",
+  "src/wagons/control/features/publish-control-diagnostics/application/publish-control-diagnostics.ts",
+  "tests/fixtures/decision-control-evaluator/v1/canonical-vector.json",
+  "tests/trains/score:evaluate-control/canonical-routes.test.ts",
+  "tests/wagons/commons/features/measured-aspect/unit/provider-inspection-descriptor.contract.test.ts",
+  "tests/wagons/commons/features/measured-aspect/unit/provider-manifest.contract.test.ts",
+  "tests/wagons/control/features/assess-joint-feasibility/unit/canonical-joint-feasibility.test.ts",
+  "tests/wagons/control/features/estimate-respite/unit/canonical-timeliness.test.ts",
+  "tests/wagons/control/features/estimate-response-time/unit/canonical-response-time.test.ts",
+  "tests/wagons/control/features/evaluate-required-predicates/unit/canonical-vector.test.ts",
+  "tests/wagons/control/features/evaluate-required-predicates/unit/noncanonical.test.ts",
+  "tests/wagons/control/features/publish-control-diagnostics/integration/publish-control-diagnostics.test.ts",
+];
+const exceptionFields = ["schema", "inventory", "inventory_sha256", ...Object.keys(exceptionPin)];
+const inventoryHash = (paths: string[]) => new Bun.CryptoHasher("sha256").update([...paths].sort().join("\n")).digest("hex");
+const exceptionInventoryHash = inventoryHash(exceptionInventory);
+/** `reason: null` means no activation record exists: the exception is not in play and the ordinary rejection stands unchanged. */
+type StagedFileExceptionGrant = { ok: true; owner_authorization: string; inventory_sha256: string };
+type StagedFileExceptionDecision = StagedFileExceptionGrant | { ok: false; reason: string | null };
+const refuseException = (reason: string | null): StagedFileExceptionDecision => ({ ok: false, reason });
+type ExceptionRecord = Record<string, unknown> | "missing" | "malformed";
+
+async function readExceptionRecord(file: string): Promise<ExceptionRecord> {
+  const text = await readFile(file, "utf8").catch(() => null);
+  if (text === null) return "missing";
+  try { const data = Bun.YAML.parse(text) as unknown; return data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : "malformed"; } catch { return "malformed"; }
+}
+const wellFormedExceptionRecord = (record: Record<string, unknown>) => Object.keys(record).length === exceptionFields.length && exceptionFields.every(key => key in record)
+  && record.schema === exceptionSchema && exceptionFields.filter(key => key !== "inventory").every(key => typeof record[key] === "string")
+  && Array.isArray(record.inventory) && record.inventory.every(path => typeof path === "string");
+function exceptionRecordRefusal(record: Record<string, unknown> | "malformed"): string | null {
+  if (record === "malformed" || !wellFormedExceptionRecord(record)) return "authorization record is malformed";
+  if (Object.entries(exceptionPin).some(([key, value]) => record[key] !== value)) return "authorization record does not match the pinned authorization";
+  if (record.inventory_sha256 !== inventoryHash(record.inventory as string[])) return "authorization record inventory hash does not match its inventory";
+  return record.inventory_sha256 === exceptionInventoryHash ? null : "authorization record does not match the pinned authorization";
+}
+/** Whether the exact staged path set may exceed the staged-file-count limit. Any doubt refuses. */
+async function authorizeStagedFileException(directory: string | null, staged: string[]): Promise<StagedFileExceptionDecision> {
+  const record = directory ? await readExceptionRecord(join(directory, "authorization.yaml")) : "missing";
+  if (!directory || record === "missing") return refuseException(null);
+  const refusal = exceptionRecordRefusal(record);
+  if (refusal) return refuseException(refusal);
+  if ((await readExceptionRecord(join(directory, "consumed.yaml"))) !== "missing") return refuseException("authorization was already consumed");
+  const outside = staged.filter(path => !exceptionInventory.includes(path)), absent = exceptionInventory.filter(path => !staged.includes(path));
+  if (outside.length) return refuseException(`staged paths outside the authorized inventory: ${outside.join(", ")}`);
+  if (absent.length) return refuseException(`authorized inventory paths missing from the staged set: ${absent.join(", ")}`);
+  return { ok: true, owner_authorization: exceptionPin.owner_authorization!, inventory_sha256: exceptionInventoryHash };
+}
+/** Remember that the exception admitted a commit, so post-commit can consume it only if that exact inventory landed. */
+async function recordPendingException(directory: string | null, grant: StagedFileExceptionGrant) {
+  if (!directory) return;
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256 }));
+}
+/** Consume the authorization when HEAD carries exactly the pinned inventory; any pending marker is discarded either way. */
+async function consumePendingException(directory: string | null, head: string, committed: string[]) {
+  if (!directory) return;
+  const pending = join(directory, "pending.yaml"), marker = await readExceptionRecord(pending);
+  if (marker === "missing") return;
+  await rm(pending, { force: true });
+  if (marker === "malformed" || marker.owner_authorization !== exceptionPin.owner_authorization || marker.inventory_sha256 !== exceptionInventoryHash || inventoryHash(committed) !== exceptionInventoryHash) return;
+  const temporary = join(directory, `consumed.yaml.${process.pid}.tmp`);
+  await writeFile(temporary, JSON.stringify({ schema: exceptionSchema, owner_authorization: exceptionPin.owner_authorization, commit: head, inventory_sha256: exceptionInventoryHash, consumed_at: new Date().toISOString() }));
+  await rename(temporary, join(directory, "consumed.yaml"));
+}
+/** Where the owner-authorized staged-file exception keeps its record and single-use ledger: the Git common directory, shared by every worktree. */
+async function stagedExceptionDirectory(root: string): Promise<string | null> {
+  const common = await git(root, ["rev-parse", "--git-common-dir"]);
+  return common.code || !common.out ? null : join(resolve(root, common.out), "atdd-bun", "staged-file-limit-exception");
+}
 /** Findings for one exact tree: reuse a valid entry, otherwise compute and record the result for the next push. */
 async function findingsCacheDirectory(root: string): Promise<string | null> {
   const common = await git(root, ["rev-parse", "--git-common-dir"]);
@@ -352,10 +466,10 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
   if (["pre-commit", "pre-merge-commit"].includes(event) && cfg.protected_branches.includes(branch)) return bad(`protected branch ${branch} is blocked`);
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
-  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); if (counted > cfg.max_staged_files) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}`); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; return cfg.require_traceability || registries.length || generated.length ? validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; }
+  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); let exception: StagedFileExceptionGrant | null = null; if (counted > cfg.max_staged_files) { const decision = await authorizeStagedFileException(await stagedExceptionDirectory(root), staged); if (!decision.ok) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}${decision.reason ? `; staged-file exception refused: ${decision.reason}` : ""}`); exception = decision; } if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; const checked = cfg.require_traceability || registries.length || generated.length ? await validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; if (checked.ok && exception) await recordPendingException(await stagedExceptionDirectory(root), exception); return checked; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { const reports: string[] = []; let exclusions: Awaited<ReturnType<typeof countExclusionTips>> | undefined; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const isNew = !remoteSha || /^0+$/.test(remoteSha), range = isNew ? `${local}^..${local}` : `${remoteSha}..${local}`, shared = exclusions ??= await countExclusionTips(root, cfg.protected_branches, args[0]); if ("error" in shared) return bad(`could not list remote branch tips for the pushed range ${range}: ${shared.error}`); const counted = await git(root, ["rev-list", "--count", ...(shared.tips.length ? [isNew ? local : range, "--not", ...shared.tips] : [range])]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = remote?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
-  if (event === "post-commit") { const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
+  if (event === "post-commit") { await consumePendingException(await stagedExceptionDirectory(root), (await git(root, ["rev-parse", "HEAD"])).out, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"])); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
   return { ok: true, message: "ok" };
 }
 

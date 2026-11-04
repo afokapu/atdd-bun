@@ -1,3 +1,7 @@
+// URN: test:toolkit:staged-file-exception:E001-UNIT-001-bound-test-file
+// Acceptance: acc:toolkit:E001-UNIT-001-bound-test-file
+// Phase: UNIT
+// Layer: integration
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -88,7 +92,7 @@ const authorize = async (root: string, record: unknown = validRecord(), raw?: st
 const commit = (root: string, message: string) => git(root, ["commit", "-qm", message, "--no-verify"]);
 const cleanup = (root: string) => rm(root, { recursive: true, force: true });
 
-test("without an activation record the ordinary staged-file-count rejection is unchanged", async () => {
+test("without an activation record (exception not in play) the ordinary staged-file-count rejection is exactly unchanged", async () => {
   const root = await consumer(); try {
     await stage(root);
     expect(await runHook("pre-commit", root)).toEqual({ ok: false, message: ORDINARY });
@@ -120,11 +124,10 @@ test("the exception leaves the protected-branch gate in force", async () => {
   } finally { await cleanup(root); }
 }, 30_000);
 
-type Refusal = { name: string; reason: RegExp; record?: unknown; raw?: string; unrecorded?: true; staged?: (root: string) => Promise<unknown> };
+type Refusal = { name: string; reason: RegExp; record?: unknown; raw?: string; staged?: (root: string) => Promise<unknown> };
 const stagedWithout = (path: string) => (root: string) => stage(root, inventory.filter(candidate => candidate !== path));
 const widened = () => { const paths = [...inventory, "src/outside.ts"]; return { ...validRecord(), inventory: paths, inventory_sha256: inventoryHash(paths) }; };
 const refusals: Refusal[] = [
-  { name: "missing record", unrecorded: true, reason: /authorization record is missing/ },
   { name: "malformed YAML", raw: "{ not: [valid", reason: /authorization record is malformed/ },
   { name: "non-mapping record", raw: "- just\n- a list\n", reason: /authorization record is malformed/ },
   { name: "unknown schema", record: { ...validRecord(), schema: "atdd-bun.staged-file-limit-exception/v0" }, reason: /authorization record is malformed/ },
@@ -144,7 +147,7 @@ const refusals: Refusal[] = [
 for (const refusal of refusals) {
   test(`fails closed on ${refusal.name} and keeps the ordinary rejection`, async () => {
     const root = await consumer(); try {
-      if (!refusal.unrecorded) await authorize(root, refusal.record, refusal.raw);
+      await authorize(root, refusal.record, refusal.raw);
       await (refusal.staged ?? (r => stage(r)))(root);
       // Two plan registries and six generated journey views are exempt from the count.
       const staged = (await git(root, ["diff", "--cached", "--name-only"])).out.trim().split("\n").length;
