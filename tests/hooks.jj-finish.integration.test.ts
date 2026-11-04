@@ -178,3 +178,47 @@ jjTest("finish fails closed when the workspace was forgotten from the registry",
     expect(await f.bookmark("delivery/demo")).toBeTrue();
   } finally { await rm(f.container, { recursive: true, force: true }); }
 }, 60_000);
+
+// Zero-bookmark retirement: a merged delivery bookmark may already be gone (for example
+// deleted by the forge). The workspace is retireable only when its revision is merged.
+jjTest("finish retires a zero-bookmark workspace whose revision equals protected main", async () => {
+  const f = await fixture(); try {
+    await deliverContent(f.ws);
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    expect(await f.bookmark("delivery/demo")).toBeFalse();
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish retires a zero-bookmark workspace whose revision is an ancestor of protected main", async () => {
+  const f = await fixture(); try {
+    await deliverContent(f.ws);
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    await jj(f.ws, "new");
+    await jj(f.ws, "bookmark", "set", "main", "-r", "@");
+    await jj(f.ws, "new");
+    await jj(f.ws, "edit", "@--");
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a zero-bookmark workspace with unmerged content", async () => {
+  const f = await fixture(); try {
+    await writeFile(join(f.ws, "feature.txt"), "feature\n"); await jj(f.ws, "status");
+    await jj(f.ws, "bookmark", "delete", "delivery/demo");
+    const result = await finishWorktree(f.ws, true, "jj");
+    expect(outcome(result)).toMatchObject({ ok: false });
+    expect(result.message).toContain("exactly one non-protected exported bookmark");
+    expect(existsSync(f.ws)).toBeTrue();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
+
+jjTest("finish refuses a merged revision carrying more than one bookmark", async () => {
+  const f = await fixture(); try {
+    await deliverContent(f.ws);
+    await jj(f.ws, "bookmark", "set", "delivery/alias", "-r", "@");
+    await expectRefused(f, "exactly one non-protected exported bookmark");
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
