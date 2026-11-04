@@ -580,9 +580,10 @@ async function finishJjWorktree(root: string, deleteBranch: boolean, cfg: HookPo
   if ("error" in workspace) return bad(workspace.error);
   const removed = await jj(state.primary, ["workspace", "remove", workspace.name]);
   if (removed.code) return bad(removed.err || removed.out);
-  if (!deleteBranch || candidate.branch === null) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
-  const deletionError = await deleteBookmark(state, candidate, cfg);
-  return deletionError ? bad(deletionError) : { ok: true, message: `removed merged Jujutsu workspace ${state.current} and bookmark ${candidate.branch}` };
+  const { branch } = candidate;
+  if (!deleteBranch || branch === null) return { ok: true, message: `removed merged Jujutsu workspace ${state.current}` };
+  const deletionError = await deleteBookmark(state, { branch, tip: candidate.tip }, cfg);
+  return deletionError ? bad(deletionError) : { ok: true, message: `removed merged Jujutsu workspace ${state.current} and bookmark ${branch}` };
 }
 
 
