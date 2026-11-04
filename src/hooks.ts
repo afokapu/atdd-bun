@@ -340,8 +340,8 @@ function exceptionRecordRefusal(record: Record<string, unknown> | "malformed"): 
   return record.inventory_sha256 === exceptionInventoryHash ? null : "authorization record does not match the pinned authorization";
 }
 /** Whether the exact staged path set may exceed the staged-file-count limit. Any doubt refuses. */
-async function authorizeStagedFileException(directory: string | null, staged: string[]): Promise<StagedFileExceptionDecision> {
-  const record = directory ? await readExceptionRecord(join(directory, "authorization.yaml")) : "missing";
+async function authorizeStagedFileException(root: string, staged: string[]): Promise<StagedFileExceptionDecision> {
+  const directory = await stagedExceptionDirectory(root), record = directory ? await readExceptionRecord(join(directory, "authorization.yaml")) : "missing";
   if (!directory || record === "missing") return refuseException(null);
   const refusal = exceptionRecordRefusal(record);
   if (refusal) return refuseException(refusal);
@@ -352,21 +352,31 @@ async function authorizeStagedFileException(directory: string | null, staged: st
   return { ok: true, owner_authorization: exceptionPin.owner_authorization!, inventory_sha256: exceptionInventoryHash };
 }
 /** Remember that the exception admitted a commit, so post-commit can consume it only if that exact inventory landed. */
-async function recordPendingException(directory: string | null, grant: StagedFileExceptionGrant) {
+async function recordPendingException(root: string, grant: StagedFileExceptionGrant) {
+  const directory = await stagedExceptionDirectory(root);
   if (!directory) return;
   await mkdir(directory, { recursive: true });
   await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256 }));
 }
 /** Consume the authorization when HEAD carries exactly the pinned inventory; any pending marker is discarded either way. */
-async function consumePendingException(directory: string | null, head: string, committed: string[]) {
+async function consumePendingException(root: string) {
+  const directory = await stagedExceptionDirectory(root);
   if (!directory) return;
   const pending = join(directory, "pending.yaml"), marker = await readExceptionRecord(pending);
   if (marker === "missing") return;
   await rm(pending, { force: true });
+  const head = (await git(root, ["rev-parse", "HEAD"])).out, committed = await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]);
   if (marker === "malformed" || marker.owner_authorization !== exceptionPin.owner_authorization || marker.inventory_sha256 !== exceptionInventoryHash || inventoryHash(committed) !== exceptionInventoryHash) return;
   const temporary = join(directory, `consumed.yaml.${process.pid}.tmp`);
   await writeFile(temporary, JSON.stringify({ schema: exceptionSchema, owner_authorization: exceptionPin.owner_authorization, commit: head, inventory_sha256: exceptionInventoryHash, consumed_at: new Date().toISOString() }));
   await rename(temporary, join(directory, "consumed.yaml"));
+}
+/** The staged-file-count gate: the ordinary rejection, unless the pinned exception admits exactly this staged set. */
+async function stagedCountGate(root: string, staged: string[], counted: number, limit: number): Promise<{ rejection: string | null; grant: StagedFileExceptionGrant | null }> {
+  if (counted <= limit) return { rejection: null, grant: null };
+  const decision = await authorizeStagedFileException(root, staged);
+  if (decision.ok) return { rejection: null, grant: decision };
+  return { rejection: `staged files ${counted} exceed ${limit}${decision.reason ? `; staged-file exception refused: ${decision.reason}` : ""}`, grant: null };
 }
 /** Where the owner-authorized staged-file exception keeps its record and single-use ledger: the Git common directory, shared by every worktree. */
 async function stagedExceptionDirectory(root: string): Promise<string | null> {
@@ -466,10 +476,10 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
   if (["pre-commit", "pre-merge-commit"].includes(event) && cfg.protected_branches.includes(branch)) return bad(`protected branch ${branch} is blocked`);
   if (["pre-commit", "pre-merge-commit"].includes(event)) { const violation = await worktreeCommitPolicy(root, cfg.worktrees); if (violation) return bad(violation); }
-  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); let exception: StagedFileExceptionGrant | null = null; if (counted > cfg.max_staged_files) { const decision = await authorizeStagedFileException(await stagedExceptionDirectory(root), staged); if (!decision.ok) return bad(`staged files ${counted} exceed ${cfg.max_staged_files}${decision.reason ? `; staged-file exception refused: ${decision.reason}` : ""}`); exception = decision; } if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; const checked = cfg.require_traceability || registries.length || generated.length ? await validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; if (checked.ok && exception) await recordPendingException(await stagedExceptionDirectory(root), exception); return checked; }
+  if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); const count = await stagedCountGate(root, staged, counted, cfg.max_staged_files); if (count.rejection) return bad(count.rejection); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; const checked = cfg.require_traceability || registries.length || generated.length ? await validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; if (checked.ok && count.grant) await recordPendingException(root, count.grant); return checked; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { const reports: string[] = []; let exclusions: Awaited<ReturnType<typeof countExclusionTips>> | undefined; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const isNew = !remoteSha || /^0+$/.test(remoteSha), range = isNew ? `${local}^..${local}` : `${remoteSha}..${local}`, shared = exclusions ??= await countExclusionTips(root, cfg.protected_branches, args[0]); if ("error" in shared) return bad(`could not list remote branch tips for the pushed range ${range}: ${shared.error}`); const counted = await git(root, ["rev-list", "--count", ...(shared.tips.length ? [isNew ? local : range, "--not", ...shared.tips] : [range])]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = remote?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
-  if (event === "post-commit") { await consumePendingException(await stagedExceptionDirectory(root), (await git(root, ["rev-parse", "HEAD"])).out, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"])); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
+  if (event === "post-commit") { await consumePendingException(root); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
   return { ok: true, message: "ok" };
 }
 
