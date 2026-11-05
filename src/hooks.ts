@@ -628,7 +628,7 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
   const current = await currentCommit(state.current);
   if (!current) return { error: "could not resolve the current Jujutsu revision" };
   let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
-  if ("error" in found && found.count === 0 && await mergedIntoPrimary(state, current, cfg)) return { branch: null, tip: current };
+  if ("error" in found && found.count === 0 && await emptyChainToPrimary(state, current, cfg)) return { branch: null, tip: current };
   if ("error" in found) {
     const changed = await jj(state.current, ["diff", "-r", "@", "--name-only"]);
     const parent = await jj(state.current, ["log", "-r", "@-", "--no-graph", "-T", "commit_id"]);
@@ -647,6 +647,21 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
 // Zero-bookmark retirement is safe only for a revision already equal to or an ancestor of protected main.
 async function mergedIntoPrimary(state: Layout, commit: string, cfg: HookPolicy) {
   return !(await git(state.primary, ["merge-base", "--is-ancestor", commit, cfg.worktrees.primary_branch])).code;
+}
+
+// Zero-bookmark retirement also covers a chain of empty, single-parent, conflict-free changes
+// above a protected-branch ancestor. Every unmerged change on that chain must carry no bookmark
+// of any kind (protected or not), so no unique work or ref is left behind.
+async function emptyChainToPrimary(state: Layout, tip: string, cfg: HookPolicy) {
+  for (let commit = tip;;) {
+    const info = await jjRevision(state.primary, commit);
+    if ("error" in info || info.conflict) return false;
+    if (await mergedIntoPrimary(state, commit, cfg)) return true;
+    if (!info.empty || info.parents.length !== 1) return false;
+    const refs = await git(state.primary, ["for-each-ref", "--format=%(refname)", "--points-at", commit, "refs/heads/"]);
+    if (refs.code || refs.out) return false;
+    commit = info.parents[0]!;
+  }
 }
 
 async function jjRevision(root: string, commit: string): Promise<{ error: string } | { empty: boolean; conflict: boolean; parents: string[] }> {
