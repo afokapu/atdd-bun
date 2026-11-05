@@ -628,13 +628,12 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
   const current = await currentCommit(state.current);
   if (!current) return { error: "could not resolve the current Jujutsu revision" };
   let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
-  if ("error" in found && found.count === 0 && await chainToPrimary(state, current, cfg, true) === "merged") return { branch: null, tip: current };
   if ("error" in found) {
+    // The established delivery path comes first: an empty working copy above a bookmarked parent.
     const changed = await jj(state.current, ["diff", "-r", "@", "--name-only"]);
     const parent = await jj(state.current, ["log", "-r", "@-", "--no-graph", "-T", "commit_id"]);
-    if (changed.code || changed.out || parent.code || !parent.out) return found;
-    const parentFound = await branchForCommit(state.current, parent.out, cfg.protected_branches);
-    if ("error" in parentFound) return found;
+    const parentFound = changed.code || changed.out || parent.code || !parent.out ? found : await branchForCommit(state.current, parent.out, cfg.protected_branches);
+    if ("error" in parentFound) return found.count === 0 && await chainToPrimary(state, current, cfg, true) === "merged" ? { branch: null, tip: current } : found;
     delivery = parent.out;
     found = parentFound;
   }
