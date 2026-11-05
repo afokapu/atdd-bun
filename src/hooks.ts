@@ -556,50 +556,60 @@ async function jjPrimaryOnBranch(primary: string, branch: string): Promise<boole
   return (await lines("@-")).length === 1 && (await lines(`@- & (bookmarks(exact:${name}) | remote_bookmarks(exact:${name}, exact:"origin"))`)).length === 1;
 }
 
-// A colocated JJ workspace keeps Git HEAD detached, so the named-branch condition is read from JJ:
-// @ must carry exactly one local, non-conflicted bookmark, and that same name must be the only
-// Git-exported branch at @ and not protected. `--ignore-working-copy` keeps the hook from snapshotting.
-async function jjDeliveryBookmarkAtWorkingCopy(root: string, protectedBranches: string[]): Promise<boolean> {
-  if (!existsSync(join(root, ".jj"))) return false;
-  const at = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", "@", "-T", 'commit_id ++ "\\n" ++ local_bookmarks.map(|b| if(b.conflict(), "conflict:", "") ++ b.name()).join("\\n")']).catch(() => null);
-  if (!at || at.code) return false;
-  const [commit, ...bookmarks] = at.out.split("\n");
-  if (!commit || bookmarks.length !== 1) return false;
-  const exported = await branchForCommit(root, commit, []);
-  return !("error" in exported) && exported.branch === bookmarks[0] && !protectedBranches.includes(exported.branch);
-}
-
 const ADVANCE_ADVISORY = "delivery bookmark not advanced";
 const workingCopyTemplate = 'commit_id ++ "\\n" ++ empty ++ "\\n" ++ parents.map(|p| p.commit_id()).join(",") ++ "\\n" ++ local_bookmarks.map(|b| if(b.conflict(), "conflict:", "") ++ b.name()).join("\\n")';
-async function jjWorkingCopy(root: string, ignoreWorkingCopy: boolean) {
+type WorkingCopy = { commit: string; empty: boolean; parents: string; bookmarks: string[] };
+// `--ignore-working-copy` reads the recorded operation state without snapshotting; omit it to snapshot first.
+async function jjWorkingCopy(root: string, ignoreWorkingCopy: boolean): Promise<WorkingCopy | null> {
   const result = await jj(root, ["log", ...(ignoreWorkingCopy ? ["--ignore-working-copy"] : []), "--no-graph", "-r", "@", "-T", workingCopyTemplate]).catch(() => null);
   if (!result || result.code) return null;
   const [commit, empty, parents, ...bookmarks] = result.out.split("\n");
-  return { commit: commit ?? "", empty: empty === "true", parents: parents ?? "", bookmarks };
+  return { commit: commit ?? "", empty: empty === "true", parents: parents ?? "", bookmarks: bookmarks.filter(Boolean) };
+}
+
+// The one unambiguous delivery bookmark of a commit: exactly one local, non-conflicted, non-protected
+// bookmark that is also the only Git-exported branch at that commit.
+async function exactDeliveryBookmark(root: string, at: WorkingCopy, protectedBranches: string[]): Promise<{ name: string } | { error: string }> {
+  if (at.bookmarks.length !== 1) return { error: `the working-copy commit must carry exactly one bookmark; found ${at.bookmarks.length}` };
+  const name = at.bookmarks[0]!;
+  if (protectedBranches.includes(name)) return { error: `bookmark ${name} is protected` };
+  const exported = await branchForCommit(root, at.commit, []);
+  return "error" in exported || exported.branch !== name ? { error: `bookmark ${name} is conflicted or not the only exported branch at the working-copy commit` } : { name };
+}
+
+// A colocated JJ workspace keeps Git HEAD detached, so the named-branch condition is read from JJ: @ must
+// carry the exact delivery bookmark. Reading without a snapshot keeps the hook from mutating the working copy.
+async function jjDeliveryBookmarkAtWorkingCopy(root: string, protectedBranches: string[]): Promise<boolean> {
+  if (!existsSync(join(root, ".jj"))) return false;
+  const at = await jjWorkingCopy(root, true);
+  return !!at && "name" in await exactDeliveryBookmark(root, at, protectedBranches);
 }
 
 // `git commit` in a colocated JJ workspace leaves the delivery bookmark on the old empty working-copy commit,
-// a sibling of the validated commit, so `jj git push --bookmark` cannot publish it. After the validated commit,
-// move exactly that one eligible bookmark to the validated commit. Returns null when the policy does not apply,
-// and an advisory (never a veto of the already-made commit) when the state is ineligible; nothing moves then.
+// a sibling of the validated commit, so `jj git push --bookmark` cannot publish it. Verify the validated commit
+// and the previous working copy, returning the one bookmark to move or the reason it must stay.
+async function advanceCandidate(root: string, protectedBranches: string[]): Promise<{ name: string; validated: string } | { error: string }> {
+  const [validated, ...gitParents] = (await git(root, ["rev-list", "--parents", "-n", "1", "HEAD"])).out.split(" ");
+  if (!validated || gitParents.length !== 1) return { error: "the validated HEAD must have exactly one parent" };
+  const old = await jjWorkingCopy(root, true);
+  if (!old || !old.empty || old.parents !== gitParents[0]) return { error: "the previous working-copy commit is not an empty sibling of the validated commit" };
+  const exact = await exactDeliveryBookmark(root, old, protectedBranches);
+  if ("error" in exact) return exact;
+  const now = await jjWorkingCopy(root, false);
+  return now?.empty && now.parents === validated ? { name: exact.name, validated } : { error: "the working copy is not an empty child of the validated commit" };
+}
+
+// After the validated commit, move exactly the eligible delivery bookmark to it. Returns null when the policy
+// does not apply, and an advisory (never a veto of the already-made commit) when ineligible; nothing moves then.
 async function advanceJjDeliveryBookmark(root: string, cfg: HookPolicy): Promise<string | null> {
   if (!cfg.worktrees.enabled || !existsSync(join(root, ".jj"))) return null;
   const state = await layout(root, cfg.worktrees);
   if ("error" in state || state.branch || state.current === state.primary || !inside(state.worktreeRoot, state.current)) return null;
-  const refuse = (reason: string) => `${ADVANCE_ADVISORY}: ${reason}`;
-  const [validated, ...gitParents] = (await git(root, ["rev-list", "--parents", "-n", "1", "HEAD"])).out.split(" ");
-  if (!validated || gitParents.length !== 1) return refuse("the validated HEAD must have exactly one parent");
-  const old = await jjWorkingCopy(root, true);
-  if (!old || !old.empty || old.parents !== gitParents[0]) return refuse("the previous working-copy commit is not an empty sibling of the validated commit");
-  if (old.bookmarks.length !== 1) return refuse(`the previous working-copy commit must carry exactly one bookmark; found ${old.bookmarks.length}`);
-  const name = old.bookmarks[0]!, exported = await branchForCommit(root, old.commit, []);
-  if (cfg.protected_branches.includes(name)) return refuse(`bookmark ${name} is protected`);
-  if ("error" in exported || exported.branch !== name) return refuse(`bookmark ${name} is conflicted or not the only exported branch at the previous working-copy commit`);
-  const now = await jjWorkingCopy(root, false);
-  if (!now || !now.empty || now.parents !== validated) return refuse("the working copy is not an empty child of the validated commit");
-  const moved = await jj(root, ["bookmark", "set", name, "-r", validated, "--allow-backwards"]);
+  const candidate = await advanceCandidate(root, cfg.protected_branches);
+  if ("error" in candidate) return `${ADVANCE_ADVISORY}: ${candidate.error}`;
+  const { name, validated } = candidate, moved = await jj(root, ["bookmark", "set", name, "-r", validated, "--allow-backwards"]);
   const targets = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `bookmarks(exact:${JSON.stringify(name)})`, "-T", 'commit_id ++ "\\n"']);
-  if (moved.code || targets.out !== validated || (await branchCommit(root, name)) !== validated) return refuse(`bookmark ${name} did not end at the validated commit ${validated}: ${moved.err || targets.out}`);
+  if (moved.code || targets.out !== validated || (await branchCommit(root, name)) !== validated) return `${ADVANCE_ADVISORY}: bookmark ${name} did not end at the validated commit ${validated}: ${moved.err || targets.out}`;
   return `advanced delivery bookmark ${name} to ${validated}`;
 }
 
