@@ -305,3 +305,16 @@ jjTest("finish refuses a zero-bookmark empty chain above a conflicted merged cha
     await expectZeroRefused(f);
   } finally { await rm(f.container, { recursive: true, force: true }); }
 }, 60_000);
+
+// Public lifecycle shape (CI jj-vcs): the delivery bookmark sits on the merged parent and the
+// working copy is a fresh empty child. The bookmark must still be deleted, not left behind by the
+// zero-bookmark path.
+jjTest("finish deletes the delivery bookmark when an empty working-copy child sits above the merged bookmarked change", async () => {
+  const f = await fixture(); try {
+    await deliverContent(f.ws);
+    await jj(f.ws, "new", "delivery/demo");
+    expect(outcome(await finishWorktree(f.ws, true, "jj"))).toMatchObject({ ok: true });
+    expect(existsSync(f.ws)).toBeFalse();
+    expect(await f.bookmark("delivery/demo")).toBeFalse();
+  } finally { await rm(f.container, { recursive: true, force: true }); }
+}, 60_000);
