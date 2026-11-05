@@ -599,18 +599,29 @@ async function advanceCandidate(root: string, protectedBranches: string[]): Prom
   return now?.empty && now.parents === validated ? { name: exact.name, validated } : { error: "the working copy is not an empty child of the validated commit" };
 }
 
+// The advance applies only to a detached colocated JJ workspace linked beneath the required worktree root.
+async function isLinkedJjDeliveryWorkspace(root: string, cfg: HookPolicy): Promise<boolean> {
+  if (!cfg.worktrees.enabled || !existsSync(join(root, ".jj"))) return false;
+  const state = await layout(root, cfg.worktrees);
+  return !("error" in state) && !state.branch && state.current !== state.primary && inside(state.worktreeRoot, state.current);
+}
+
+// Move the bookmark, then prove JJ and the Git ref both name exactly the validated commit; returns the failure or null.
+async function moveBookmarkVerified(root: string, name: string, validated: string): Promise<string | null> {
+  const moved = await jj(root, ["bookmark", "set", name, "-r", validated, "--allow-backwards"]);
+  const targets = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `bookmarks(exact:${JSON.stringify(name)})`, "-T", 'commit_id ++ "\\n"']);
+  const aligned = !moved.code && targets.out === validated && (await branchCommit(root, name)) === validated;
+  return aligned ? null : `bookmark ${name} did not end at the validated commit ${validated}: ${moved.err || targets.out}`;
+}
+
 // After the validated commit, move exactly the eligible delivery bookmark to it. Returns null when the policy
 // does not apply, and an advisory (never a veto of the already-made commit) when ineligible; nothing moves then.
 async function advanceJjDeliveryBookmark(root: string, cfg: HookPolicy): Promise<string | null> {
-  if (!cfg.worktrees.enabled || !existsSync(join(root, ".jj"))) return null;
-  const state = await layout(root, cfg.worktrees);
-  if ("error" in state || state.branch || state.current === state.primary || !inside(state.worktreeRoot, state.current)) return null;
+  if (!await isLinkedJjDeliveryWorkspace(root, cfg)) return null;
   const candidate = await advanceCandidate(root, cfg.protected_branches);
   if ("error" in candidate) return `${ADVANCE_ADVISORY}: ${candidate.error}`;
-  const { name, validated } = candidate, moved = await jj(root, ["bookmark", "set", name, "-r", validated, "--allow-backwards"]);
-  const targets = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `bookmarks(exact:${JSON.stringify(name)})`, "-T", 'commit_id ++ "\\n"']);
-  if (moved.code || targets.out !== validated || (await branchCommit(root, name)) !== validated) return `${ADVANCE_ADVISORY}: bookmark ${name} did not end at the validated commit ${validated}: ${moved.err || targets.out}`;
-  return `advanced delivery bookmark ${name} to ${validated}`;
+  const failure = await moveBookmarkVerified(root, candidate.name, candidate.validated);
+  return failure ? `${ADVANCE_ADVISORY}: ${failure}` : `advanced delivery bookmark ${candidate.name} to ${candidate.validated}`;
 }
 
 type Layout = { primary: string; worktreeRoot: string; current: string };
