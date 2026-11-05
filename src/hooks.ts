@@ -628,7 +628,7 @@ async function finishCandidate(state: Layout, cfg: HookPolicy): Promise<{ error:
   const current = await currentCommit(state.current);
   if (!current) return { error: "could not resolve the current Jujutsu revision" };
   let delivery = current, found = await branchForCommit(state.current, current, cfg.protected_branches);
-  if ("error" in found && found.count === 0 && await emptyChainToPrimary(state, current, cfg)) return { branch: null, tip: current };
+  if ("error" in found && found.count === 0 && await chainToPrimary(state, current, cfg, true) === "merged") return { branch: null, tip: current };
   if ("error" in found) {
     const changed = await jj(state.current, ["diff", "-r", "@", "--name-only"]);
     const parent = await jj(state.current, ["log", "-r", "@-", "--no-graph", "-T", "commit_id"]);
@@ -649,21 +649,6 @@ async function mergedIntoPrimary(state: Layout, commit: string, cfg: HookPolicy)
   return !(await git(state.primary, ["merge-base", "--is-ancestor", commit, cfg.worktrees.primary_branch])).code;
 }
 
-// Zero-bookmark retirement also covers a chain of empty, single-parent, conflict-free changes
-// above a protected-branch ancestor. Every unmerged change on that chain must carry no bookmark
-// of any kind (protected or not), so no unique work or ref is left behind.
-async function emptyChainToPrimary(state: Layout, tip: string, cfg: HookPolicy) {
-  for (let commit = tip;;) {
-    const info = await jjRevision(state.primary, commit);
-    if ("error" in info || info.conflict) return false;
-    if (await mergedIntoPrimary(state, commit, cfg)) return true;
-    if (!info.empty || info.parents.length !== 1) return false;
-    const refs = await git(state.primary, ["for-each-ref", "--format=%(refname)", "--points-at", commit, "refs/heads/"]);
-    if (refs.code || refs.out) return false;
-    commit = info.parents[0]!;
-  }
-}
-
 async function jjRevision(root: string, commit: string): Promise<{ error: string } | { empty: boolean; conflict: boolean; parents: string[] }> {
   const info = await jj(root, ["log", "-r", commit, "--no-graph", "-T", 'if(empty, "empty", "content") ++ " " ++ if(conflict, "conflict", "clean") ++ " " ++ parents.map(|p| p.commit_id()).join(" ")']);
   if (info.code || !info.out) return { error: `could not inspect Jujutsu revision ${commit}: ${info.err || info.out}` };
@@ -671,19 +656,31 @@ async function jjRevision(root: string, commit: string): Promise<{ error: string
   return { empty: emptiness === "empty", conflict: conflict === "conflict", parents };
 }
 
-// A tip is delivered when it is an ancestor of the protected branch, or when it
-// reaches such an ancestor only through empty single-parent changes (nothing to
-// deliver). Content, conflicts, or merge shapes outside that chain fail closed.
-async function deliveryError(state: Layout, branch: string, tip: string, cfg: HookPolicy): Promise<string | null> {
-  let commit = tip;
-  for (;;) {
+// Walks from a tip toward the protected branch through empty single-parent changes. "merged" means
+// the walk reached an ancestor of the protected branch, so there is nothing to deliver. Content,
+// conflicts, or merge shapes outside that chain fail closed. With refFree, an unmerged change that
+// carries any refs/heads bookmark (protected or not) also fails closed, so no unique ref is left behind.
+type ChainOutcome = "merged" | "conflict" | "unmerged" | { error: string };
+async function chainToPrimary(state: Layout, tip: string, cfg: HookPolicy, refFree = false): Promise<ChainOutcome> {
+  for (let commit = tip;;) {
     const info = await jjRevision(state.primary, commit);
-    if ("error" in info) return info.error;
-    if (info.conflict) return `bookmark ${branch} has unresolved conflicts`;
-    if (await mergedIntoPrimary(state, commit, cfg)) return null;
-    if (!info.empty || info.parents.length !== 1) return `branch ${branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout`;
+    if ("error" in info) return info;
+    if (info.conflict) return "conflict";
+    if (await mergedIntoPrimary(state, commit, cfg)) return "merged";
+    if (!info.empty || info.parents.length !== 1) return "unmerged";
+    if (refFree) {
+      const refs = await git(state.primary, ["for-each-ref", "--format=%(refname)", "--points-at", commit, "refs/heads/"]);
+      if (refs.code || refs.out) return "unmerged";
+    }
     commit = info.parents[0]!;
   }
+}
+
+async function deliveryError(state: Layout, branch: string, tip: string, cfg: HookPolicy): Promise<string | null> {
+  const outcome = await chainToPrimary(state, tip, cfg);
+  if (outcome === "merged") return null;
+  if (outcome === "conflict") return `bookmark ${branch} has unresolved conflicts`;
+  return typeof outcome === "string" ? `branch ${branch} is not merged into ${cfg.worktrees.primary_branch} in the primary checkout` : outcome.error;
 }
 
 // The workspace name is never derived from the bookmark (bookmarks can be
