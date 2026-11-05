@@ -92,9 +92,12 @@ jjTest("without the post-commit advance the same colocated commit is not publish
   expect(await remoteRef(f, "delivery/demo")).not.toBe(committed);
 }), 60_000);
 
+// Pre-commit still requires the delivery bookmark at @ (unchanged policy), so the next commit starts by
+// placing the bookmark at the empty working copy again; the advance then repeats for the new commit.
 jjTest("a second validated commit in the same workspace advances the bookmark again", withFixture(async f => {
   await commitFile(f.ws, "one.txt");
   expect((await runHook("post-commit", f.ws)).ok).toBeTrue();
+  await jj(f.ws, "bookmark", "set", "delivery/demo", "-r", "@", "--allow-backwards");
   const second = await commitFile(f.ws, "two.txt");
   expect((await runHook("post-commit", f.ws)).ok).toBeTrue();
   expect(await bookmarkCommits(f.ws, "delivery/demo")).toEqual([second]);
@@ -108,7 +111,7 @@ const negatives: Negative[] = [
   { name: "a protected bookmark beside the delivery bookmark", arrange: f => jj(f.ws, "bookmark", "create", "release", "-r", "@").then(() => undefined) },
   { name: "only a protected bookmark at the working copy", arrange: async f => { await jj(f.ws, "bookmark", "delete", "delivery/demo"); await jj(f.ws, "bookmark", "create", "release", "-r", "@"); } },
   { name: "no bookmark at the working copy", arrange: f => jj(f.ws, "bookmark", "delete", "delivery/demo").then(() => undefined) },
-  { name: "a delivery bookmark naming an unrelated commit", arrange: async f => { await jj(f.ws, "bookmark", "delete", "delivery/demo"); await jj(f.ws, "new", "main", "-m", "unrelated"); await jj(f.ws, "bookmark", "create", "delivery/unrelated", "-r", "@"); await jj(f.ws, "new", "main"); await jj(f.ws, "bookmark", "create", "delivery/demo", "-r", "@"); } },
+  { name: "a delivery bookmark naming an unrelated commit and none at the working copy", arrange: async f => { await jj(f.ws, "bookmark", "delete", "delivery/demo"); await jj(f.ws, "new", "main", "-m", "unrelated"); await jj(f.ws, "bookmark", "create", "delivery/unrelated", "-r", "@"); await jj(f.ws, "new", "main"); } },
   {
     name: "a conflicted delivery bookmark",
     between: async f => {

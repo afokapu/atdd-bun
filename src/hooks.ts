@@ -479,7 +479,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); const count = await stagedCountGate(root, staged, counted, cfg.max_staged_files); if (count.rejection) return bad(count.rejection); if (lines > cfg.max_staged_changed_lines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; const checked = cfg.require_traceability || registries.length || generated.length ? await validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; if (checked.ok && count.grant) await recordPendingException(root, count.grant); return checked; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { const reports: string[] = []; let exclusions: Awaited<ReturnType<typeof countExclusionTips>> | undefined; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const isNew = !remoteSha || /^0+$/.test(remoteSha), range = isNew ? `${local}^..${local}` : `${remoteSha}..${local}`, shared = exclusions ??= await countExclusionTips(root, cfg.protected_branches, args[0]); if ("error" in shared) return bad(`could not list remote branch tips for the pushed range ${range}: ${shared.error}`); const counted = await git(root, ["rev-list", "--count", ...(shared.tips.length ? [isNew ? local : range, "--not", ...shared.tips] : [range])]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = remote?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
-  if (event === "post-commit") { await consumePendingException(root); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false); return { ok: true, message: result.ok ? result.message : `advisory: ${result.message}` }; }
+  if (event === "post-commit") { await consumePendingException(root); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false), advance = await advanceJjDeliveryBookmark(root, cfg), message = result.ok ? result.message : `advisory: ${result.message}`; return { ok: true, message: advance ? `${message}; ${advance}` : message }; }
   return { ok: true, message: "ok" };
 }
 
@@ -567,6 +567,40 @@ async function jjDeliveryBookmarkAtWorkingCopy(root: string, protectedBranches: 
   if (!commit || bookmarks.length !== 1) return false;
   const exported = await branchForCommit(root, commit, []);
   return !("error" in exported) && exported.branch === bookmarks[0] && !protectedBranches.includes(exported.branch);
+}
+
+const ADVANCE_ADVISORY = "delivery bookmark not advanced";
+const workingCopyTemplate = 'commit_id ++ "\\n" ++ empty ++ "\\n" ++ parents.map(|p| p.commit_id()).join(",") ++ "\\n" ++ local_bookmarks.map(|b| if(b.conflict(), "conflict:", "") ++ b.name()).join("\\n")';
+async function jjWorkingCopy(root: string, ignoreWorkingCopy: boolean) {
+  const result = await jj(root, ["log", ...(ignoreWorkingCopy ? ["--ignore-working-copy"] : []), "--no-graph", "-r", "@", "-T", workingCopyTemplate]).catch(() => null);
+  if (!result || result.code) return null;
+  const [commit, empty, parents, ...bookmarks] = result.out.split("\n");
+  return { commit: commit ?? "", empty: empty === "true", parents: parents ?? "", bookmarks };
+}
+
+// `git commit` in a colocated JJ workspace leaves the delivery bookmark on the old empty working-copy commit,
+// a sibling of the validated commit, so `jj git push --bookmark` cannot publish it. After the validated commit,
+// move exactly that one eligible bookmark to the validated commit. Returns null when the policy does not apply,
+// and an advisory (never a veto of the already-made commit) when the state is ineligible; nothing moves then.
+async function advanceJjDeliveryBookmark(root: string, cfg: HookPolicy): Promise<string | null> {
+  if (!cfg.worktrees.enabled || !existsSync(join(root, ".jj"))) return null;
+  const state = await layout(root, cfg.worktrees);
+  if ("error" in state || state.branch || state.current === state.primary || !inside(state.worktreeRoot, state.current)) return null;
+  const refuse = (reason: string) => `${ADVANCE_ADVISORY}: ${reason}`;
+  const [validated, ...gitParents] = (await git(root, ["rev-list", "--parents", "-n", "1", "HEAD"])).out.split(" ");
+  if (!validated || gitParents.length !== 1) return refuse("the validated HEAD must have exactly one parent");
+  const old = await jjWorkingCopy(root, true);
+  if (!old || !old.empty || old.parents !== gitParents[0]) return refuse("the previous working-copy commit is not an empty sibling of the validated commit");
+  if (old.bookmarks.length !== 1) return refuse(`the previous working-copy commit must carry exactly one bookmark; found ${old.bookmarks.length}`);
+  const name = old.bookmarks[0]!, exported = await branchForCommit(root, old.commit, []);
+  if (cfg.protected_branches.includes(name)) return refuse(`bookmark ${name} is protected`);
+  if ("error" in exported || exported.branch !== name) return refuse(`bookmark ${name} is conflicted or not the only exported branch at the previous working-copy commit`);
+  const now = await jjWorkingCopy(root, false);
+  if (!now || !now.empty || now.parents !== validated) return refuse("the working copy is not an empty child of the validated commit");
+  const moved = await jj(root, ["bookmark", "set", name, "-r", validated, "--allow-backwards"]);
+  const targets = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `bookmarks(exact:${JSON.stringify(name)})`, "-T", 'commit_id ++ "\\n"']);
+  if (moved.code || targets.out !== validated || (await branchCommit(root, name)) !== validated) return refuse(`bookmark ${name} did not end at the validated commit ${validated}: ${moved.err || targets.out}`);
+  return `advanced delivery bookmark ${name} to ${validated}`;
 }
 
 type Layout = { primary: string; worktreeRoot: string; current: string };
