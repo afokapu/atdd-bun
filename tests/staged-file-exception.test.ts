@@ -227,8 +227,8 @@ test("a commit that does not match the authorized inventory never consumes the a
     expect(await runHook("pre-commit", root)).toMatchObject({ ok: true });
     await git(root, ["reset", "-q", "--", "src/composition.ts"]);
     expect((await commit(root, "partial delivery")).code).toBe(0);
-    expect(await runHook("post-commit", root)).toMatchObject({ ok: true });
+    expect(await runHook("post-commit", root)).toMatchObject({ ok: true, message: expect.stringContaining("pending authorization preserved") });
     expect(existsSync(join(await directory(root), "consumed.yaml"))).toBeFalse();
-    expect(existsSync(join(await directory(root), "pending.yaml"))).toBeFalse();
+    expect(existsSync(join(await directory(root), "pending.yaml"))).toBeTrue();
   } finally { await cleanup(root); }
 }, 30_000);
