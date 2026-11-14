@@ -6,7 +6,7 @@ import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-const FLOW_VERSION = "0.3.82";
+const FLOW_VERSION = "0.3.97";
 const root = join(import.meta.dir, "..");
 
 test("package.json pins @afokapu/atdd-flow to the exact authorized version", async () => {
