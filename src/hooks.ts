@@ -422,11 +422,15 @@ async function consumePendingException(root: string): Promise<string | null> {
     const landed = await landedDelivery(root, marker);
     if ("refusal" in landed) return preservedPending(`${landed.refusal}; authorized recovery is required`);
     if ("none" in landed) return preservedPending("no commit since the pending base carries exactly the authorized inventory");
-    const consumed = await readExceptionRecord(join(directory, "consumed.yaml"));
-    if (consumed === "missing") await publishConsumedException(directory, landed.commit);
-    else if (!consumedThisDelivery(consumed, landed.commit)) return preservedPending("consumed record is unreadable or names a different delivery; authorized recovery is required");
-    return await rm(pending, { force: true }).then(() => null);
+    const unrecorded = await recordConsumption(directory, landed.commit);
+    return unrecorded ? preservedPending(unrecorded) : await rm(pending, { force: true }).then(() => null);
   } catch (error) { return preservedPending(`ledger transition failed: ${String(error)}`); }
+}
+/** Make sure the ledger names this delivery as consumed, publishing it when absent; returns why it cannot, or null when it does. */
+async function recordConsumption(directory: string, commit: string): Promise<string | null> {
+  const consumed = await readExceptionRecord(join(directory, "consumed.yaml"));
+  if (consumed === "missing") return await publishConsumedException(directory, commit).then(() => null);
+  return consumedThisDelivery(consumed, commit) ? null : "consumed record is unreadable or names a different delivery; authorized recovery is required";
 }
 /** A leftover pending may sit beside a new grant only while it is valid and no commit since its base delivered the inventory; otherwise refuse until post-commit completes it or recovery is authorized. */
 async function leftoverPendingRefusal(directory: string, root: string): Promise<string | null> {
