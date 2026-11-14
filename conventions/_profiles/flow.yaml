@@ -4,9 +4,21 @@ implementations: []
 conventions:
   - rule_id: "atdd-bun.review.behavioral-reconciliation"
     path: "conventions/atdd-bun.review/atdd-bun.review.behavioral-reconciliation.convention.yaml"
+  - rule_id: "atdd-bun.review.owner-inspectability"
+    path: "conventions/atdd-bun.review/atdd-bun.review.owner-inspectability.convention.yaml"
   - rule_id: "atdd-workflow.workflow.lifecycle"
     path: "../atdd-flow/conventions/atdd-workflow.workflow/atdd-workflow.workflow.lifecycle.convention.yaml"
 relationships:
+  - confidence: 1
+    constraint: "mandatory"
+    control: "internal"
+    foundation: "finish_to_start"
+    origin: "@afokapu/atdd-bun"
+    reason: "owner-inspection evidence is checked read-only before the final behavioral reconciliation accepts the delivery"
+    source_ref: "atdd-bun.review.behavioral-reconciliation"
+    strength: "important"
+    target_ref: "atdd-bun.review.owner-inspectability"
+    type: "requires"
   - confidence: 1
     constraint: "mandatory"
     control: "internal"

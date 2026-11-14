@@ -20,3 +20,5 @@ export { releaseCheck } from "./release";
 export { profileRegistries, renderProfileRegistries, PROFILE_REGISTRY_DIR } from "./profile-registry";
 export { defaultTopology, topologyFor } from "./topology";
 export type { Topology } from "./topology";
+export { OWNER_INSPECTION_RULE_IDS, checkOwnerInspection } from "./owner-inspection-evidence";
+export type { OwnerInspectionCandidate, OwnerInspectionCheck, OwnerInspectionFinding, OwnerInspectionInput, OwnerInspectionRuleId } from "./owner-inspection-evidence";
