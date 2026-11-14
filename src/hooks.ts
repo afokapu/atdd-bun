@@ -651,7 +651,12 @@ async function exactDeliveryBookmark(root: string, at: WorkingCopy, protectedBra
 type Holder = { name: string } | { error: string; explain?: string };
 const EMPTY_PARENT = "the bookmarked parent commit is empty (an empty first commit cannot be followed by another)";
 const SNAPSHOT_DIFFERS = "a jj snapshot recorded edits in the working-copy commit that differ from the staged content; stage exactly that content (re-run jj st if you edited since, then git add -A) and commit again";
-const gitTree = async (root: string, args: string[]) => { const result = await git(root, args); return result.code ? "" : result.out; };
+const gitValue = async (root: string, args: string[]) => { const result = await git(root, args); return result.code ? "" : result.out; };
+// Two Git answers agree only when both exist: a failed lookup never equals another failed lookup.
+async function sameGitValue(root: string, left: string[], right: string[]): Promise<boolean> {
+  const value = await gitValue(root, left);
+  return !!value && value === await gitValue(root, right);
+}
 
 // Where the delivery bookmark must rest for a commit to be both admissible and advanceable: on the working
 // copy itself, or, when the working copy is an unbookmarked empty child, on its non-empty parent (the commit
@@ -671,11 +676,11 @@ type Admission = { admitted: true } | { admitted: false; reason?: string };
 async function jjDeliveryAdmission(root: string, protectedBranches: string[]): Promise<Admission> {
   if (!existsSync(join(root, ".jj"))) return { admitted: false };
   const at = await jjWorkingCopy(root, true);
-  if (!at || !at.parents || at.parents !== await gitTree(root, ["rev-parse", "HEAD"])) return { admitted: false };
+  if (!at || !at.parents || at.parents !== await gitValue(root, ["rev-parse", "HEAD"])) return { admitted: false };
   const holder = await bookmarkHolder(root, at, protectedBranches);
   if ("error" in holder) return { admitted: false, reason: holder.explain };
-  const staged = at.empty || await gitTree(root, ["write-tree"]) === await gitTree(root, ["rev-parse", `${at.commit}^{tree}`]);
-  return staged ? { admitted: true } : { admitted: false, reason: SNAPSHOT_DIFFERS };
+  const contentMatches = at.empty || await sameGitValue(root, ["write-tree"], ["rev-parse", `${at.commit}^{tree}`]);
+  return contentMatches ? { admitted: true } : { admitted: false, reason: SNAPSHOT_DIFFERS };
 }
 
 async function detachedHeadRefusal(root: string, protectedBranches: string[]): Promise<string | null> {
@@ -686,8 +691,7 @@ async function detachedHeadRefusal(root: string, protectedBranches: string[]): P
 // A snapshotted (non-empty) previous working copy may be advanced past only when the validated commit is its
 // identical-tree duplicate and nothing hangs below it. It is never abandoned: the caller only reports it.
 async function snapshotDuplicateError(root: string, old: WorkingCopy, validated: string): Promise<string | null> {
-  const tree = await gitTree(root, ["rev-parse", `${validated}^{tree}`]);
-  if (!tree || tree !== await gitTree(root, ["rev-parse", `${old.commit}^{tree}`])) return "the validated commit does not have the snapshotted working-copy commit's tree";
+  if (!await sameGitValue(root, ["rev-parse", `${validated}^{tree}`], ["rev-parse", `${old.commit}^{tree}`])) return "the validated commit does not have the snapshotted working-copy commit's tree";
   const below = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `descendants(${old.commit}) ~ ${old.commit}`, "-T", 'commit_id ++ "\\n"']).catch(() => null);
   return below && !below.code && !below.out ? null : "the snapshotted working-copy commit has descendants";
 }
