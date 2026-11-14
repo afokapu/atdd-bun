@@ -362,16 +362,39 @@ async function recordPendingException(root: string, grant: StagedFileExceptionGr
   const directory = await stagedExceptionDirectory(root);
   if (!directory) return;
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256 }));
+  const base = await git(root, ["rev-parse", "--verify", "-q", "HEAD"]);
+  await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256, base: base.code || !base.out ? null : base.out }));
 }
 const preservedPending = (reason: string) => `staged-file exception pending authorization preserved: ${reason}`;
-const pendingRefusal = (marker: ExceptionRecord) => marker === "missing" || marker === "malformed" ? "pending record is malformed"
+const validBase = (base: unknown) => base === null || typeof base === "string" && /^[0-9a-f]{40,64}$/.test(base);
+const pendingRefusal = (marker: ExceptionRecord) => marker === "missing" || marker === "malformed" || ("base" in marker && !validBase(marker.base)) ? "pending record is malformed"
   : marker.owner_authorization !== exceptionPin.owner_authorization || marker.inventory_sha256 !== exceptionInventoryHash ? "pending record does not match the pinned authorization" : null;
-/** The exact HEAD this hook run delivered, or why it is not the pinned inventory; nothing is changed while deciding. */
-async function exactInventoryHead(root: string): Promise<{ head: string } | { refusal: string }> {
-  const head = await git(root, ["rev-parse", "HEAD"]), committed = await git(root, ["show", "--pretty=format:", "--name-only", "HEAD"]);
-  if (head.code || !head.out || committed.code) return { refusal: `HEAD could not be read: ${head.err || committed.err || "empty result"}` };
-  return inventoryHash(committed.out.split("\n").filter(Boolean)) === exceptionInventoryHash ? { head: head.out } : { refusal: "HEAD does not carry exactly the authorized inventory" };
+/** Whether one commit's own changed paths are exactly the pinned inventory. */
+async function carriesExactInventory(root: string, commit: string): Promise<boolean | string> {
+  const shown = await git(root, ["show", "--pretty=format:", "--name-only", commit]);
+  return shown.code ? `commit ${commit} could not be read: ${shown.err || "empty result"}` : inventoryHash(shown.out.split("\n").filter(Boolean)) === exceptionInventoryHash;
+}
+type Landing = { commit: string } | { none: true } | { refusal: string };
+/** The commits a pending grant could have produced: base..HEAD, or all of HEAD when the grant was made on an unborn repository. */
+async function commitsSinceBase(root: string, base: string | null): Promise<string[] | string> {
+  if ((await git(root, ["rev-parse", "--verify", "-q", "HEAD"])).code) return base === null ? [] : `base ${base} is not an ancestor of HEAD; history was rewritten`;
+  if (base !== null && (await git(root, ["merge-base", "--is-ancestor", base, "HEAD"])).code) return `base ${base} is not an ancestor of HEAD; history was rewritten`;
+  const listed = await git(root, ["rev-list", ...(base === null ? ["HEAD"] : [`${base}..HEAD`])]);
+  return listed.code ? `commits since the pending base could not be listed: ${listed.err}` : listed.out.split("\n").filter(Boolean);
+}
+/** Where a pending grant landed. Nothing is changed while deciding; any doubt (unreachable base, several matches, read failure) is a refusal. A pending without a base predates this record, so only HEAD itself can complete it. */
+async function landedDelivery(root: string, marker: Record<string, unknown>): Promise<Landing> {
+  const candidates = "base" in marker ? await commitsSinceBase(root, marker.base as string | null) : [(await git(root, ["rev-parse", "HEAD"])).out];
+  if (typeof candidates === "string") return { refusal: candidates };
+  const matches: string[] = [];
+  for (const commit of candidates) {
+    const carries = commit ? await carriesExactInventory(root, commit) : "HEAD could not be read";
+    if (typeof carries === "string") return { refusal: carries };
+    if (carries) matches.push(commit);
+  }
+  if (matches.length > 1) return { refusal: `${matches.length} commits carry the authorized inventory: ${matches.join(", ")}` };
+  if (matches[0]) return { commit: matches[0] };
+  return "base" in marker ? { none: true } : { refusal: "pending record has no base commit and HEAD does not carry exactly the authorized inventory" };
 }
 /** Publish the consumed record complete or not at all; a failed attempt leaves no partial ledger entry. */
 async function publishConsumedException(directory: string, head: string) {
@@ -381,11 +404,12 @@ async function publishConsumedException(directory: string, head: string) {
     await rename(temporary, join(directory, "consumed.yaml"));
   } catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
 }
-/** A consumed record completes the same delivery only when it names this authorization and exactly the HEAD being finished. */
-const consumedThisDelivery = (consumed: ExceptionRecord, head: string) => consumed !== "missing" && consumed !== "malformed" && consumed.owner_authorization === exceptionPin.owner_authorization && consumed.commit === head;
+/** A consumed record completes the same delivery only when it names this authorization and exactly the commit being finished. */
+const consumedThisDelivery = (consumed: ExceptionRecord, commit: string) => consumed !== "missing" && consumed !== "malformed" && consumed.owner_authorization === exceptionPin.owner_authorization && consumed.commit === commit;
 /**
- * Consume the authorization when a valid pending marker meets HEAD carrying exactly the pinned inventory. Pending is removed
- * only after the consumed record is durable, so every refusal or I/O failure preserves it for a retry; the return value is that diagnostic.
+ * Consume the authorization when a valid pending marker meets the one commit since its base that carries exactly the pinned
+ * inventory. Pending is removed only after the consumed record is durable, so every refusal or I/O failure preserves it for a
+ * retry; the return value is that diagnostic.
  */
 async function consumePendingException(root: string): Promise<string | null> {
   try {
@@ -394,23 +418,25 @@ async function consumePendingException(root: string): Promise<string | null> {
     const pending = join(directory, "pending.yaml"), marker = await readExceptionRecord(pending);
     if (marker === "missing") return null;
     const refusal = pendingRefusal(marker);
-    if (refusal) return preservedPending(refusal);
-    const delivered = await exactInventoryHead(root);
-    if ("refusal" in delivered) return preservedPending(delivered.refusal);
+    if (refusal || marker === "malformed") return preservedPending(refusal ?? "pending record is malformed");
+    const landed = await landedDelivery(root, marker);
+    if ("refusal" in landed) return preservedPending(`${landed.refusal}; authorized recovery is required`);
+    if ("none" in landed) return preservedPending("no commit since the pending base carries exactly the authorized inventory");
     const consumed = await readExceptionRecord(join(directory, "consumed.yaml"));
-    if (consumed === "missing") await publishConsumedException(directory, delivered.head);
-    else if (!consumedThisDelivery(consumed, delivered.head)) return preservedPending("consumed record is unreadable or is not this delivery");
+    if (consumed === "missing") await publishConsumedException(directory, landed.commit);
+    else if (!consumedThisDelivery(consumed, landed.commit)) return preservedPending("consumed record is unreadable or names a different delivery; authorized recovery is required");
     return await rm(pending, { force: true }).then(() => null);
   } catch (error) { return preservedPending(`ledger transition failed: ${String(error)}`); }
 }
-/** A leftover pending may sit beside a new grant only while it is valid and its delivery never landed; otherwise refuse until post-commit completes it or recovery is authorized. */
+/** A leftover pending may sit beside a new grant only while it is valid and no commit since its base delivered the inventory; otherwise refuse until post-commit completes it or recovery is authorized. */
 async function leftoverPendingRefusal(directory: string, root: string): Promise<string | null> {
   const marker = await readExceptionRecord(join(directory, "pending.yaml"));
   if (marker === "missing") return null;
   const unrecoverable = pendingRefusal(marker);
-  if (unrecoverable) return `leftover pending authorization is unrecoverable (${unrecoverable}); authorized recovery is required`;
-  const delivered = await exactInventoryHead(root);
-  return "head" in delivered ? `leftover pending authorization: HEAD ${delivered.head} already carries the authorized inventory; complete its post-commit consumption before any new grant` : null;
+  if (unrecoverable || marker === "malformed") return `leftover pending authorization is unrecoverable (${unrecoverable ?? "pending record is malformed"}); authorized recovery is required`;
+  const landed = await landedDelivery(root, marker);
+  if ("refusal" in landed) return `leftover pending authorization is unrecoverable (${landed.refusal}); authorized recovery is required`;
+  return "commit" in landed ? `leftover pending authorization: commit ${landed.commit} already carries the authorized inventory; complete its post-commit consumption before any new grant` : null;
 }
 /** The staged-file-count gate: the ordinary rejection, unless the pinned exception admits exactly this staged set. */
 async function stagedCountGate(root: string, staged: string[], counted: number, limit: number): Promise<{ rejection: string | null; grant: StagedFileExceptionGrant | null }> {
