@@ -541,7 +541,7 @@ async function primaryPolicy(root: string): Promise<PrimaryPolicy> { const found
 const disabledWorktreePolicy = (source: PrimaryPolicy["source"]) => bad(source ? `worktree policy is disabled in primary checkout ${source.path} at ${source.commit}; update the primary checkout and try again` : "worktree policy is disabled");
 export type WorktreeLayout = { primary: string; worktreeRoot: string; current: string; branch: string };
 async function layout(root: string, cfg: WorktreePolicy): Promise<WorktreeLayout | { error: string }> { const current = await realpath(resolve(root)), commonRoot = await primaryRoot(current); if (!commonRoot) return { error: "not inside a Git worktree" }; const primary = await realpath(commonRoot), expectedPrimary = cfg.primary_directory === "." ? primary : join(dirname(primary), cfg.primary_directory); if (primary !== expectedPrimary) return { error: `primary checkout must be ${expectedPrimary}, not ${primary}` }; const branch = (await git(primary, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out; if (branch !== cfg.primary_branch && !(await jjPrimaryOnBranch(primary, cfg.primary_branch))) return { error: `primary checkout ${primary} must be on ${cfg.primary_branch}, not ${branch || "a detached HEAD"}` }; return { primary, worktreeRoot: resolve(primary, cfg.root.replaceAll("{repo}", basename(primary))), current, branch: (await git(current, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out }; }
-async function worktreeCommitPolicy(root: string, cfg: WorktreePolicy, protectedBranches: string[]): Promise<string | null> { if (!cfg.enabled || !cfg.require_linked_worktree) return null; const state = await layout(root, cfg); if ("error" in state) return state.error; if (state.current === state.primary) return `commits must use a linked worktree beneath ${state.worktreeRoot}; run: atdd-bun worktree start <branch>`; if (!inside(state.worktreeRoot, state.current)) return `linked worktree ${state.current} is outside required root ${state.worktreeRoot}`; if (!state.branch && !(await jjDeliveryBookmarkAtWorkingCopy(state.current, protectedBranches))) return "commits require a named branch, not a detached HEAD"; return null; }
+async function worktreeCommitPolicy(root: string, cfg: WorktreePolicy, protectedBranches: string[]): Promise<string | null> { if (!cfg.enabled || !cfg.require_linked_worktree) return null; const state = await layout(root, cfg); if ("error" in state) return state.error; if (state.current === state.primary) return `commits must use a linked worktree beneath ${state.worktreeRoot}; run: atdd-bun worktree start <branch>`; if (!inside(state.worktreeRoot, state.current)) return `linked worktree ${state.current} is outside required root ${state.worktreeRoot}`; if (!state.branch) { const refusal = await detachedHeadRefusal(state.current, protectedBranches); if (refusal) return refusal; } return null; }
 
 export async function runHook(event: HookEvent, root = process.cwd(), args: string[] = [], stdin = "") {
   const cfg = await policy(root), branch = (await git(root, ["symbolic-ref", "--quiet", "--short", "HEAD"])).out;
@@ -631,8 +631,8 @@ const ADVANCE_ADVISORY = "delivery bookmark not advanced";
 const workingCopyTemplate = 'commit_id ++ "\\n" ++ empty ++ "\\n" ++ parents.map(|p| p.commit_id()).join(",") ++ "\\n" ++ local_bookmarks.map(|b| if(b.conflict(), "conflict:", "") ++ b.name()).join("\\n")';
 type WorkingCopy = { commit: string; empty: boolean; parents: string; bookmarks: string[] };
 // `--ignore-working-copy` reads the recorded operation state without snapshotting; omit it to snapshot first.
-async function jjWorkingCopy(root: string, ignoreWorkingCopy: boolean): Promise<WorkingCopy | null> {
-  const result = await jj(root, ["log", ...(ignoreWorkingCopy ? ["--ignore-working-copy"] : []), "--no-graph", "-r", "@", "-T", workingCopyTemplate]).catch(() => null);
+async function jjWorkingCopy(root: string, ignoreWorkingCopy: boolean, rev = "@"): Promise<WorkingCopy | null> {
+  const result = await jj(root, ["log", ...(ignoreWorkingCopy ? ["--ignore-working-copy"] : []), "--no-graph", "-r", rev, "-T", workingCopyTemplate]).catch(() => null);
   if (!result || result.code) return null;
   const [commit, empty, parents, ...bookmarks] = result.out.split("\n");
   return { commit: commit ?? "", empty: empty === "true", parents: parents ?? "", bookmarks: bookmarks.filter(Boolean) };
@@ -648,26 +648,64 @@ async function exactDeliveryBookmark(root: string, at: WorkingCopy, protectedBra
   return "error" in exported || exported.branch !== name ? { error: `bookmark ${name} is conflicted or not the only exported branch at the working-copy commit` } : { name };
 }
 
-// A colocated JJ workspace keeps Git HEAD detached, so the named-branch condition is read from JJ: @ must
-// carry the exact delivery bookmark. Reading without a snapshot keeps the hook from mutating the working copy.
-async function jjDeliveryBookmarkAtWorkingCopy(root: string, protectedBranches: string[]): Promise<boolean> {
-  if (!existsSync(join(root, ".jj"))) return false;
-  const at = await jjWorkingCopy(root, true);
-  return !!at && "name" in await exactDeliveryBookmark(root, at, protectedBranches);
+type Holder = { name: string } | { error: string; explain?: string };
+const EMPTY_PARENT = "the bookmarked parent commit is empty (an empty first commit cannot be followed by another)";
+const SNAPSHOT_DIFFERS = "a jj snapshot recorded edits in the working-copy commit that differ from the staged content; stage exactly that content (re-run jj st if you edited since, then git add -A) and commit again";
+const gitTree = async (root: string, args: string[]) => { const result = await git(root, args); return result.code ? "" : result.out; };
+
+// Where the delivery bookmark must rest for a commit to be both admissible and advanceable: on the working
+// copy itself, or, when the working copy is an unbookmarked empty child, on its non-empty parent (the commit
+// the previous advance validated).
+async function bookmarkHolder(root: string, at: WorkingCopy, protectedBranches: string[]): Promise<Holder> {
+  if (at.bookmarks.length) return exactDeliveryBookmark(root, at, protectedBranches);
+  const parent = at.empty && at.parents && !at.parents.includes(",") ? await jjWorkingCopy(root, true, at.parents) : null;
+  if (!parent) return { error: "the working copy carries no bookmark and has no single parent to hold it" };
+  const exact = await exactDeliveryBookmark(root, parent, protectedBranches);
+  return "error" in exact || !parent.empty ? exact : { error: "the bookmarked parent commit is empty", explain: EMPTY_PARENT };
 }
 
-// `git commit` in a colocated JJ workspace leaves the delivery bookmark on the old empty working-copy commit,
-// a sibling of the validated commit, so `jj git push --bookmark` cannot publish it. Verify the validated commit
+type Admission = { admitted: true } | { admitted: false; reason?: string };
+// A colocated JJ workspace keeps Git HEAD detached, so the named-branch condition is read from JJ without a
+// snapshot (so the hook never mutates the working copy). Admission mirrors exactly what post-commit can advance:
+// Git HEAD is the working copy's single parent, and either the working copy is empty or its content is what is staged.
+async function jjDeliveryAdmission(root: string, protectedBranches: string[]): Promise<Admission> {
+  if (!existsSync(join(root, ".jj"))) return { admitted: false };
+  const at = await jjWorkingCopy(root, true);
+  if (!at || !at.parents || at.parents !== await gitTree(root, ["rev-parse", "HEAD"])) return { admitted: false };
+  const holder = await bookmarkHolder(root, at, protectedBranches);
+  if ("error" in holder) return { admitted: false, reason: holder.explain };
+  const staged = at.empty || await gitTree(root, ["write-tree"]) === await gitTree(root, ["rev-parse", `${at.commit}^{tree}`]);
+  return staged ? { admitted: true } : { admitted: false, reason: SNAPSHOT_DIFFERS };
+}
+
+async function detachedHeadRefusal(root: string, protectedBranches: string[]): Promise<string | null> {
+  const admission = await jjDeliveryAdmission(root, protectedBranches);
+  return admission.admitted ? null : `commits require a named branch, not a detached HEAD${admission.reason ? `; ${admission.reason}` : ""}`;
+}
+
+// A snapshotted (non-empty) previous working copy may be advanced past only when the validated commit is its
+// identical-tree duplicate and nothing hangs below it. It is never abandoned: the caller only reports it.
+async function snapshotDuplicateError(root: string, old: WorkingCopy, validated: string): Promise<string | null> {
+  const tree = await gitTree(root, ["rev-parse", `${validated}^{tree}`]);
+  if (!tree || tree !== await gitTree(root, ["rev-parse", `${old.commit}^{tree}`])) return "the validated commit does not have the snapshotted working-copy commit's tree";
+  const below = await jj(root, ["log", "--ignore-working-copy", "--no-graph", "-r", `descendants(${old.commit}) ~ ${old.commit}`, "-T", 'commit_id ++ "\\n"']).catch(() => null);
+  return below && !below.code && !below.out ? null : "the snapshotted working-copy commit has descendants";
+}
+
+// `git commit` in a colocated JJ workspace leaves the delivery bookmark on the old working-copy commit or on its
+// parent, never on the validated commit, so `jj git push --bookmark` cannot publish it. Verify the validated commit
 // and the previous working copy, returning the one bookmark to move or the reason it must stay.
-async function advanceCandidate(root: string, protectedBranches: string[]): Promise<{ name: string; validated: string } | { error: string }> {
+async function advanceCandidate(root: string, protectedBranches: string[]): Promise<{ name: string; validated: string; duplicate?: string } | { error: string }> {
   const [validated, ...gitParents] = (await git(root, ["rev-list", "--parents", "-n", "1", "HEAD"])).out.split(" ");
   if (!validated || gitParents.length !== 1) return { error: "the validated HEAD must have exactly one parent" };
   const old = await jjWorkingCopy(root, true);
-  if (!old || !old.empty || old.parents !== gitParents[0]) return { error: "the previous working-copy commit is not an empty sibling of the validated commit" };
-  const exact = await exactDeliveryBookmark(root, old, protectedBranches);
-  if ("error" in exact) return exact;
+  if (!old || old.parents !== gitParents[0]) return { error: "the previous working-copy commit is not a sibling of the validated commit" };
+  const holder = await bookmarkHolder(root, old, protectedBranches);
+  if ("error" in holder) return holder;
+  const duplicateError = old.empty ? null : await snapshotDuplicateError(root, old, validated);
+  if (duplicateError) return { error: duplicateError };
   const now = await jjWorkingCopy(root, false);
-  return now?.empty && now.parents === validated ? { name: exact.name, validated } : { error: "the working copy is not an empty child of the validated commit" };
+  return now?.empty && now.parents === validated ? { name: holder.name, validated, duplicate: old.empty ? undefined : old.commit } : { error: "the working copy is not an empty child of the validated commit" };
 }
 
 // The advance applies only to a detached colocated JJ workspace linked beneath the required worktree root.
@@ -692,7 +730,8 @@ async function advanceJjDeliveryBookmark(root: string, cfg: HookPolicy): Promise
   const candidate = await advanceCandidate(root, cfg.protected_branches);
   if ("error" in candidate) return `${ADVANCE_ADVISORY}: ${candidate.error}`;
   const failure = await moveBookmarkVerified(root, candidate.name, candidate.validated);
-  return failure ? `${ADVANCE_ADVISORY}: ${failure}` : `advanced delivery bookmark ${candidate.name} to ${candidate.validated}`;
+  const note = candidate.duplicate ? `; commit ${candidate.duplicate} is a redundant identical-tree snapshot that no longer carries the bookmark and may be abandoned` : "";
+  return failure ? `${ADVANCE_ADVISORY}: ${failure}` : `advanced delivery bookmark ${candidate.name} to ${candidate.validated}${note}`;
 }
 
 type Layout = { primary: string; worktreeRoot: string; current: string };
