@@ -205,7 +205,7 @@ const refusedWith = async (cwd: string, reason: string) => {
   }
 };
 
-jjTest("a snapshotted non-empty @ carrying the bookmark is refused with a diagnostic, not admitted and stranded", withFixture(async f => {
+jjTest("snapshot then a fully staged commit: the non-empty bookmarked @ is refused with a diagnostic, not admitted and stranded", withFixture(async f => {
   await stage(f.ws, "one.txt");
   await jj(f.ws, "status");
   expect(await jj(f.ws, "log", "--no-graph", "-r", "@ & empty()", "-T", "commit_id")).toBe("");
@@ -241,4 +241,13 @@ jjTest("the refusal for an empty bookmarked @- names the empty parent commit", w
   await jj(f.ws, "new");
   await stage(f.ws, "one.txt");
   await refusedWith(f.ws, "parent commit is empty");
+}), 90_000);
+
+jjTest("snapshot then a partially staged commit: the non-empty bookmarked @ is refused and nothing moves", withFixture(async f => {
+  await writeFile(join(f.ws, "staged.txt"), "staged\n"); await writeFile(join(f.ws, "unstaged.txt"), "unstaged\n");
+  await jj(f.ws, "status");
+  await git(f.ws, "add", "staged.txt");
+  const before = await bookmarkState(f.ws);
+  await refusedWith(f.ws, "working-copy commit is not empty");
+  expect(await bookmarkState(f.ws)).toBe(before);
 }), 90_000);
