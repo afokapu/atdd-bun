@@ -41,16 +41,19 @@ function staleCandidate(input: OwnerInspectionInput): OwnerInspectionFinding[] {
   return findings;
 }
 
+function isLoopbackUrl(locator: unknown): boolean {
+  try {
+    const url = new URL(String(locator));
+    return LOOPBACK_HOSTS.includes(url.hostname) && !url.username && !url.password;
+  } catch {
+    return false;
+  }
+}
+
 function targetFindings(record: OwnerInspectionRecord): OwnerInspectionFinding[] {
   const target = record.target;
   if (target?.kind !== "local") return [found("non-local-target", "target.kind", `a ${String(target?.kind)} target is not authorized by this convention; only a loopback local target is, absent ${DIRECTIVE}`)];
-  try {
-    const url = new URL(String(target.locator));
-    const loopback = LOOPBACK_HOSTS.includes(url.hostname) && !url.username && !url.password;
-    return loopback ? [] : [found("non-local-target", "target.locator", "a local target must be a credential-free 127.0.0.1 or localhost URL")];
-  } catch {
-    return [found("non-local-target", "target.locator", "a local target must be a credential-free 127.0.0.1 or localhost URL")];
-  }
+  return isLoopbackUrl(target.locator) ? [] : [found("non-local-target", "target.locator", "a local target must be a credential-free 127.0.0.1 or localhost URL")];
 }
 
 function notApplicableFindings(record: OwnerInspectionRecord): OwnerInspectionFinding[] {
