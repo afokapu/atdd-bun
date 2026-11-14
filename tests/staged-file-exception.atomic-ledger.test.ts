@@ -245,3 +245,64 @@ jjTest("jj colocated: a changed HEAD preserves pending, and the exact delivery t
     expect(await exists(pendingFile(f.root))).toBeFalse();
   } finally { await f.cleanup(); }
 }, 120_000);
+
+// Leftover-pending recovery negatives: a retry may complete a leftover pending ONLY when its marker and the exact HEAD
+// inventory still match. Any other leftover pending fails closed with a diagnostic and blocks reuse or a new grant.
+const LEFTOVER = /leftover pending authorization/;
+const STALE_MARKER = () => JSON.stringify({ owner_authorization: OWNER_AUTHORIZATION, inventory_sha256: "0".repeat(64) });
+
+test("git hooks: a leftover pending whose marker does not match the pin is preserved even when HEAD carries the exact inventory", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    await writeFile(await pendingFile(f.root), STALE_MARKER());
+    expect((await run(f.root, ["git", "commit", "-qm", "atomic delivery", "--no-verify"])).code).toBe(0);
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(STALE_MARKER());
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: a leftover pending beside a consumed record is not completed when HEAD is no longer the consumed delivery", async () => {
+  const f = await gitFixture(); try {
+    expect((await run(f.root, ["git", "commit", "-qm", "atomic delivery"])).code).toBe(0);
+    const consumed = await readFile(await consumedFile(f.root), "utf8");
+    const pending = JSON.stringify({ owner_authorization: OWNER_AUTHORIZATION, inventory_sha256: inventoryHash(inventory) });
+    await writeFile(await pendingFile(f.root), pending);
+    await writeFile(join(f.root, "unrelated.txt"), "later\n"); await git(f.root, "add", "unrelated.txt");
+    expect((await run(f.root, ["git", "commit", "-qm", "unrelated", "--no-verify"])).code).toBe(0);
+    const result = await runHook("post-commit", f.root);
+    expect(result.message).toMatch(PRESERVED);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await readFile(await consumedFile(f.root), "utf8")).toBe(consumed);
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: a leftover pending that cannot be recovered refuses a new grant with a diagnostic and keeps the ordinary rejection", async () => {
+  const f = await gitFixture(); try {
+    await mkdir(await ledger(f.root), { recursive: true });
+    await writeFile(await pendingFile(f.root), STALE_MARKER());
+    const result = await runHook("pre-commit", f.root);
+    expect(result.ok).toBeFalse();
+    expect(result.message).toMatch(/^staged files \d+ exceed 20/);
+    expect(result.message).toContain("staged-file exception refused");
+    expect(result.message).toMatch(LEFTOVER);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(STALE_MARKER());
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+jjTest("jj colocated: a leftover pending beside a consumed record is preserved with a diagnostic when HEAD moved on, and no bookmark other than the delivery bookmark moves", async () => {
+  const f = await jjFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    await git(f.root, "commit", "-q", "-m", "atomic delivery", "--no-verify");
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    const consumed = await readFile(await consumedFile(f.root), "utf8"), mainBefore = await bookmarkCommits(f.root, "main");
+    const pending = JSON.stringify({ owner_authorization: OWNER_AUTHORIZATION, inventory_sha256: inventoryHash(inventory) });
+    await writeFile(await pendingFile(f.root), pending);
+    await writeFile(join(f.root, "unrelated.txt"), "later\n"); await git(f.root, "add", "unrelated.txt");
+    await git(f.root, "commit", "-q", "-m", "unrelated", "--no-verify");
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await readFile(await consumedFile(f.root), "utf8")).toBe(consumed);
+    expect(await bookmarkCommits(f.root, "main")).toEqual(mainBefore);
+  } finally { await f.cleanup(); }
+}, 120_000);
