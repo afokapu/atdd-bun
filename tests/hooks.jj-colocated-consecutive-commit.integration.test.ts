@@ -196,3 +196,49 @@ test("a non-JJ detached linked worktree stays refused after a commit even when a
     await refusedForBranch(linked);
   } finally { await rm(container, { recursive: true, force: true }); }
 }, 60_000);
+
+// Pre-commit must never admit a commit that post-commit cannot advance.
+const refusedWith = async (cwd: string, reason: string) => {
+  for (const event of ["pre-commit", "pre-merge-commit"] as const) {
+    const hook = await runHook(event, cwd);
+    expect(hook.ok).toBeFalse(); expect(hook.message).toContain(NAMED_BRANCH); expect(hook.message).toContain(reason);
+  }
+};
+
+jjTest("a snapshotted non-empty @ carrying the bookmark is refused with a diagnostic, not admitted and stranded", withFixture(async f => {
+  await stage(f.ws, "one.txt");
+  await jj(f.ws, "status");
+  expect(await jj(f.ws, "log", "--no-graph", "-r", "@ & empty()", "-T", "commit_id")).toBe("");
+  const before = await bookmarkState(f.ws);
+  await refusedWith(f.ws, "working-copy commit is not empty");
+  expect(await bookmarkState(f.ws)).toBe(before);
+}), 90_000);
+
+jjTest("after a snapshot, `jj new` leaves a non-empty bookmarked @- and the next git commit passes and advances", withFixture(async f => {
+  await stage(f.ws, "one.txt");
+  await jj(f.ws, "status");
+  await jj(f.ws, "new");
+  const second = await commitFile(f.ws, "two.txt");
+  expect(await bookmarkCommits(f.ws, "delivery/demo")).toEqual([second]);
+  expect(await jj(f.ws, "log", "--no-graph", "-r", "@-", "-T", "commit_id")).toBe(second);
+}), 90_000);
+
+jjTest("a second commit is admitted and advanced when @ is empty but described", withFixture(async f => {
+  await commitFile(f.ws, "one.txt");
+  await jj(f.ws, "describe", "-m", "wip");
+  expect(await jj(f.ws, "log", "--no-graph", "-r", "@ & empty()", "-T", "commit_id")).not.toBe("");
+  const second = await commitFile(f.ws, "two.txt");
+  expect(await bookmarkCommits(f.ws, "delivery/demo")).toEqual([second]);
+}), 90_000);
+
+jjTest("pre-commit refuses a first commit when Git HEAD is not @- because post-commit could not advance it", withFixture(async f => {
+  await git(f.ws, "update-ref", "--no-deref", "HEAD", await git(f.ws, "commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "elsewhere"));
+  await stage(f.ws, "one.txt");
+  await refusedForBranch(f.ws);
+}), 90_000);
+
+jjTest("the refusal for an empty bookmarked @- names the empty parent commit", withFixture(async f => {
+  await jj(f.ws, "new");
+  await stage(f.ws, "one.txt");
+  await refusedWith(f.ws, "parent commit is empty");
+}), 90_000);
