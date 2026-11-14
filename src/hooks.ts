@@ -329,8 +329,9 @@ const refuseException = (reason: string | null): StagedFileExceptionDecision => 
 type ExceptionRecord = Record<string, unknown> | "missing" | "malformed";
 
 async function readExceptionRecord(file: string): Promise<ExceptionRecord> {
-  const text = await readFile(file, "utf8").catch(() => null);
+  const text = await readFile(file, "utf8").catch((error: NodeJS.ErrnoException) => error.code === "ENOENT" ? null : undefined);
   if (text === null) return "missing";
+  if (text === undefined) return "malformed";
   try { const data = Bun.YAML.parse(text) as unknown; return data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : "malformed"; } catch { return "malformed"; }
 }
 const wellFormedExceptionRecord = (record: Record<string, unknown>) => Object.keys(record).length === exceptionFields.length && exceptionFields.every(key => key in record)
@@ -349,6 +350,8 @@ async function authorizeStagedFileException(root: string, staged: string[]): Pro
   const refusal = exceptionRecordRefusal(record);
   if (refusal) return refuseException(refusal);
   if ((await readExceptionRecord(join(directory, "consumed.yaml"))) !== "missing") return refuseException("authorization was already consumed");
+  const leftover = await leftoverPendingRefusal(directory, root);
+  if (leftover) return refuseException(leftover);
   const outside = staged.filter(path => !exceptionInventory.includes(path)), absent = exceptionInventory.filter(path => !staged.includes(path));
   if (outside.length) return refuseException(`staged paths outside the authorized inventory: ${outside.join(", ")}`);
   if (absent.length) return refuseException(`authorized inventory paths missing from the staged set: ${absent.join(", ")}`);
@@ -359,20 +362,85 @@ async function recordPendingException(root: string, grant: StagedFileExceptionGr
   const directory = await stagedExceptionDirectory(root);
   if (!directory) return;
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256 }));
+  const base = await git(root, ["rev-parse", "--verify", "-q", "HEAD"]);
+  await writeFile(join(directory, "pending.yaml"), JSON.stringify({ owner_authorization: grant.owner_authorization, inventory_sha256: grant.inventory_sha256, base: base.code || !base.out ? null : base.out }));
 }
-/** Consume the authorization when HEAD carries exactly the pinned inventory; any pending marker is discarded either way. */
-async function consumePendingException(root: string) {
-  const directory = await stagedExceptionDirectory(root);
-  if (!directory) return;
-  const pending = join(directory, "pending.yaml"), marker = await readExceptionRecord(pending);
-  if (marker === "missing") return;
-  await rm(pending, { force: true });
-  const head = (await git(root, ["rev-parse", "HEAD"])).out, committed = await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]);
-  if (marker === "malformed" || marker.owner_authorization !== exceptionPin.owner_authorization || marker.inventory_sha256 !== exceptionInventoryHash || inventoryHash(committed) !== exceptionInventoryHash) return;
-  const temporary = join(directory, `consumed.yaml.${process.pid}.tmp`);
-  await writeFile(temporary, JSON.stringify({ schema: exceptionSchema, owner_authorization: exceptionPin.owner_authorization, commit: head, inventory_sha256: exceptionInventoryHash, consumed_at: new Date().toISOString() }));
-  await rename(temporary, join(directory, "consumed.yaml"));
+const preservedPending = (reason: string) => `staged-file exception pending authorization preserved: ${reason}`;
+const validBase = (base: unknown) => base === null || typeof base === "string" && /^[0-9a-f]{40,64}$/.test(base);
+const pendingRefusal = (marker: ExceptionRecord) => marker === "missing" || marker === "malformed" || ("base" in marker && !validBase(marker.base)) ? "pending record is malformed"
+  : marker.owner_authorization !== exceptionPin.owner_authorization || marker.inventory_sha256 !== exceptionInventoryHash ? "pending record does not match the pinned authorization" : null;
+/** Whether one commit's own changed paths are exactly the pinned inventory. */
+async function carriesExactInventory(root: string, commit: string): Promise<boolean | string> {
+  const shown = await git(root, ["show", "--pretty=format:", "--name-only", commit]);
+  return shown.code ? `commit ${commit} could not be read: ${shown.err || "empty result"}` : inventoryHash(shown.out.split("\n").filter(Boolean)) === exceptionInventoryHash;
+}
+type Landing = { commit: string } | { none: true } | { refusal: string };
+/** The commits a pending grant could have produced: base..HEAD, or all of HEAD when the grant was made on an unborn repository. */
+async function commitsSinceBase(root: string, base: string | null): Promise<string[] | string> {
+  if ((await git(root, ["rev-parse", "--verify", "-q", "HEAD"])).code) return base === null ? [] : `base ${base} is not an ancestor of HEAD; history was rewritten`;
+  if (base !== null && (await git(root, ["merge-base", "--is-ancestor", base, "HEAD"])).code) return `base ${base} is not an ancestor of HEAD; history was rewritten`;
+  const listed = await git(root, ["rev-list", ...(base === null ? ["HEAD"] : [`${base}..HEAD`])]);
+  return listed.code ? `commits since the pending base could not be listed: ${listed.err}` : listed.out.split("\n").filter(Boolean);
+}
+/** Where a pending grant landed. Nothing is changed while deciding; any doubt (unreachable base, several matches, read failure) is a refusal. A pending without a base predates this record, so only HEAD itself can complete it. */
+async function landedDelivery(root: string, marker: Record<string, unknown>): Promise<Landing> {
+  const candidates = "base" in marker ? await commitsSinceBase(root, marker.base as string | null) : [(await git(root, ["rev-parse", "HEAD"])).out];
+  if (typeof candidates === "string") return { refusal: candidates };
+  const matches: string[] = [];
+  for (const commit of candidates) {
+    const carries = commit ? await carriesExactInventory(root, commit) : "HEAD could not be read";
+    if (typeof carries === "string") return { refusal: carries };
+    if (carries) matches.push(commit);
+  }
+  if (matches.length > 1) return { refusal: `${matches.length} commits carry the authorized inventory: ${matches.join(", ")}` };
+  if (matches[0]) return { commit: matches[0] };
+  return "base" in marker ? { none: true } : { refusal: "pending record has no base commit and HEAD does not carry exactly the authorized inventory" };
+}
+/** Publish the consumed record complete or not at all; a failed attempt leaves no partial ledger entry. */
+async function publishConsumedException(directory: string, head: string) {
+  const temporary = join(directory, `consumed.yaml.${process.pid}.${crypto.randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, JSON.stringify({ schema: exceptionSchema, owner_authorization: exceptionPin.owner_authorization, commit: head, inventory_sha256: exceptionInventoryHash, consumed_at: new Date().toISOString() }));
+    await rename(temporary, join(directory, "consumed.yaml"));
+  } catch (error) { await rm(temporary, { force: true }).catch(() => undefined); throw error; }
+}
+/** A consumed record completes the same delivery only when it names this authorization and exactly the commit being finished. */
+const consumedThisDelivery = (consumed: ExceptionRecord, commit: string) => consumed !== "missing" && consumed !== "malformed" && consumed.owner_authorization === exceptionPin.owner_authorization && consumed.commit === commit;
+/**
+ * Consume the authorization when a valid pending marker meets the one commit since its base that carries exactly the pinned
+ * inventory. Pending is removed only after the consumed record is durable, so every refusal or I/O failure preserves it for a
+ * retry; the return value is that diagnostic.
+ */
+async function consumePendingException(root: string): Promise<string | null> {
+  try {
+    const directory = await stagedExceptionDirectory(root);
+    if (!directory) return null;
+    const pending = join(directory, "pending.yaml"), marker = await readExceptionRecord(pending);
+    if (marker === "missing") return null;
+    const refusal = pendingRefusal(marker);
+    if (refusal || marker === "malformed") return preservedPending(refusal ?? "pending record is malformed");
+    const landed = await landedDelivery(root, marker);
+    if ("refusal" in landed) return preservedPending(`${landed.refusal}; authorized recovery is required`);
+    if ("none" in landed) return preservedPending("no commit since the pending base carries exactly the authorized inventory");
+    const unrecorded = await recordConsumption(directory, landed.commit);
+    return unrecorded ? preservedPending(unrecorded) : await rm(pending, { force: true }).then(() => null);
+  } catch (error) { return preservedPending(`ledger transition failed: ${String(error)}`); }
+}
+/** Make sure the ledger names this delivery as consumed, publishing it when absent; returns why it cannot, or null when it does. */
+async function recordConsumption(directory: string, commit: string): Promise<string | null> {
+  const consumed = await readExceptionRecord(join(directory, "consumed.yaml"));
+  if (consumed === "missing") return await publishConsumedException(directory, commit).then(() => null);
+  return consumedThisDelivery(consumed, commit) ? null : "consumed record is unreadable or names a different delivery; authorized recovery is required";
+}
+/** A leftover pending may sit beside a new grant only while it is valid and no commit since its base delivered the inventory; otherwise refuse until post-commit completes it or recovery is authorized. */
+async function leftoverPendingRefusal(directory: string, root: string): Promise<string | null> {
+  const marker = await readExceptionRecord(join(directory, "pending.yaml"));
+  if (marker === "missing") return null;
+  const unrecoverable = pendingRefusal(marker);
+  if (unrecoverable || marker === "malformed") return `leftover pending authorization is unrecoverable (${unrecoverable ?? "pending record is malformed"}); authorized recovery is required`;
+  const landed = await landedDelivery(root, marker);
+  if ("refusal" in landed) return `leftover pending authorization is unrecoverable (${landed.refusal}); authorized recovery is required`;
+  return "commit" in landed ? `leftover pending authorization: commit ${landed.commit} already carries the authorized inventory; complete its post-commit consumption before any new grant` : null;
 }
 /** The staged-file-count gate: the ordinary rejection, unless the pinned exception admits exactly this staged set. */
 async function stagedCountGate(root: string, staged: string[], counted: number, limit: number): Promise<{ rejection: string | null; grant: StagedFileExceptionGrant | null }> {
@@ -482,7 +550,7 @@ export async function runHook(event: HookEvent, root = process.cwd(), args: stri
   if (event === "pre-commit") { const staged = await files(root, ["diff", "--cached", "--name-only"]), registries = staged.filter(path => isRegistry(cfg, path)), generated = staged.filter(isGeneratedView), counted = staged.length - registries.length - generated.length, lines = (await stagedLineStats(root)).filter(row => !isRegistry(cfg, row.path) && !isGeneratedView(row.path)).reduce((n, row) => n + row.added + row.removed, 0); const count = await stagedCountGate(root, staged, counted, cfg.max_staged_files); if (count.rejection) return bad(count.rejection); const authorizedChangedLines = count.grant !== null && cfg.max_staged_changed_lines === exceptionChangedLinesLimit && lines === exceptionChangedLines; if (lines > cfg.max_staged_changed_lines && !authorizedChangedLines) return bad(`staged changed lines ${lines} exceed ${cfg.max_staged_changed_lines}`); const ratchet = await ratchetCommitGate(root, staged, registries.length > 0); if (ratchet) return ratchet; const checked = cfg.require_traceability || registries.length || generated.length ? await validation(root, staged, false, registries.length > 0) : { ok: true, message: "ok" }; if (checked.ok && count.grant) await recordPendingException(root, count.grant); return checked; }
   if (event === "commit-msg") { const deleted = (await files(root, ["diff", "--cached", "--name-only", "--diff-filter=D"])).length, stats = await stagedStats(root), lines = stats.reduce((n, row) => n + row.removed, 0), registryRemoved = stats.filter(row => isRegistry(cfg, row.path)).reduce((n, row) => n + row.removed - row.added, 0), message = args[0] && existsSync(args[0]) ? await readFile(args[0], "utf8") : "", approved = message.includes("[mass-delete-approved]"); if ((deleted > 50 || lines > 10_000) && !approved) return bad("mass delete requires [mass-delete-approved]"); return registryRemoved > cfg.max_registry_removed_lines && !approved ? bad(`registry removal of ${registryRemoved} net lines exceeds ${cfg.max_registry_removed_lines}; requires [mass-delete-approved]`) : { ok: true, message: "ok" }; }
   if (event === "pre-push") { const reports: string[] = []; let exclusions: Awaited<ReturnType<typeof countExclusionTips>> | undefined; for (const row of stdin.split("\n").filter(Boolean).map(row => row.split(/\s+/))) { const [, local, remote, remoteSha] = row, target = remote?.replace("refs/heads/", ""); if (target && cfg.protected_branches.includes(target)) return bad(`protected branch ${target} is blocked`); if (!local) return bad("pre-push update has no local object id"); if (/^0+$/.test(local)) { const deletion = await deletionPushGate(root, remoteSha); if (!deletion.ok) return deletion; continue; } const isNew = !remoteSha || /^0+$/.test(remoteSha), range = isNew ? `${local}^..${local}` : `${remoteSha}..${local}`, shared = exclusions ??= await countExclusionTips(root, cfg.protected_branches, args[0]); if ("error" in shared) return bad(`could not list remote branch tips for the pushed range ${range}: ${shared.error}`); const counted = await git(root, ["rev-list", "--count", ...(shared.tips.length ? [isNew ? local : range, "--not", ...shared.tips] : [range])]); if (counted.code || !/^\d+$/.test(counted.out)) return bad(`could not count commits in pushed range ${range}: ${counted.err || counted.out}`); if (Number(counted.out) > cfg.max_commits_per_push) return bad(`commits per push ${counted.out} exceed ${cfg.max_commits_per_push}`); const ratchet = remote?.startsWith("refs/heads/") ? await ratchetPushGate(root, remoteSha ?? "", local, cfg.protected_branches, args[0]) : null; if (ratchet) { if (!ratchet.ok) return ratchet; reports.push(ratchet.message); continue; } const strict = await strictPushGate(root, local, range); if (!strict.ok) return strict; } return reports.length ? { ok: true, message: reports.length === 1 ? reports[0]! : `[${reports.join(",")}]` } : { ok: true, message: "validation clean" }; }
-  if (event === "post-commit") { await consumePendingException(root); const result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false), advance = await advanceJjDeliveryBookmark(root, cfg), message = result.ok ? result.message : `advisory: ${result.message}`; return { ok: true, message: advance ? `${message}; ${advance}` : message }; }
+  if (event === "post-commit") { const ledgerDiagnostic = await consumePendingException(root), result = await validation(root, await files(root, ["show", "--pretty=format:", "--name-only", "HEAD"]), false), advance = await advanceJjDeliveryBookmark(root, cfg), message = result.ok ? result.message : `advisory: ${result.message}`; return { ok: true, message: [message, ledgerDiagnostic, advance].filter(Boolean).join("; ") }; }
   return { ok: true, message: "ok" };
 }
 
