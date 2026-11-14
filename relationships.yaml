@@ -18,6 +18,7 @@ nodes:
   - atdd-bun.planner.train-wagon-resolves
   - atdd-bun.profiles.presets
   - atdd-bun.review.behavioral-reconciliation
+  - atdd-bun.review.owner-inspectability
   - atdd-bun.topology.e2e-location
   - atdd-bun.topology.feature-source-coverage
   - atdd-bun.topology.feature-test-coverage
@@ -5287,6 +5288,16 @@ edges:
     strength: critical
     target_ref: coder.bun.phase-discipline
     type: follows
+    origin: "@afokapu/atdd-bun"
+  - confidence: 1
+    constraint: mandatory
+    control: internal
+    foundation: finish_to_start
+    reason: owner-inspection evidence is checked read-only before the final behavioral reconciliation accepts the delivery
+    source_ref: atdd-bun.review.behavioral-reconciliation
+    strength: important
+    target_ref: atdd-bun.review.owner-inspectability
+    type: requires
     origin: "@afokapu/atdd-bun"
   - confidence: 1
     constraint: mandatory

@@ -1,0 +1,64 @@
+schema_version: 1.1.0
+rule_id: atdd-bun.review.owner-inspectability
+kind: policy
+status: active
+name: Owner-inspection evidence is read-only, bound to the candidate, and synthetic
+statement: >-
+  Before a delivery that Flow tracks with an owner-inspection/v1 record is accepted, the record Flow already read
+  MUST be acceptable evidence for the exact candidate: published for that commit, its tracked evidence digests
+  still matching, aimed only at a loopback local target, built on synthetic data, carrying teardown evidence,
+  stating N/A only for a toolkit surface with a rationale and one of the direct evidence kinds Flow defines for
+  N/A, and acknowledged by operator@desk before done. Flow alone owns the record shape, publication, acknowledgement and
+  cleanup lifecycle; ATDD Bun only reports findings and never writes, publishes, stores, or copies any of it.
+terms:
+- term_id: flow_owned_record
+  text: >-
+    the atdd-workflow/owner-inspection/v1 record published and acknowledged through Flow. Bun reads it through the
+    exact-pinned @afokapu/atdd-flow type and creates no parallel manifest, registry, schema, report, preview,
+    acknowledgement, or dependency state.
+- term_id: synthetic
+  text: >-
+    the value `synthetic` for data_classification. This is Bun applicability policy; Flow's field is free text and
+    the policy is not a Flow schema constraint.
+- term_id: findings
+  text: >-
+    the seven deterministic findings the read-only capability emits for a record and a candidate.
+  values:
+    stale-candidate: provenance.commit differs from the candidate, or a merge record cites no candidate record.
+    evidence-digest-mismatch: a tracked evidence path no longer matches its recorded sha256.
+    non-local-target: the target is not a credential-free 127.0.0.1 or localhost local URL; sandbox and preview targets are reported citing owner directive M-20261011T121147Z.
+    non-synthetic-data: data_classification is not exactly synthetic.
+    missing-teardown: the teardown reference or its digest is absent.
+    invalid-not-applicable: rendered N/A on a non-toolkit surface, without a rationale, or without one of the direct evidence kinds Flow defines for N/A.
+    unacknowledged: in done mode, operator@desk has not acknowledged the record.
+content:
+  summary: >-
+    A read-only consumer check over the Flow-owned inspection record. Evidence it cannot read from tracked files
+    yields COULD_NOT_CHECK, never PASS.
+  normative_text: |
+    The capability `checkOwnerInspection` takes a record that Flow has already read and a candidate (its commit and
+    a reader over tracked files). It returns PASS only when no finding applies and every evidence reference was
+    verified against tracked bytes. A finding returns FAIL. Evidence that is not a tracked path, such as a CI run
+    URL, or a tracked path that cannot be read returns COULD_NOT_CHECK and is never promoted to PASS.
+
+    A decorative journey is not machine-checkable from a read-only record: whether a journey or its health and
+    smoke evidence genuinely proves the stated scenario is not machine-checkable here. That judgment stays with
+    the checklist and the independent semantic review required by atdd-bun.review.behavioral-reconciliation.
+
+    The check applies no production target, deploy, implicit preview, or fabricated URL; a sandbox or preview target
+    needs the explicit authorization of owner directive M-20261011T121147Z and is otherwise a finding.
+  fix_hint: |
+    Republish through Flow when the candidate or an evidence file changed; never edit a record or copy it into
+    Bun state. Use only a synthetic data set and a loopback target, record teardown evidence, state N/A only for a
+    toolkit surface with a rationale and a Flow-defined direct evidence kind, and obtain operator@desk
+    acknowledgement before done.
+  exceptions:
+  - >-
+    A toolkit repository with no served surface states rendered N/A with an exact rationale and direct evidence of a
+    Flow-defined N/A kind (CI run, gate report, or package listing); it is never given a fabricated URL.
+metadata:
+  aliases:
+  - ATDD-BUN-REVIEW-OWNER-INSPECTABILITY-001
+  severity: 3
+implementation:
+  type: none
