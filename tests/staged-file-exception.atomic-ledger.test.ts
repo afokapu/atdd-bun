@@ -306,3 +306,28 @@ jjTest("jj colocated: a leftover pending beside a consumed record is preserved w
     expect(await bookmarkCommits(f.root, "main")).toEqual(mainBefore);
   } finally { await f.cleanup(); }
 }, 120_000);
+
+test("git hooks: after exact delivery A lands with its post-commit skipped and pending unconsumed, a second exact candidate B is refused without overwriting pending, and a later post-commit still consumes A exactly once", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    expect((await run(f.root, ["git", "-c", "core.hooksPath=/dev/null", "commit", "-qm", "atomic delivery A"])).code).toBe(0);
+    const a = await git(f.root, "rev-parse", "HEAD"), pending = await readFile(await pendingFile(f.root), "utf8");
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    for (const path of inventory) await writeFile(join(f.root, path), `second candidate of ${path}\n`);
+    await stageInventory(f.root);
+    const refused = await runHook("pre-commit", f.root);
+    expect(refused.ok).toBeFalse();
+    expect(refused.message).toMatch(/^staged files \d+ exceed 20/);
+    expect(refused.message).toContain("staged-file exception refused");
+    expect(refused.message).toMatch(LEFTOVER);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    expect(await git(f.root, "rev-parse", "HEAD")).toBe(a);
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    const consumed = await readFile(await consumedFile(f.root), "utf8");
+    expect(JSON.parse(consumed)).toMatchObject({ owner_authorization: OWNER_AUTHORIZATION, commit: a, inventory_sha256: inventoryHash(inventory) });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    expect(await readFile(await consumedFile(f.root), "utf8")).toBe(consumed);
+  } finally { await f.cleanup(); }
+}, 120_000);
