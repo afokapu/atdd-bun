@@ -288,6 +288,21 @@ jjTest("post-commit neither moves nor abandons for the snapshotted old @ with an
   expect(await commitIds(f.ws, old)).toEqual([old]);
 }), 90_000);
 
+jjTest("post-commit neither moves nor abandons for the snapshotted old @ with a descendant other than the new working copy", withFixture(async f => {
+  await writeFile(join(f.ws, "one.txt"), "one.txt\n");
+  await jj(f.ws, "status");
+  const old = await jj(f.ws, "log", "--no-graph", "-r", "@", "-T", "commit_id");
+  await jj(f.ws, "new", "--no-edit", "-r", "@", "-m", "descendant");
+  await git(f.ws, "add", "one.txt");
+  await git(f.ws, "commit", "-q", "-m", "add one.txt");
+  const before = await bookmarkState(f.ws);
+  const result = await runHook("post-commit", f.ws);
+  expect(result.ok).toBeTrue();
+  expect(result.message).toContain(ADVISORY);
+  expect(await bookmarkState(f.ws)).toBe(before);
+  expect(await commitIds(f.ws, old)).toEqual([old]);
+}), 90_000);
+
 jjTest("after a snapshot commit, the next consecutive commit uses the @- path and leaves the old snapshot an unrelated sibling", withFixture(async f => {
   const old = await snapshotThenStage(f);
   expect((await runHook("pre-commit", f.ws)).ok).toBeTrue();
