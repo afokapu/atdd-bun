@@ -331,3 +331,132 @@ test("git hooks: after exact delivery A lands with its post-commit skipped and p
     expect(await readFile(await consumedFile(f.root), "utf8")).toBe(consumed);
   } finally { await f.cleanup(); }
 }, 120_000);
+
+// F1 (independent review of f1ea4ff6): single use must survive a LATER commit landing before pending is completed.
+// Pending records the HEAD it was granted from; a delivery that landed anywhere in base..HEAD is the grant's use.
+const SKIP_HOOKS = ["-c", "core.hooksPath=/dev/null"];
+const commitUnrelated = async (root: string, hooks: boolean) => {
+  await writeFile(join(root, "unrelated.txt"), "later\n"); await git(root, "add", "unrelated.txt");
+  expect((await run(root, ["git", ...(hooks ? [] : SKIP_HOOKS), "commit", "-qm", "unrelated"])).code).toBe(0);
+};
+const restageSecondCandidate = async (root: string) => {
+  for (const path of inventory) await writeFile(join(root, path), `second candidate of ${path}\n`);
+  await stageInventory(root);
+};
+const refusedGrant = (result: { ok: boolean; message: string }) => {
+  expect(result.ok).toBeFalse();
+  expect(result.message).toMatch(/^staged files \d+ exceed 20/);
+  expect(result.message).toContain("staged-file exception refused");
+};
+
+test("git hooks: A lands with post-commit skipped, then a hooked unrelated commit U cannot let a second exact candidate B be granted", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    expect((await run(f.root, ["git", ...SKIP_HOOKS, "commit", "-qm", "atomic delivery A"])).code).toBe(0);
+    const a = await git(f.root, "rev-parse", "HEAD");
+    await commitUnrelated(f.root, true);
+    await restageSecondCandidate(f.root);
+    refusedGrant(await runHook("pre-commit", f.root));
+    const consumed = JSON.parse(await readFile(await consumedFile(f.root), "utf8"));
+    expect(consumed).toMatchObject({ owner_authorization: OWNER_AUTHORIZATION, commit: a, inventory_sha256: inventoryHash(inventory) });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: A skipped and unrelated U skipped: B is refused with the leftover diagnostic, pending is intact, and a later post-commit consumes A exactly once", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    expect((await run(f.root, ["git", ...SKIP_HOOKS, "commit", "-qm", "atomic delivery A"])).code).toBe(0);
+    const a = await git(f.root, "rev-parse", "HEAD"), pending = await readFile(await pendingFile(f.root), "utf8");
+    await commitUnrelated(f.root, false);
+    await restageSecondCandidate(f.root);
+    const refused = await runHook("pre-commit", f.root);
+    refusedGrant(refused);
+    expect(refused.message).toMatch(LEFTOVER);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    const consumed = await readFile(await consumedFile(f.root), "utf8");
+    expect(JSON.parse(consumed)).toMatchObject({ commit: a, inventory_sha256: inventoryHash(inventory) });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    expect(await readFile(await consumedFile(f.root), "utf8")).toBe(consumed);
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: A with a real consumed-write failure, then hooked unrelated U: B is refused with the leftover diagnostic and a retry consumes A", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    const release = await obstruct(await consumedFile(f.root));
+    expect((await run(f.root, ["git", "commit", "-qm", "atomic delivery A", "--no-verify"])).code).toBe(0);
+    const a = await git(f.root, "rev-parse", "HEAD"), pending = await readFile(await pendingFile(f.root), "utf8");
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    await commitUnrelated(f.root, true);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    await release();
+    await restageSecondCandidate(f.root);
+    const refused = await runHook("pre-commit", f.root);
+    refusedGrant(refused);
+    expect(refused.message).toMatch(LEFTOVER);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    expect(JSON.parse(await readFile(await consumedFile(f.root), "utf8"))).toMatchObject({ commit: a });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: a pending whose base is no longer an ancestor of HEAD fails closed: no new grant, no consumption, pending preserved with a recovery diagnostic", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    const pending = await readFile(await pendingFile(f.root), "utf8");
+    const rewritten = await git(f.root, "commit-tree", await git(f.root, "rev-parse", "HEAD^{tree}"), "-m", "rewritten root");
+    await git(f.root, "reset", "-q", "--soft", rewritten);
+    const refused = await runHook("pre-commit", f.root);
+    refusedGrant(refused);
+    expect(refused.message).toMatch(LEFTOVER);
+    expect(refused.message).toMatch(/authorized recovery/);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect((await run(f.root, ["git", ...SKIP_HOOKS, "commit", "-qm", "inventory on rewritten history"])).code).toBe(0);
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+test("git hooks: control, a grant whose commit never landed may be re-granted after an unrelated commit, and the exact delivery then consumes with its own sha", async () => {
+  const f = await gitFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    await git(f.root, "reset", "-q");
+    await commitUnrelated(f.root, false);
+    await stageInventory(f.root);
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    expect((await run(f.root, ["git", "commit", "-qm", "atomic delivery"])).code).toBe(0);
+    expect(JSON.parse(await readFile(await consumedFile(f.root), "utf8"))).toMatchObject({ commit: await git(f.root, "rev-parse", "HEAD") });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+  } finally { await f.cleanup(); }
+}, 120_000);
+
+jjTest("jj colocated: A with a consumed-write failure, then unrelated U: B is refused with the leftover diagnostic and a retry consumes A", async () => {
+  const f = await jjFixture(); try {
+    expect(await runHook("pre-commit", f.root)).toMatchObject({ ok: true });
+    const release = await obstruct(await consumedFile(f.root));
+    await git(f.root, "commit", "-q", "-m", "atomic delivery A", "--no-verify");
+    const a = await git(f.root, "rev-parse", "HEAD"), pending = await readFile(await pendingFile(f.root), "utf8");
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    await writeFile(join(f.root, "unrelated.txt"), "later\n"); await git(f.root, "add", "unrelated.txt");
+    await git(f.root, "commit", "-q", "-m", "unrelated", "--no-verify");
+    expect((await runHook("post-commit", f.root)).message).toMatch(PRESERVED);
+    await release();
+    await jj(f.root, "bookmark", "set", "delivery/demo", "-r", "@", "--allow-backwards"); // the delivery bookmark returns to the working copy, as a developer's next commit needs
+    await restageSecondCandidate(f.root);
+    const refused = await runHook("pre-commit", f.root);
+    refusedGrant(refused);
+    expect(refused.message).toMatch(LEFTOVER);
+    expect(await readFile(await pendingFile(f.root), "utf8")).toBe(pending);
+    expect(await exists(consumedFile(f.root))).toBeFalse();
+    expect((await runHook("post-commit", f.root)).ok).toBeTrue();
+    expect(JSON.parse(await readFile(await consumedFile(f.root), "utf8"))).toMatchObject({ commit: a });
+    expect(await exists(pendingFile(f.root))).toBeFalse();
+  } finally { await f.cleanup(); }
+}, 120_000);
