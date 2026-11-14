@@ -205,23 +205,72 @@ const refusedWith = async (cwd: string, reason: string) => {
   }
 };
 
-jjTest("snapshot then a fully staged commit: the non-empty bookmarked @ is refused with a diagnostic, not admitted and stranded", withFixture(async f => {
-  await stage(f.ws, "one.txt");
+const redundantOldWorkingCopyReason = "differ from what is staged";
+const snapshotThenStage = async (f: Fixture, name = "one.txt") => {
+  await writeFile(join(f.ws, name), `${name}\n`);
   await jj(f.ws, "status");
+  await git(f.ws, "add", name);
+  return jj(f.ws, "log", "--no-graph", "-r", "@", "-T", "commit_id");
+};
+// A later jj command re-syncs the Git index, so stage only after every jj arrangement.
+const commitIds = (cwd: string, revset: string) => jj(cwd, "--ignore-working-copy", "log", "--no-graph", "-r", revset, "-T", 'commit_id ++ "\\n"').then(out => out.split("\n").filter(Boolean), () => [] as string[]);
+
+jjTest("snapshot then a fully staged commit: pre-commit admits, post-commit moves the bookmark to the commit and abandons only the redundant old @", withFixture(async f => {
+  const old = await snapshotThenStage(f);
   expect(await jj(f.ws, "log", "--no-graph", "-r", "@ & empty()", "-T", "commit_id")).toBe("");
+  for (const event of ["pre-commit", "pre-merge-commit"] as const) expect(await runHook(event, f.ws)).toMatchObject({ ok: true });
+  await git(f.ws, "commit", "-q", "-m", "add one.txt");
+  const committed = await head(f.ws);
+  const post = await runHook("post-commit", f.ws);
+  expect(post.ok).toBeTrue();
+  expect(post.message).not.toContain(ADVISORY);
+  expect(await bookmarkCommits(f.ws, "delivery/demo")).toEqual([committed]);
+  expect(await git(f.repo, "rev-parse", "refs/heads/delivery/demo")).toBe(committed);
+  expect(await commitIds(f.ws, old)).toEqual([]);
+  expect(await jj(f.ws, "log", "--no-graph", "-r", "@-", "-T", "commit_id")).toBe(committed);
+  expect(await jj(f.ws, "log", "--no-graph", "-r", "@ & empty()", "-T", "commit_id")).not.toBe("");
+  expect((await run(f.ws, ["jj", "git", "push", "--bookmark", "delivery/demo"])).code).toBe(0);
+  expect(await remoteRef(f, "delivery/demo")).toBe(committed);
+}), 90_000);
+
+jjTest("snapshot then a partially staged commit is refused with a diagnostic and nothing moves", withFixture(async f => {
+  await writeFile(join(f.ws, "staged.txt"), "staged\n"); await writeFile(join(f.ws, "unstaged.txt"), "unstaged\n");
+  await jj(f.ws, "status");
+  await git(f.ws, "add", "staged.txt");
   const before = await bookmarkState(f.ws);
-  await refusedWith(f.ws, "working-copy commit is not empty");
+  await refusedWith(f.ws, redundantOldWorkingCopyReason);
   expect(await bookmarkState(f.ws)).toBe(before);
 }), 90_000);
 
-jjTest("after a snapshot, `jj new` leaves a non-empty bookmarked @- and the next git commit passes and advances", withFixture(async f => {
-  await stage(f.ws, "one.txt");
-  await jj(f.ws, "status");
-  await jj(f.ws, "new");
-  const second = await commitFile(f.ws, "two.txt");
-  expect(await bookmarkCommits(f.ws, "delivery/demo")).toEqual([second]);
-  expect(await jj(f.ws, "log", "--no-graph", "-r", "@-", "-T", "commit_id")).toBe(second);
+jjTest("a file edited after the snapshot makes the index differ from @ and is refused", withFixture(async f => {
+  await snapshotThenStage(f);
+  await writeFile(join(f.ws, "one.txt"), "edited after the snapshot\n");
+  await git(f.ws, "add", "one.txt");
+  const before = await bookmarkState(f.ws);
+  await refusedWith(f.ws, redundantOldWorkingCopyReason);
+  expect(await bookmarkState(f.ws)).toBe(before);
 }), 90_000);
+
+const redundantOldWorkingCopyNegatives: Negative[] = [
+  { name: "an extra bookmark on the old @", arrange: f => jj(f.ws, "bookmark", "create", "delivery/other", "-r", "@").then(() => undefined) },
+  { name: "a descendant of the old @ other than the new working copy", arrange: f => jj(f.ws, "new", "--no-edit", "-r", "@", "-m", "descendant").then(() => undefined) },
+];
+for (const item of redundantOldWorkingCopyNegatives) {
+  jjTest(`post-commit neither moves nor abandons for the redundant old @ with ${item.name}`, withFixture(async f => {
+    await writeFile(join(f.ws, "one.txt"), "one.txt\n");
+    await jj(f.ws, "status");
+    const old = await jj(f.ws, "log", "--no-graph", "-r", "@", "-T", "commit_id");
+    await item.arrange(f);
+    await git(f.ws, "add", "one.txt");
+    await git(f.ws, "commit", "-q", "-m", "add one.txt");
+    const before = await bookmarkState(f.ws);
+    const result = await runHook("post-commit", f.ws);
+    expect(result.ok).toBeTrue();
+    expect(result.message).toContain(ADVISORY);
+    expect(await bookmarkState(f.ws)).toBe(before);
+    expect(await commitIds(f.ws, old)).toEqual([old]);
+  }), 90_000);
+}
 
 jjTest("a second commit is admitted and advanced when @ is empty but described", withFixture(async f => {
   await commitFile(f.ws, "one.txt");
@@ -241,13 +290,4 @@ jjTest("the refusal for an empty bookmarked @- names the empty parent commit", w
   await jj(f.ws, "new");
   await stage(f.ws, "one.txt");
   await refusedWith(f.ws, "parent commit is empty");
-}), 90_000);
-
-jjTest("snapshot then a partially staged commit: the non-empty bookmarked @ is refused and nothing moves", withFixture(async f => {
-  await writeFile(join(f.ws, "staged.txt"), "staged\n"); await writeFile(join(f.ws, "unstaged.txt"), "unstaged\n");
-  await jj(f.ws, "status");
-  await git(f.ws, "add", "staged.txt");
-  const before = await bookmarkState(f.ws);
-  await refusedWith(f.ws, "working-copy commit is not empty");
-  expect(await bookmarkState(f.ws)).toBe(before);
 }), 90_000);
