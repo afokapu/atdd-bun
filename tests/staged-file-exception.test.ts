@@ -18,6 +18,8 @@ import { runHook } from "../src/hooks";
 const OWNER_AUTHORIZATION = "M-20261104T155526Z-owner-authorization_3fd46f1c";
 const DECISION_EVIDENCE = "M-20261104T120517Z-atomic-decision-evidence_a871b6f0";
 const SCHEMA = "atdd-bun.staged-file-limit-exception/v1";
+const SCORE_DELIVERY_CHANGED_LINES = 1235;
+const SCORE_INVENTORY_HASH = "041adeb75dc13a08c870881044a66f9cfdb93d908e7bbb416c386c3a7b0a8123";
 
 const inventory = [
   "contracts/score-provider/v1/inspection/descriptor.json",
@@ -87,6 +89,11 @@ async function consumer(extra = "") {
   return root;
 }
 const stage = (root: string, paths = inventory) => git(root, ["add", "--", ...paths]);
+const stageScoreDeliveryWithChangedLines = async (root: string, changedLines: number) => {
+  // Forty-one non-exempt files retain their single initial line; composition supplies the rest.
+  await writeFile(join(root, "src/composition.ts"), Array.from({ length: changedLines - 41 }, (_, index) => `export const line${index} = ${index};`).join("\n") + "\n");
+  await stage(root);
+};
 const directory = async (root: string) => join(root, (await git(root, ["rev-parse", "--git-common-dir"])).out.trim(), "atdd-bun", "staged-file-limit-exception");
 const authorize = async (root: string, record: unknown = validRecord(), raw?: string) => { const dir = await directory(root); await mkdir(dir, { recursive: true }); await writeFile(join(dir, "authorization.yaml"), raw ?? JSON.stringify(record)); };
 const commit = (root: string, message: string) => git(root, ["commit", "-qm", message, "--no-verify"]);
@@ -107,13 +114,25 @@ test("a valid record admits exactly the authorized inventory past the staged-fil
   } finally { await cleanup(root); }
 }, 30_000);
 
-test("the exception relaxes only the file count: the changed-line cap still rejects", async () => {
+test("the exact pinned Score delivery may pass its owner-authorized 1235 changed-lines gate", async () => {
   const root = await consumer(); try {
-    await writeFile(join(root, "src/composition.ts"), Array.from({ length: 400 }, (_, index) => `export const line${index} = ${index};`).join("\n") + "\n");
-    await authorize(root); await stage(root);
-    const result = await runHook("pre-commit", root);
-    expect(result.ok).toBeFalse();
-    expect(result.message).toMatch(/^staged changed lines \d+ exceed 350/);
+    expect(inventoryHash(inventory)).toBe(SCORE_INVENTORY_HASH);
+    await authorize(root); await stageScoreDeliveryWithChangedLines(root, SCORE_DELIVERY_CHANGED_LINES);
+    expect(await runHook("pre-commit", root)).toMatchObject({ ok: true });
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("the exception rejects a changed-lines total other than the owner-authorized 1235", async () => {
+  const root = await consumer(); try {
+    await authorize(root); await stageScoreDeliveryWithChangedLines(root, SCORE_DELIVERY_CHANGED_LINES + 1);
+    expect(await runHook("pre-commit", root)).toEqual({ ok: false, message: `staged changed lines ${SCORE_DELIVERY_CHANGED_LINES + 1} exceed 350` });
+  } finally { await cleanup(root); }
+}, 30_000);
+
+test("the exception does not waive a changed-lines gate with a different configured limit", async () => {
+  const root = await consumer("max_staged_changed_lines: 349\n"); try {
+    await authorize(root); await stageScoreDeliveryWithChangedLines(root, SCORE_DELIVERY_CHANGED_LINES);
+    expect(await runHook("pre-commit", root)).toEqual({ ok: false, message: `staged changed lines ${SCORE_DELIVERY_CHANGED_LINES} exceed 349` });
   } finally { await cleanup(root); }
 }, 30_000);
 
