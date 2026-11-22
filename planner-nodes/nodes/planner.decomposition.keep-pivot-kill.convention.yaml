@@ -21,3 +21,13 @@ terms:
     the author dispatch used to RAISE on a kept heuristic, which left kill — the verdict
     that records the opposite of what happened — as the only one that kept a session
     authorable.'
+
+exceptions:
+- >-
+  For a separate atdd-flow PLAN handoff on a pre-approved, bounded task,
+  the operator's task-specific Coach delegation permits the accountable Coach
+  to record keep (approve), pivot (return with concrete correction), or kill
+  (reject/escalate) within existing criteria. The Coach must retain its own
+  identity and immutable evidence; expanded intent, scope or inconsistent
+  acceptance requires operator action. This does not delegate Bun's own
+  deterministic atdd plan author-session lock.
