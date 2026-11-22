@@ -5,14 +5,14 @@ status: active
 statement: 'Each invocation targets a scoped slice; different runs have different
   framing. The agent reads existing plan/ via the repo graph to compose, and does
   not inherit prior-run framing. What is NOT in this protocol: no atdd agent ask,
-  no step-1 disk persistence, no plan/_meta.yaml, no coach-led decomposition inside the agent's scoped planning session.'
+  no step-1 disk persistence, no plan/_meta.yaml, no coach-led decomposition inside the driver scoped planning session.'
 terms:
 - term_id: local_scope
   text: one scoped slice per run; framing is per-invocation, read from the graph not
     inherited.
 - term_id: out_of_scope
   text: 'excluded mechanisms: atdd-agent-ask, step-1 disk persistence, plan/_meta.yaml,
-    coach involvement.'
+    coach-led decomposition.'
 
 exceptions:
 - >-
