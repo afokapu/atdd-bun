@@ -26,3 +26,16 @@ terms:
 - term_id: author_on_confirm
   text: on confirm, atdd plan deterministically invokes atdd author per locked unit
     (complete, atomic, idempotently replayable).
+
+exceptions:
+- >-
+  An owner-authorized Coach review in atdd-flow is a separate post-planning
+  PLAN-to-RED handoff, not ratification of the deterministic atdd plan
+  PlanSession and never an invocation of an atdd author writer. For an assigned,
+  already-approved bounded task, operator@desk may issue one immutable typed
+  plan-coach-delegation/v1 naming the task, accountable Coach, assignee, title
+  and exact ordered criteria. The Coach then evaluates the committed plan's
+  exact revision and declared acceptance identities and records its own
+  task-linked approval, return or escalation. This delegation cannot be used
+  to set PlanSession.locked or impersonate operator@desk. Contradictory intent,
+  expanded scope, revoked authority or absent proof requires owner escalation.
