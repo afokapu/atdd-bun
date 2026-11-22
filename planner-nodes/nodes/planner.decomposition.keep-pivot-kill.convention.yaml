@@ -2,7 +2,7 @@ schema_version: 1.0.0
 rule_id: planner.decomposition.keep-pivot-kill
 kind: pattern
 status: active
-statement: 'Decomposition advances by per-unit keep/pivot/kill: the operator keeps,
+statement: 'Decomposition advances by per-unit keep/pivot/kill: the operator (or a task-delegated accountable Coach) keeps,
   pivots (names a modification), or kills each candidate (heuristic, analog, main
   job, wagon, feature, WMBT, acceptance); an artifact is written only after a final-granularity
   keep.'
@@ -21,3 +21,10 @@ terms:
     the author dispatch used to RAISE on a kept heuristic, which left kill — the verdict
     that records the opposite of what happened — as the only one that kept a session
     authorable.'
+
+exceptions:
+- >-
+  For an already assigned bounded task with a recorded owner delegation, its accountable Coach may
+  decide keep/pivot/kill for candidates within that task's existing intent and scope. The Coach
+  records every individual verdict under its own identity, never operator@desk; new or contradictory
+  product intent, broader scope, or unclear authority goes to the human operator.
