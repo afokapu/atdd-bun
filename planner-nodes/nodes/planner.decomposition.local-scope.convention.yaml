@@ -13,3 +13,10 @@ terms:
 - term_id: out_of_scope
   text: 'excluded mechanisms: atdd-agent-ask, step-1 disk persistence, plan/_meta.yaml,
     coach involvement.'
+
+exceptions:
+- >-
+  The accountable Coach may review a completed scoped plan at the separate
+  atdd-flow PLAN handoff under an exact operator-issued task delegation.
+  The Coach does not become the driver's planner, create a parallel planning
+  session, or widen local decomposition scope. Bun's author lock remains unchanged.
