@@ -2,7 +2,7 @@ schema_version: 1.1.0
 rule_id: planner.plan.confirm-before-author
 kind: rule
 status: active
-statement: 'Nothing is authored before the operator confirms the locked decomposition.
+statement: 'Nothing is authored before the operator or task-delegated Coach confirms the locked decomposition.
   The Ratify gate is the conversational-to-deterministic boundary: only on ratification
   does atdd plan (the system, not the agent) invoke atdd author <kind> per locked
   unit.'
@@ -11,7 +11,7 @@ implementation:
   ref: test_plan_confirm_before_author::test_confirm_before_author_is_enforced
 content:
   normative_text: The session machine's author pass MUST refuse to invoke any atdd
-    author writer until the session is locked by the operator's ratification.
+    author writer until the session is locked by an authenticated operator or scoped Coach ratification.
   fix_hint: 'PlanSession.author() must raise SessionGateError when self.locked is
     False, before calling any author writer. Keep the lock guard as the first
     statement of author().'
@@ -26,3 +26,11 @@ terms:
 - term_id: author_on_confirm
   text: on confirm, atdd plan deterministically invokes atdd author per locked unit
     (complete, atomic, idempotently replayable).
+
+exceptions:
+- >-
+  An accountable Coach with recorded owner delegation for an already assigned, bounded task may
+  ratify its unchanged scope after reviewing JTBD decomposition and concrete acceptance criteria.
+  The ratification records the task, Coach identity, exact plan revision and evidence. This does
+  not authorize a change of product intent or scope, impersonation of operator@desk, bypassing the
+  session lock, or authoring without a recorded ratification; those require the operator.
